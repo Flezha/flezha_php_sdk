@@ -1,0 +1,68 @@
+name: PHP SDK
+
+# Three tiers and no controller, then the source-shape checks. Everything the
+# core contributes is fetched from one of its releases and checked against that
+# release's manifest, so nothing here needs a checkout of the core or a build
+# of it.
+#
+# What this cannot prove is the capability vocabulary the controller owns:
+# persistence, effectively-once, correction, partitioning, workflows, liveness,
+# restarts. Those are end-to-end scenarios and they run in the core's tree,
+# against the commit it pins this repository at, as does the threaded
+# executor's arm on the thread-safe build.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  # The core release every tier is proven against. One tag decides the library,
+  # the fake controller and the contract set, so a change to it is one line.
+  CORE_VERSION: "0.1.0"
+  CORE_RELEASE: https://github.com/flezha/flezha/releases/download/v0.1.0
+
+jobs:
+  # Unit, local mode and smoke, on every PHP line still receiving support. The
+  # declared floor is also the newest release today, so the window is one line
+  # wide; a second entry returns when a newer line ships.
+  tiers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.4"]
+    steps:
+      - uses: actions/checkout@v5
+
+      # `ext-ffi` is how the package loads the library at all, and `git`, `tar`
+      # and `composer` are what the install test packs and installs it with.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ffi
+          ini-values: ffi.enable=true
+          tools: composer
+
+      - name: Run the three tiers
+        run: scripts/ci.sh --core "$CORE_RELEASE" --version "$CORE_VERSION"
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: ffi
+          tools: composer
+
+      - run: composer install --no-interaction --no-progress
+
+      - name: Formatting
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff --config .php-cs-fixer.dist.php

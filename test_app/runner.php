@@ -23,7 +23,7 @@ declare(strict_types=1);
  * kills every worker before it polls once.
  */
 
-require __DIR__ . '/../../../sdk/php/vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/fixtures.php';
 require __DIR__ . '/fixtures_state.php';
 require __DIR__ . '/fixtures_probe.php';

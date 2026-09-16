@@ -1,0 +1,8 @@
+/vendor/
+/composer.lock
+/.phpunit.cache/
+/lib/
+# Fetched from a core release and checked against its manifest: the fake
+# controller, and the contract set the fixture tests resolve against.
+/.core/
+/contract/
