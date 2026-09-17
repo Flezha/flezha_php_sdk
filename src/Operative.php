@@ -135,7 +135,7 @@ abstract class Operative
      * short form and a full form cannot drift apart in what they declare.
      *
      * @param class-string<Procedure> $procedure
-     * @internal Called by {@see Procedure::operative()}.
+     * @internal Called by {@see Definition::shortForm()}.
      */
     public static function shortForm(
         string $procedure,
