@@ -11,7 +11,7 @@ use Flezha\TestApp\BoundedMailboxDropNothingOperative;
 use Flezha\TestApp\DynamicEntityOperative;
 use Flezha\TestApp\PartitionRelayOperative;
 use Flezha\TestApp\SessionTimeoutOperative;
-use Flezha\TestApp\SugarDoNothingOperative;
+use Flezha\TestApp\SugarDoNothing;
 use Flezha\TestApp\TierStoreOperative;
 use PHPUnit\Framework\TestCase;
 
@@ -48,12 +48,12 @@ final class LocalModeCapabilitiesTest extends TestCase
         TestApp::load('fixtures_state.php');
     }
 
-    public function testGraphBuilderBuildsAndRunsADeclaredGraphWithNoController(): void
+    public function testShorthandBuildsAndRunsAShortFormWithNoController(): void
     {
-        $this->declares('graph_builder', 'sugar_do_nothing');
+        $this->declares('shorthand', 'sugar_do_nothing');
 
         $released = $this->release(
-            SugarDoNothingOperative::class,
+            SugarDoNothing::class,
             'input',
             'sugar_do_nothing_echo',
             ['alpha', 'beta'],

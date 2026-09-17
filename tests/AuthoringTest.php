@@ -21,10 +21,96 @@ use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
+use Flezha\LoopMode;
+use Flezha\Operative as OperativeBase;
+use Flezha\OperativeKind;
 use Flezha\Procedure;
 use Flezha\StreamOperative;
 use Flezha\Transforms;
 use Flezha\WorkflowOperative;
+
+// ---------------------------------------------------------------------------
+// The §5 short form
+
+#[Proc(name: 'sf_upcase', kind: OperativeKind::Stream, sink: 'out', codec: ChannelCodec::Text)]
+final class ShortUpcase extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+#[Proc(name: 'sf_upcase_twin')]
+final class ShortUpcaseTwin extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+#[Operative(factoryId: 'sf_upcase_twin')]
+final class ShortUpcaseTwinOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input', codec: ChannelCodec::Text)
+            ->into(ShortUpcaseTwin::class)
+            ->sink('out');
+    }
+}
+
+#[Proc(
+    name: 'sf_place',
+    kind: OperativeKind::Workflow,
+    sink: 'placed',
+    input: 'order',
+    codec: ChannelCodec::Text,
+)]
+final class ShortPlace extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+#[Proc(kind: OperativeKind::Stream, sink: 'out')]
+final class ShortDerivedName extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+#[Proc(name: 'sf_no_kind', sink: 'out')]
+final class ShortNoKind extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+#[Proc(name: 'sf_no_sink', kind: OperativeKind::Stream)]
+final class ShortKeyWithoutSink extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+#[Proc(name: 'sf_plain')]
+final class ShortPlain extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
 
 #[Proc(clock: Clock::EventTime)]
 final class NoExtractor extends Procedure
@@ -731,6 +817,71 @@ final class AuthoringTest extends RepositoryTestCase
         $this->expectExceptionMessage("codecs: $channel: names both a codec");
 
         self::codecSlots($input, $sink);
+    }
+
+    // -- the §5 short form -------------------------------------------------
+
+    public function testAStreamShortFormIsItsHandWrittenTwin(): void
+    {
+        $short = OperativeBase::specFor(ShortUpcase::class);
+        $hand = ShortUpcaseTwinOperative::spec();
+
+        self::assertSame('stream', $short->kind);
+        self::assertSame('sf_upcase', $short->factoryId);
+        self::assertSame(
+            array_map(static fn ($c): array => [$c->name, $c->kind], $hand->channels),
+            array_map(static fn ($c): array => [$c->name, $c->kind], $short->channels),
+        );
+    }
+
+    public function testAWorkflowShortFormIsAOnceWorkflow(): void
+    {
+        $spec = OperativeBase::specFor(ShortPlace::class);
+
+        self::assertSame('workflow', $spec->kind);
+        self::assertSame(LoopMode::Once, $spec->workflow?->loopMode);
+        self::assertSame(
+            ['order', 'placed'],
+            array_map(static fn ($c): string => $c->name, $spec->channels),
+        );
+    }
+
+    public function testASinkWithoutAWrittenNameIsRefused(): void
+    {
+        $this->expectException(DeclarationException::class);
+        $this->expectExceptionMessageMatches('/SinkWithoutId/');
+        OperativeBase::specFor(ShortDerivedName::class);
+    }
+
+    public function testASinkWithoutAKindIsRefused(): void
+    {
+        $this->expectException(DeclarationException::class);
+        $this->expectExceptionMessageMatches('/SinkWithoutKind/');
+        OperativeBase::specFor(ShortNoKind::class);
+    }
+
+    /**
+     * fails when: `Procedure::run` stops being declared `: mixed`, which is
+     * what makes a no-output procedure unwritable in PHP — and a
+     * `SinkWithoutOutput` this SDK could then owe.
+     */
+    public function testAProcedureCannotDeclareNoOutput(): void
+    {
+        $returns = (new \ReflectionMethod(Procedure::class, 'run'))->getReturnType();
+        self::assertInstanceOf(\ReflectionNamedType::class, $returns);
+        self::assertSame('mixed', $returns->getName());
+    }
+
+    public function testAShortFormKeyWithoutASinkIsRefused(): void
+    {
+        $this->expectException(DeclarationException::class);
+        $this->expectExceptionMessageMatches('/ShorthandKeyWithoutSink/');
+        OperativeBase::specFor(ShortKeyWithoutSink::class);
+    }
+
+    public function testAProcedureWithNoSinkDeclaresNoOperative(): void
+    {
+        self::assertNull(Definition::of(ShortPlain::class)->shortForm());
     }
 }
 

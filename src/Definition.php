@@ -9,6 +9,7 @@ use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
 use Flezha\Codec\ValueCodec;
 use Flezha\Exception\DeclarationException;
+use Flezha\Graph\ClassSpec;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -74,6 +75,67 @@ final class Definition
     public static function of(string $class): self
     {
         return self::$cache[$class] ??= new self($class);
+    }
+
+    /**
+     * The operative this class's §5 short form generates, or `null` when it
+     * declares no `sink`.
+     *
+     * Built here, at registration, as the PHP contract places every refusal;
+     * each refusal's message begins with its own name
+     * (`docs/sdk/authoring_contract.md` §5.2).
+     *
+     * `SinkWithoutOutput` is not among them. {@see Procedure::run()} is
+     * declared `: mixed`, and PHP forbids an override from narrowing that to
+     * `: void`, so a procedure declaring no output cannot be written — and a
+     * refusal nothing can reach is a refusal nobody reads. The PHP manifest
+     * therefore leaves `shorthand_typed_output` off `topology_surfaces`.
+     */
+    public function shortForm(): ?ClassSpec
+    {
+        if ($this->decl->sink === null) {
+            $keys = array_keys(array_filter([
+                'kind' => $this->decl->kind !== null,
+                'input' => $this->decl->input !== null,
+                'codec' => $this->decl->codec !== null,
+            ]));
+            if ($keys !== []) {
+                throw new DeclarationException($this->class, $this->name, sprintf(
+                    'ShorthandKeyWithoutSink: `%s` name(s) of the operative a `sink` generates; '
+                    . 'this class declares no `sink`, so there is nothing for them to describe',
+                    implode('`, `', $keys),
+                ), ['ShorthandKeyWithoutSink']);
+            }
+
+            return null;
+        }
+        if ($this->decl->name === null) {
+            throw new DeclarationException(
+                $this->class,
+                $this->name,
+                'SinkWithoutId: a `sink` makes this class a whole operative, whose factory id is '
+                . 'an address an operator types; write it as `name:` rather than deriving it from '
+                . 'the class',
+                ['SinkWithoutId']
+            );
+        }
+        if ($this->decl->kind === null) {
+            throw new DeclarationException(
+                $this->class,
+                $this->name,
+                'SinkWithoutKind: a `sink` makes this class a whole operative; write '
+                . '`kind: OperativeKind::Stream` or `kind: OperativeKind::Workflow`',
+                ['SinkWithoutKind']
+            );
+        }
+        return Operative::shortForm(
+            $this->class,
+            $this->name,
+            $this->decl->kind,
+            $this->decl->sink,
+            $this->decl->input ?? 'input',
+            $this->decl->codec,
+        );
     }
 
     /** `single` | `static` | `dynamic`, as the core's declaration spells it. */

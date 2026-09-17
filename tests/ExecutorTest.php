@@ -92,18 +92,18 @@ final class ExecutorTest extends TestCase
         self::assertStringContainsString($expected, $refusal);
     }
 
-    /** `removeType` is the inverse of `defineStream` / `defineWorkflow`. */
+    /** `unregisterFactory` is the inverse of `registerFactory`. */
     public function testARemovedTypeIsNotDeclared(): void
     {
         $runner = \Flezha\Flezha::createRunner('test')
-            ->defineStream(EchoOperative::class)
-            ->defineWorkflow(CounterOperative::class);
+            ->registerFactory(EchoOperative::class)
+            ->registerFactory(CounterOperative::class);
 
         self::assertSame(
             ['echo_operative'],
-            self::declaredFactories($runner->removeType(CounterOperative::class)),
+            self::declaredFactories($runner->unregisterFactory(CounterOperative::class)),
         );
-        self::assertSame([], self::declaredFactories($runner->removeType(EchoOperative::class)));
+        self::assertSame([], self::declaredFactories($runner->unregisterFactory(EchoOperative::class)));
     }
 
     /** @return list<string> */

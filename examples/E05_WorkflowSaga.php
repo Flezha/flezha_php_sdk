@@ -71,5 +71,5 @@ final class CheckoutWorkflow extends WorkflowOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->defineWorkflow(CheckoutWorkflow::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(CheckoutWorkflow::class)->run();
 }

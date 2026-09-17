@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Flezha\Attribute;
 
 use Attribute;
+use Flezha\ChannelCodec;
 use Flezha\Clock;
+use Flezha\OperativeKind;
 
 /**
  * Everything a procedure declares that is not behaviour.
@@ -28,6 +30,10 @@ final class Proc
      */
     public function __construct(
         public readonly ?string $name = null,
+        public readonly ?OperativeKind $kind = null,
+        public readonly ?string $sink = null,
+        public readonly ?string $input = null,
+        public readonly ?ChannelCodec $codec = null,
         public readonly ?array $entityKeys = null,
         public readonly bool $dynamicEntities = false,
         public readonly ?int $idleTtlMs = null,

@@ -66,7 +66,7 @@ final class LocalOperative
         $core = Core::create();
 
         try {
-            $spec = $class::spec();
+            $spec = Operative::specFor($class);
             // `Validate::spec` is what writes the derived edges back into the
             // spec, so it runs before anything is declared.
             Validate::spec($spec, $core);

@@ -51,5 +51,5 @@ final class ChatWorkflow extends WorkflowOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->defineWorkflow(ChatWorkflow::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(ChatWorkflow::class)->run();
 }

@@ -33,13 +33,17 @@ use Flezha\Attribute\Proc;
 use Flezha\Clock;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
+use Flezha\Dispatch\Registry;
 use Flezha\Exception\DeclarationException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
 use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
+use Flezha\Operative;
+use Flezha\OperativeKind;
 use Flezha\Overflow;
 use Flezha\Procedure;
 use Flezha\Runner;
@@ -349,6 +353,62 @@ final class RowInterpreter
  * reason — the base memoises one spec per class, and a run declares every row
  * through this one.
  */
+// ---------------------------------------------------------------------------
+// The §5 short-form palette. PHP writes a short form in an attribute, which is
+// written where the class is, so each spelling the fixture's `shorthand(...)`
+// step describes is one class here. Nothing registers them but a row that
+// names them.
+
+/** A `sink` whose factory id would be derived from the class. */
+#[Proc(kind: OperativeKind::Stream, sink: 'out')]
+final class ShorthandSinkWithoutId extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+/** A `sink` with no `kind`. */
+#[Proc(name: 'plain', sink: 'out')]
+final class ShorthandSinkWithoutKind extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+/** A short-form key on a class with no `sink`. */
+#[Proc(name: 'plain', input: 'prices')]
+final class ShorthandKeyWithoutSink extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+/** Half of the duplicate row's pair. */
+#[Proc(name: 'plain', kind: OperativeKind::Stream, sink: 'out')]
+final class ShorthandDupStream extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
+/** The other half: a workflow claiming the id the stream holds. */
+#[Proc(name: 'plain', kind: OperativeKind::Workflow, sink: 'twin_sink')]
+final class ShorthandDupWorkflow extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return $input;
+    }
+}
+
 final class ConformanceRow extends StreamOperative
 {
     public static ?RowInterpreter $row = null;
@@ -388,7 +448,31 @@ final class Conformance
      * NAME, which is what makes the skip checkable. The class flag a typed
      * builder cannot spell is a plain builder call here.
      */
-    private const SURFACES = ['branch', 'merge', 'workflow', 'sync_durability'];
+    private const SURFACES = [
+        'branch',
+        'merge',
+        'workflow',
+        'sync_durability',
+        'shorthand',
+        'shorthand_omittable_sink',
+    ];
+
+    /**
+     * The §5 short-form palette: one class per spelling the fixture's
+     * `shorthand(...)` step can describe. PHP declares a short form in an
+     * attribute, which is written where the class is, so the step selects the
+     * class whose declaration is that shape rather than building one.
+     *
+     * Keyed by `<id?>|<kind?>|<sink?>|<input?>` with `-` for an unwritten
+     * field, and `.noout` for a procedure declaring no output.
+     */
+    private const SHORTHAND_PALETTE = [
+        '-|stream|out|-' => ShorthandSinkWithoutId::class,
+        'plain|-|out|-' => ShorthandSinkWithoutKind::class,
+        'plain|-|-|prices' => ShorthandKeyWithoutSink::class,
+        'plain|stream|out|-' => ShorthandDupStream::class,
+        'plain|workflow|twin_sink|-' => ShorthandDupWorkflow::class,
+    ];
 
     /**
      * The two topologies the fixture cites rather than re-spells: this app's
@@ -427,6 +511,75 @@ final class Conformance
     }
 
     /**
+     * The `shorthand(<id>|-, <kind>|-, <sink>|-, <input>|-)` steps of a row,
+     * each resolved to the palette class whose attribute is that declaration.
+     *
+     * @param array{steps: string} $row
+     * @return list<class-string<\Flezha\Procedure>>
+     */
+    private static function shorthandSteps(array $row): array
+    {
+        $classes = [];
+        foreach (explode(';', $row['steps']) as $raw) {
+            $step = trim($raw);
+            if (!str_starts_with($step, 'shorthand(')) {
+                continue;
+            }
+            $noout = str_ends_with($step, '.noout');
+            $body = $noout ? substr($step, 0, -strlen('.noout')) : $step;
+            [, $args] = RowInterpreter::splitCall($body);
+            $fields = array_map('trim', explode(',', $args));
+            if (count($fields) !== 4) {
+                throw new \RuntimeException("a shorthand step declares four fields: read `$step`");
+            }
+            $key = implode('|', $fields) . ($noout ? '.noout' : '');
+            $classes[] = self::SHORTHAND_PALETTE[$key]
+                ?? throw new \RuntimeException("the palette has no class for `$step`");
+        }
+
+        return $classes;
+    }
+
+    /**
+     * A short-form row's verdict: what registering its declarations answered.
+     * PHP raises every short-form refusal at registration, so each row boots
+     * for real.
+     *
+     * @param array{topology: string} $row
+     * @param list<class-string<\Flezha\Procedure>> $classes
+     * @return array<string, mixed>
+     */
+    private static function judgeShorthand(array $row, array $classes): array
+    {
+        try {
+            // A duplicate factory id is the registry's refusal, which a
+            // deployed runner reaches at boot; the registry is driven here
+            // rather than restated, so the name reported is the name an author
+            // reads.
+            $registry = new Registry();
+            foreach ($classes as $class) {
+                $registry->add(Operative::specFor($class));
+            }
+        } catch (DeclarationException $e) {
+            return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => $e->refusals];
+        } catch (FlezhaException $e) {
+            return [
+                'topology' => $row['topology'],
+                'outcome' => 'refused',
+                'names' => [self::refusalName($e->getMessage())],
+            ];
+        }
+
+        return ['topology' => $row['topology'], 'outcome' => 'accepted'];
+    }
+
+    /** The leading refusal name of a message the contract requires to begin with one. */
+    private static function refusalName(string $message): string
+    {
+        return trim(explode(':', $message, 2)[0]);
+    }
+
+    /**
      * Register ONLY the named row's topology, the way the app registers any
      * class. A refused row never reaches a connected runner: the declaration is
      * judged before the core is started, and the process dies naming the
@@ -436,7 +589,14 @@ final class Conformance
     {
         foreach (self::rows() as $row) {
             if ($row['topology'] === $topology) {
-                $runner->defineStream(self::classFor($row));
+                $shorthand = self::shorthandSteps($row);
+                if ($shorthand === []) {
+                    $runner->registerFactory(self::classFor($row));
+                } else {
+                    foreach ($shorthand as $class) {
+                        $runner->registerFactory($class);
+                    }
+                }
 
                 return;
             }
@@ -457,6 +617,11 @@ final class Conformance
     {
         if ($row['needs'] !== '-' && !in_array($row['needs'], self::SURFACES, true)) {
             return ['topology' => $row['topology'], 'outcome' => 'skipped', 'needs' => $row['needs']];
+        }
+
+        $shorthand = self::shorthandSteps($row);
+        if ($shorthand !== []) {
+            return self::judgeShorthand($row, $shorthand);
         }
 
         try {

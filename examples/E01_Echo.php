@@ -42,5 +42,5 @@ final class EchoOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->defineStream(EchoOperative::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(EchoOperative::class)->run();
 }

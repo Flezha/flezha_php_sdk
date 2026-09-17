@@ -17,7 +17,8 @@ final class Registry
     {
         if (isset($this->classes[$spec->factoryId])) {
             throw new FlezhaException(sprintf(
-                'duplicate factory id `%s`: a runner declares each factory once',
+                'DuplicateFactoryId: `%s` is already declared on this runner; a runner declares '
+                . 'each factory id once',
                 $spec->factoryId,
             ));
         }

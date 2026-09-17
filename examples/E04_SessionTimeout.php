@@ -80,5 +80,5 @@ final class SessionOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->defineStream(SessionOperative::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(SessionOperative::class)->run();
 }

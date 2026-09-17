@@ -28,7 +28,7 @@ namespace Flezha;
  *         }
  *     }
  *
- *     Flezha::createRunner('default')->defineStream(EchoOperative::class)->run();
+ *     Flezha::createRunner('default')->registerFactory(EchoOperative::class)->run();
  */
 final class Flezha
 {

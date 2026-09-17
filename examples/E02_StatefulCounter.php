@@ -78,5 +78,5 @@ final class OrderTotalsOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->defineStream(OrderTotalsOperative::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(OrderTotalsOperative::class)->run();
 }

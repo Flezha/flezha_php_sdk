@@ -22,6 +22,7 @@ use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
+use Flezha\OperativeKind;
 use Flezha\Overflow;
 use Flezha\Procedure;
 use Flezha\StreamOperative;
@@ -217,25 +218,28 @@ final class MixedOperative extends StreamOperative
     }
 }
 
-// -- sugar_do_nothing / sugar_store_input ------------------------------------
+// -- the §5 short forms ------------------------------------------------------
+//
+// One attribute each: the `sink` makes the procedure a whole operative of its
+// `kind`, and `runner.php` registers the class itself. No hand-written
+// operative stands beside them.
 
-#[Proc(name: 'sugar_do_nothing')]
+#[Proc(
+    name: 'sugar_do_nothing',
+    kind: OperativeKind::Stream,
+    sink: 'sugar_do_nothing_echo',
+    codec: ChannelCodec::Text,
+)]
 final class SugarDoNothing extends PassThrough
 {
 }
 
-#[Operative(factoryId: 'sugar_do_nothing')]
-final class SugarDoNothingOperative extends StreamOperative
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('input', codec: ChannelCodec::Text)
-            ->into(SugarDoNothing::class)
-            ->sink('sugar_do_nothing_echo');
-    }
-}
-
-#[Proc(name: 'sugar_store_input')]
+#[Proc(
+    name: 'sugar_store_input',
+    kind: OperativeKind::Stream,
+    sink: 'sugar_store_sink',
+    codec: ChannelCodec::Text,
+)]
 final class SugarStoreInput extends Procedure
 {
     public function state(?string $entityKey): mixed
@@ -256,15 +260,26 @@ final class SugarStoreInput extends Procedure
     }
 }
 
-#[Operative(factoryId: 'sugar_store_input')]
-final class SugarStoreInputOperative extends StreamOperative
+#[Proc(
+    name: 'sugar_named_input',
+    kind: OperativeKind::Stream,
+    sink: 'sugar_named_input_sink',
+    input: 'prices',
+    codec: ChannelCodec::Text,
+)]
+final class SugarNamedInput extends PassThrough
 {
-    public static function channels(Builder $c): void
-    {
-        $c->input('input', codec: ChannelCodec::Text)
-            ->into(SugarStoreInput::class)
-            ->sink('sugar_store_sink');
-    }
+}
+
+#[Proc(
+    name: 'sugar_workflow',
+    kind: OperativeKind::Workflow,
+    sink: 'sugar_workflow_placed',
+    input: 'order',
+    codec: ChannelCodec::Text,
+)]
+final class SugarWorkflow extends PassThrough
+{
 }
 
 // -- hybrid_channel ----------------------------------------------------------
@@ -724,8 +739,6 @@ final class Fixtures
             StaticEntityOperative::class,
             SugarStaticEntityOperative::class,
             MixedOperative::class,
-            SugarDoNothingOperative::class,
-            SugarStoreInputOperative::class,
             HybridChannelOperative::class,
             MergedInputOperative::class,
             TransformChainOperative::class,
@@ -753,6 +766,22 @@ final class Fixtures
             PartitionRelayOperative::class,
             DynamicEntityOperative::class,
             SpawnRequesterOperative::class,
+        ];
+    }
+
+    /**
+     * The §5 short forms this app registers: each is the procedure class
+     * itself, whose `sink` makes it a whole operative.
+     *
+     * @return list<class-string<Procedure>>
+     */
+    public static function shorthand(): array
+    {
+        return [
+            SugarDoNothing::class,
+            SugarStoreInput::class,
+            SugarNamedInput::class,
+            SugarWorkflow::class,
         ];
     }
 }

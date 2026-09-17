@@ -7,7 +7,7 @@ declare(strict_types=1);
  * operatives.
  *
  * Declare every operative you want served before `start()`. One runner can
- * serve several, and `defineWorkflow()` is the same call for the workflow kind.
+ * serve several, and the same call takes a workflow operative.
  */
 
 require __DIR__ . '/vendor/autoload.php';
@@ -18,7 +18,7 @@ use Flezha\Flezha;
 // `run()` is `start()` followed by `awaitTermination()`. Splitting them leaves
 // room for the admin calls below, and still blocks until shutdown.
 $runner = Flezha::createRunner($argv[1] ?? 'default')
-    ->defineStream(EchoOperative::class)
+    ->registerFactory(EchoOperative::class)
     ->start();
 
 // Everything `flz operative` and `flz plugin` do is also a method here.

@@ -14,6 +14,7 @@ use Flezha\Executor\Executors;
 use Flezha\Executor\LoopState;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
+use Flezha\Graph\ClassSpec;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 
@@ -85,31 +86,45 @@ final class Runner
         self::$attachment = [$address, $state];
     }
 
-    /** Register a stream operative class. @param class-string<Operative> $class */
-    public function defineStream(string $class): self
+    /**
+     * Register an operative class of either kind, or a `Procedure` subclass
+     * whose `sink` makes it one. The kind is read from the class, never named
+     * by the call.
+     *
+     * @param class-string<Operative>|class-string<Procedure> $class
+     */
+    public function registerFactory(string $class): self
     {
+        // Resolved here so a malformed short form is refused at the call the
+        // author wrote, not at the first connection.
+        Operative::specFor($class);
         $this->classes[] = $class;
 
         return $this;
     }
 
     /**
-     * Register a workflow operative class.
+     * Undo a registration made before the runner starts — the inverse of
+     * {@see registerFactory()}, taking what it took.
      *
-     * The same registration as a stream, and deliberately the same code: what
-     * a class declares is read from the class, so the two names are for the
-     * reader rather than for the runner.
+     * After start it refuses: a started PHP runner serves its declarations
+     * from a registry the executor already holds, and it cannot stop serving
+     * one. Saying so is what makes the call honest rather than ignored.
      *
-     * @param class-string<Operative> $class
+     * @param class-string<Operative>|class-string<Procedure> $class
      */
-    public function defineWorkflow(string $class): self
+    public function unregisterFactory(string $class): self
     {
-        return $this->defineStream($class);
-    }
-
-    /** The inverse of `defineStream` / `defineWorkflow`. */
-    public function removeType(string $class): self
-    {
+        if ($this->core !== null) {
+            throw new FlezhaException(sprintf(
+                '`%s` cannot be unregistered: a running PHP runner cannot stop serving a started '
+                . 'declaration',
+                $class,
+            ));
+        }
+        if (!in_array($class, $this->classes, true)) {
+            throw new FlezhaException(sprintf('`%s` is not registered on this runner', $class));
+        }
         $this->classes = array_values(array_filter(
             $this->classes,
             static fn (string $registered): bool => $registered !== $class,
@@ -373,7 +388,7 @@ final class Runner
     private function buildRegistry(): void
     {
         foreach ($this->classes as $class) {
-            $spec = $class::spec();
+            $spec = Operative::specFor($class);
             // The verdict before the registration: the core judges the record
             // and this package renders it, so an author meets a declaration
             // refusal rather than a native failure at the first connection.

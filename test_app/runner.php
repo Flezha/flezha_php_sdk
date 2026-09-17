@@ -56,11 +56,14 @@ if ($topology !== false && $topology !== '') {
     Conformance::registerOnly($runner, $topology);
 } else {
     foreach (Fixtures::all() as $operative) {
-        $runner->defineStream($operative);
+        $runner->registerFactory($operative);
     }
-    // The same registration, under the name that says which kind it is.
+    // A short form is the procedure class itself; the same call takes it.
+    foreach (Fixtures::shorthand() as $shortForm) {
+        $runner->registerFactory($shortForm);
+    }
     foreach (WorkflowFixtures::all() as $operative) {
-        $runner->defineWorkflow($operative);
+        $runner->registerFactory($operative);
     }
 }
 

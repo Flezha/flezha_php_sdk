@@ -103,5 +103,59 @@ abstract class Operative
         );
     }
 
+    /**
+     * The spec a registration call was handed: an operative class answers its
+     * own, and a `Procedure` subclass the one its `sink` generates.
+     *
+     * The one resolver, so the runner and a local run cannot disagree about
+     * what a short form declares.
+     *
+     * @param class-string<Operative>|class-string<Procedure> $class
+     */
+    public static function specFor(string $class): ClassSpec
+    {
+        if (!is_subclass_of($class, Procedure::class)) {
+            return $class::spec();
+        }
+
+        return Definition::of($class)->shortForm() ?? throw new DeclarationException(
+            $class,
+            null,
+            'is a procedure with no `sink`, so it declares no operative; register the operative '
+            . 'that wires it, or declare a `sink` on it',
+        );
+    }
+
+    /**
+     * The spec a §5 short form generates: one entry channel into that one
+     * procedure, that procedure to one plugin sink, and every class-level
+     * setting at its kind's default.
+     *
+     * Assembled here, beside the assembly both hand-written kinds use, so a
+     * short form and a full form cannot drift apart in what they declare.
+     *
+     * @param class-string<Procedure> $procedure
+     * @internal Called by {@see Procedure::operative()}.
+     */
+    public static function shortForm(
+        string $procedure,
+        string $factoryId,
+        OperativeKind $kind,
+        string $sink,
+        string $entry,
+        ?ChannelCodec $codec,
+    ): ClassSpec {
+        $builder = new Builder($factoryId);
+        $builder->input($entry, null, $codec)->into($procedure)->sink($sink);
+        // Sealed before the channels are read, as `builder()` seals a
+        // hand-written class's.
+        $builder = $builder->seal();
+        $declaration = new OperativeAttribute(factoryId: $factoryId);
+
+        return $kind === OperativeKind::Workflow
+            ? static::assemble($declaration, $builder, 'workflow', false, new WorkflowAttribute())
+            : static::assemble($declaration, $builder, 'stream', $builder->syncDurability);
+    }
+
     abstract protected static function buildSpec(OperativeAttribute $declaration): ClassSpec;
 }
