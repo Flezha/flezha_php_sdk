@@ -15,11 +15,24 @@ namespace Flezha;
  */
 interface SpawnBridge
 {
-    /** Answers the controller's outcome (`spawned` | `delivered` | ...). */
-    public function spawnWorkflow(
-        string $instanceId,
+    /**
+     * Send one request from the activation `$token` and answer its handle
+     * number at once. An empty `$id` asks the controller to generate one; a
+     * replay sends nothing.
+     */
+    public function spawnRequest(
+        int $token,
         string $factoryId,
+        string $id,
         string $payload,
         string $ifRunning,
-    ): string;
+        bool $replay,
+    ): int;
+
+    /**
+     * Read a handle, waiting up to `$timeoutMs`: null while no answer has
+     * arrived, else the answer as JSON, `{"id","outcome"}` or
+     * `{"id","error","message"}`.
+     */
+    public function spawnResult(int $handle, int $timeoutMs): ?string;
 }

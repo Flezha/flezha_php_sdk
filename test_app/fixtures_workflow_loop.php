@@ -17,9 +17,11 @@ use Flezha\Attribute\Proc;
 use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
+use Flezha\Exception\SpawnException;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
 use Flezha\Procedure;
+use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
 
 // -- the durable loop family -------------------------------------------------
@@ -150,6 +152,45 @@ final class ChatRewindWorkflow extends WorkflowOperative
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
             ->into(ChatReplyUndoable::class)
+            ->sink('out');
+    }
+}
+
+// -- spawn_requester ---------------------------------------------------------
+//
+// On each input it spawns stateless_loop_workflow once with no id and once under
+// the input as its id, and prints both results, because a handle's answer is
+// observable nowhere but in the procedure that read it.
+
+#[Proc(name: 'spawn_requester')]
+final class SpawnRequester extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $handles = [
+            'unnamed' => $ctx->spawnWorkflow('stateless_loop_workflow', (string) $input),
+            'named' => $ctx->spawnWorkflow('stateless_loop_workflow', (string) $input, id: (string) $input),
+        ];
+        foreach ($handles as $label => $handle) {
+            try {
+                $result = $handle->wait();
+                echo "spawn_result $label {$result->id} {$result->outcome->value}\n";
+            } catch (SpawnException $e) {
+                echo "spawn_result $label error {$e->getMessage()}\n";
+            }
+        }
+
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'spawn_requester')]
+final class SpawnRequesterOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(SpawnRequester::class)
             ->sink('out');
     }
 }

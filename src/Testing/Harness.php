@@ -13,6 +13,7 @@ use Flezha\Definition;
 use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\RegisteredClass;
 use Flezha\Dispatch\Restore;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\ProcNode;
@@ -32,6 +33,9 @@ use Flezha\Timer;
  */
 final class Harness implements SpawnBridge
 {
+    /** The lowercase base32 a generated id's suffix is spelled in. */
+    private const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
+
     private readonly Definition $definition;
     private readonly ProcNode $node;
     private readonly RegisteredClass $registered;
@@ -40,6 +44,11 @@ final class Harness implements SpawnBridge
     public array $log = [];
 
     private int $changeSeq = 0;
+
+    /** @var array<int, string> each spawn's answer by handle number, released when its invocation ends */
+    private array $spawns = [];
+
+    private int $spawnCount = 0;
 
     /** @param class-string<Procedure> $procedureClass */
     public function __construct(
@@ -174,11 +183,35 @@ final class Harness implements SpawnBridge
 
     /**
      * The spawn bridge a `Ctx` asks. A harness has no controller, so a spawn
-     * answers what one would have and records nothing.
+     * answers at once what one would have: `spawned` under the given id, or
+     * under an id shaped like a generated one, and `skipped_on_replay` on a
+     * replay.
      */
-    public function spawnWorkflow(string $instanceId, string $factoryId, string $payload, string $ifRunning): string
+    public function spawnRequest(
+        int $token,
+        string $factoryId,
+        string $id,
+        string $payload,
+        string $ifRunning,
+        bool $replay,
+    ): int {
+        $handle = $this->spawnCount++;
+        if ($id === '' && !$replay) {
+            // The spawn's number as the suffix: deterministic, and distinct per spawn.
+            $suffix = '';
+            for ($n = $handle, $i = 0; $i < 16; $i++, $n >>= 5) {
+                $suffix = self::BASE32[$n & 31] . $suffix;
+            }
+            $id = "$factoryId-$suffix";
+        }
+        $this->spawns[$handle] = Json::encode(['id' => $id, 'outcome' => $replay ? 'skipped_on_replay' : 'spawned']);
+
+        return $handle;
+    }
+
+    public function spawnResult(int $handle, int $timeoutMs): ?string
     {
-        return 'spawned';
+        return $this->spawns[$handle] ?? throw new FlezhaException("spawn handle $handle was released");
     }
 
     /**
@@ -200,22 +233,27 @@ final class Harness implements SpawnBridge
     private function drive(int $now, bool $replay, callable $body): Outcome
     {
         $returned = null;
-        $ctx = Dispatcher::invoke(
-            [
-                'operative' => $this->operative,
-                'entity_key' => $this->entityKey,
-                'change_seq' => $this->changeSeq,
-            ],
-            $this->registered,
-            $this->node,
-            $this,
-            $now,
-            $replay,
-            function (Ctx $ctx) use ($body, &$returned): void {
-                $returned = $body($ctx);
-                $ctx->emitReturned($returned);
-            },
-        );
+        try {
+            $ctx = Dispatcher::invoke(
+                [
+                    'token' => 0,
+                    'operative' => $this->operative,
+                    'entity_key' => $this->entityKey,
+                    'change_seq' => $this->changeSeq,
+                ],
+                $this->registered,
+                $this->node,
+                $this,
+                $now,
+                $replay,
+                function (Ctx $ctx) use ($body, &$returned): void {
+                    $returned = $body($ctx);
+                    $ctx->emitReturned($returned);
+                },
+            );
+        } finally {
+            $this->spawns = [];
+        }
 
         array_push($this->log, ...$ctx->changes);
         $this->changeSeq += count($ctx->changes);

@@ -30,7 +30,7 @@ platform, from the release matching that version. The `allow-plugins` entry in
 Then, from another terminal:
 
 ```sh
-flz operative start my_echo echo
+flz operative start echo --id my_echo
 flz operative send my_echo --text 'hello world' --await 2000
 ```
 

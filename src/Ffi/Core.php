@@ -317,29 +317,50 @@ final class Core implements SpawnBridge
         return $this->ffi->flz_core_workflow_cancelled($this->live(), $instanceId) === 1;
     }
 
-    /** Spawn-or-deliver a workflow instance; answers the controller's outcome. */
-    public function spawnWorkflow(
-        string $instanceId,
+    public function spawnRequest(
+        int $token,
         string $factoryId,
+        string $id,
         string $payload,
         string $ifRunning,
-    ): string {
-        $outcome = null;
+        bool $replay,
+    ): int {
+        $handle = $this->ffi->new('uint64_t');
+        $this->check($this->ffi->flz_core_spawn_request(
+            $this->live(),
+            $token,
+            $factoryId,
+            $id,
+            $payload,
+            strlen($payload),
+            $ifRunning,
+            $replay ? 1 : 0,
+            FFI::addr($handle),
+        ));
+
+        return (int) $handle->cdata;
+    }
+
+    /**
+     * A failure resolves the handle too, so it answers its JSON rather than
+     * throwing; what throws is a handle already released.
+     */
+    public function spawnResult(int $handle, int $timeoutMs): ?string
+    {
+        $answer = null;
+        // Pending hands out no buffer, which leaves `$answer` null.
         $this->check($this->outBuffer(
-            fn (CData $out, CData $len): int => $this->ffi->flz_core_spawn_workflow(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_spawn_result(
                 $this->live(),
-                $instanceId,
-                $factoryId,
-                $payload,
-                strlen($payload),
-                $ifRunning,
+                $handle,
+                $timeoutMs,
                 FFI::addr($out),
                 FFI::addr($len),
             ),
-            $outcome,
+            $answer,
         ));
 
-        return (string) $outcome;
+        return $answer;
     }
 
     /**
@@ -386,7 +407,7 @@ final class Core implements SpawnBridge
     /**
      * Call an entry point that hands back a core-allocated buffer, and take it.
      *
-     * One place, because all four have the same obligation and the same
+     * One place, because every such entry has the same obligation and the same
      * shape: the core allocated the buffer and the core frees it, so forgetting
      * the free leaks per activation rather than visibly, and every one of them
      * writes through a `char **` / `size_t *` pair the caller must own.

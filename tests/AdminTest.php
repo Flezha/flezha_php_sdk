@@ -1,0 +1,71 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Flezha\Tests;
+
+use Flezha\Admin;
+use Flezha\Exception\FlezhaException;
+use Flezha\Ffi\Core;
+use Flezha\StartOutcome;
+use Flezha\StartResult;
+use PHPUnit\Framework\TestCase;
+
+/** Starting an operative from application code. */
+final class AdminTest extends TestCase
+{
+    /** @var list<array{string, string}> each call's verb and JSON arguments */
+    private array $calls = [];
+
+    public function testAStartWithoutAnIdSendsNoneAndAnswersTheGeneratedOne(): void
+    {
+        $result = $this->answering('{"id":"echo-k7m2qzxw4pd3fn2a","outcome":"started"}')->startOperative('echo');
+
+        self::assertSame([['Operative.start', '[{"factory_id":"echo"}]']], $this->calls);
+        self::assertEquals(new StartResult('echo-k7m2qzxw4pd3fn2a', StartOutcome::Started), $result);
+    }
+
+    public function testAStartOfARunningIdAnswersAlreadyRunning(): void
+    {
+        $result = $this->answering('{"id":"my_echo","outcome":"already_running"}')
+            ->startOperative('echo', id: 'my_echo', kind: 'stream');
+
+        self::assertSame(
+            [['Operative.start', '[{"factory_id":"echo","id":"my_echo","kind":"stream"}]']],
+            $this->calls,
+        );
+        self::assertEquals(new StartResult('my_echo', StartOutcome::AlreadyRunning), $result);
+    }
+
+    public function testAnAnswerOfAnotherShapeIsRefusedNamingIt(): void
+    {
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionMessage('"duplicate"');
+
+        $this->answering('"duplicate"')->startOperative('echo', id: 'my_echo');
+    }
+
+    /** Reported as every administration call reports a refusal: the core's reason, thrown. */
+    public function testWithNoControlPlaneAStartIsRefusedAsEveryCallIs(): void
+    {
+        $core = Core::create();
+
+        try {
+            $this->expectException(FlezhaException::class);
+            $this->expectExceptionMessage('no control plane');
+
+            (new Admin($core->adminCall(...)))->startOperative('echo');
+        } finally {
+            $core->free();
+        }
+    }
+
+    private function answering(string $answer): Admin
+    {
+        return new Admin(function (string $verb, string $args) use ($answer): string {
+            $this->calls[] = [$verb, $args];
+
+            return $answer;
+        });
+    }
+}

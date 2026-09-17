@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha;
 
+use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 
 /**
@@ -23,30 +24,41 @@ use Flezha\Ffi\Core;
  */
 final class Admin
 {
-    public function __construct(private readonly Core $core)
+    /** @param \Closure(string, string): string $adminCall {@see Core::adminCall()} */
+    public function __construct(private readonly \Closure $adminCall)
     {
     }
 
-    /** Start an operative, on the specification `flz operative start` takes. */
+    /**
+     * Start an operative of `$factoryId`, on the specification `flz operative
+     * start` takes.
+     *
+     * Without an `$id` the controller generates one, so a start retried after a
+     * lost answer starts a second operative. With one, a start of an id already
+     * running leaves that operative untouched and answers `already_running`.
+     *
+     * @throws FlezhaException the controller's refusal, as for every call here
+     */
     public function startOperative(
-        string $operativeId,
         string $factoryId,
+        ?string $id = null,
         ?string $kind = null,
         mixed $initValues = null,
         mixed $opts = null,
-    ): mixed {
-        $fields = ['id' => $operativeId, 'factory_id' => $factoryId];
-        if ($kind !== null) {
-            $fields['kind'] = $kind;
-        }
-        if ($initValues !== null) {
-            $fields['init_values'] = $initValues;
-        }
-        if ($opts !== null) {
-            $fields['opts'] = $opts;
+    ): StartResult {
+        $answer = $this->call('Operative.start', array_filter(
+            ['factory_id' => $factoryId, 'id' => $id, 'kind' => $kind, 'init_values' => $initValues, 'opts' => $opts],
+            static fn (mixed $field): bool => $field !== null,
+        ));
+        $outcome = StartOutcome::tryFrom((string) ($answer['outcome'] ?? ''));
+        if ($outcome === null || !is_string($answer['id'] ?? null)) {
+            throw new FlezhaException(sprintf(
+                'the controller answered a start with %s, not an id and an outcome',
+                json_encode($answer),
+            ));
         }
 
-        return $this->call('Operative.start', $fields);
+        return new StartResult($answer['id'], $outcome);
     }
 
     /** Stop an operative, or the whole partition group it names. */
@@ -99,7 +111,7 @@ final class Admin
      */
     public function call(string $verb, mixed ...$args): mixed
     {
-        $answer = $this->core->adminCall($verb, json_encode(array_values($args), JSON_THROW_ON_ERROR));
+        $answer = ($this->adminCall)($verb, json_encode(array_values($args), JSON_THROW_ON_ERROR));
 
         return json_decode($answer, true, 512, JSON_THROW_ON_ERROR);
     }

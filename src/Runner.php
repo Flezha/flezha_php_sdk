@@ -145,7 +145,7 @@ final class Runner
      */
     public function admin(): Admin
     {
-        return new Admin($this->core());
+        return new Admin($this->core()->adminCall(...));
     }
 
     /**

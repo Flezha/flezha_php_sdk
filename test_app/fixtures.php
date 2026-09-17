@@ -752,6 +752,7 @@ final class Fixtures
             BoundedMailboxDropOldestOperative::class,
             PartitionRelayOperative::class,
             DynamicEntityOperative::class,
+            SpawnRequesterOperative::class,
         ];
     }
 }

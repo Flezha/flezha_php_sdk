@@ -6,8 +6,10 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Proc;
 use Flezha\Ctx;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\LatestDocumentRouter;
 use Flezha\Procedure;
+use Flezha\SpawnHandle;
 use Flezha\Testing\Harness;
 use Flezha\Testing\ReplayMismatch;
 use PHPUnit\Framework\TestCase;
@@ -188,6 +190,28 @@ final class HarnessTest extends TestCase
         self::assertTrue($harness->assertReplayEquals());
     }
 
+    /** A harness has no controller, so a spawn's handle is resolved before the call returns. */
+    public function testASpawnAnswersAHandleAlreadyResolved(): void
+    {
+        $harness = new Harness(SpawnsTwice::class);
+        [[$unnamed, $spawned], $named] = $harness->feed('p')->outputs;
+
+        self::assertMatchesRegularExpression('/^worker-[a-z2-7]{16}$/', $unnamed);
+        self::assertSame('spawned', $spawned);
+        self::assertSame(['w1', 'spawned'], $named);
+        self::assertNotSame($unnamed, $harness->feed('p')->outputs[0][0], 'each spawn without an id gets its own');
+
+        self::assertSame(
+            [['', 'skipped_on_replay'], ['w1', 'skipped_on_replay']],
+            $harness->feed('p', replay: true)->outputs,
+        );
+
+        // As live: a handle is read inside the invocation that made it.
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionMessage('was released');
+        SpawnsTwice::$handles[0]->tryResult();
+    }
+
     public function testStableIdIsDistinctPerInvocationAndStableAcrossReplay(): void
     {
         $harness = new Harness(StableIdProbe::class, 'k');
@@ -196,6 +220,24 @@ final class HarnessTest extends TestCase
 
         self::assertNotSame($first[0][0], $first[0][1], 'two calls in one invocation differ');
         self::assertSame($first, $again, 'the same invocation replayed derives the same ids');
+    }
+}
+
+#[Proc]
+final class SpawnsTwice extends Procedure
+{
+    /** @var list<SpawnHandle> the handles the latest run made */
+    public static array $handles = [];
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        self::$handles = [$ctx->spawnWorkflow('worker', (string) $input), $ctx->spawnWorkflow('worker', (string) $input, id: 'w1')];
+        foreach (self::$handles as $handle) {
+            $result = $handle->tryResult();
+            $ctx->emit([$result?->id, $result?->outcome->value]);
+        }
+
+        return null;
     }
 }
 

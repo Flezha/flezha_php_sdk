@@ -159,6 +159,7 @@ final class Dispatcher
             replay: $replay,
             state: $registered->stateOf($node, $activation['entity_key']),
             bridge: $bridge,
+            token: (int) $activation['token'],
         );
 
         try {

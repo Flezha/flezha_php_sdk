@@ -26,7 +26,7 @@ $runner = Flezha::createRunner($argv[1] ?? 'default')
 // terminal:
 //
 // $admin = $runner->admin();
-// $admin->startOperative('my_echo', 'echo');
+// $admin->startOperative('echo', id: 'my_echo');
 // $admin->enablePlugin('writer', [
 //     'id' => 'writer',
 //     'provider' => 'operative_file_sink',

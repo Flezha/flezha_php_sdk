@@ -48,6 +48,7 @@ final class Ctx
         public readonly bool $replay,
         public mixed $state,
         private readonly SpawnBridge $bridge,
+        private readonly int $token,
     ) {
     }
 
@@ -181,20 +182,46 @@ final class Ctx
         $this->checkpointed = true;
     }
 
-    /** Spawn or deliver to a workflow instance. */
+    /**
+     * Ask the controller for a workflow instance of `$factoryId`, with
+     * `$payload` as its first input. Returns the handle at once: the call never
+     * waits, and a refusal reaches only a read of the handle.
+     *
+     * Without an `$id` the controller generates one and always starts a new
+     * instance, so reissuing the call after a lost or timed-out answer starts a
+     * second one, and a replay of it answers an empty id. A caller who needs at
+     * most one instance, or the id on replay, passes its own `$id`. With one,
+     * `$ifRunning` says what a running instance gets: `deliver` (the default)
+     * feeds it the payload, `error` leaves it alone and the read throws.
+     *
+     * Spawning is a side effect of live processing: a replayed invocation sends
+     * nothing and its handle answers `skipped_on_replay`. A timer on this same
+     * context is registered on replay, because a timer is internal state.
+     *
+     * @throws \InvalidArgumentException for an `$ifRunning` with no `$id`; nothing is sent
+     */
     public function spawnWorkflow(
-        string $instanceId,
         string $factoryId,
         mixed $payload,
-        string $ifRunning = 'deliver',
-    ): string {
-        // A spawn is an external side effect. A replayed invocation must not
-        // issue it twice, and a timer must — a timer is internal state.
-        if ($this->replay) {
-            return 'skipped_on_replay';
+        ?string $id = null,
+        ?string $ifRunning = null,
+    ): SpawnHandle {
+        if ($ifRunning !== null && ($id ?? '') === '') {
+            throw new \InvalidArgumentException(sprintf(
+                '%s: spawnWorkflow was given ifRunning without an id; ifRunning applies to a running '
+                . 'instance an id names, and a spawn without an id always starts a new one',
+                $this->node->name,
+            ));
         }
 
-        return $this->bridge->spawnWorkflow($instanceId, $factoryId, Json::encode($payload), $ifRunning);
+        return new SpawnHandle($this->bridge, $this->bridge->spawnRequest(
+            $this->token,
+            $factoryId,
+            $id ?? '',
+            Json::encode($payload),
+            $ifRunning ?? 'deliver',
+            $this->replay,
+        ));
     }
 
     /**
