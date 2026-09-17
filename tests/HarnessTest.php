@@ -6,6 +6,7 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Proc;
 use Flezha\Ctx;
+use Flezha\Graph\LatestDocumentRouter;
 use Flezha\Procedure;
 use Flezha\Testing\Harness;
 use Flezha\Testing\ReplayMismatch;
@@ -154,6 +155,37 @@ final class HarnessTest extends TestCase
             [['kind' => 'event_time', 'at' => 9_000, 'now' => 9_000]],
             $harness->state()['fired'],
         );
+    }
+
+    /**
+     * A document, trades for A and B, the same document again, then a trade
+     * for A: each key receives the document once, the repeat is inert, and a
+     * changed document is owed to A again on A's next trade.
+     */
+    public function testTheRouterDeliversEachDocumentOnceOnAKeysOwnTraffic(): void
+    {
+        $harness = new Harness(LatestDocumentRouter::class);
+        $document = ['limit' => 5];
+        $steps = [
+            LatestDocumentRouter::document($document),
+            LatestDocumentRouter::traffic('A'),
+            LatestDocumentRouter::traffic('B'),
+            LatestDocumentRouter::document($document),
+            LatestDocumentRouter::traffic('A'),
+        ];
+        $outcomes = array_map($harness->feed(...), $steps);
+
+        self::assertSame(
+            [[], [['A', $document]], [['B', $document]], [], []],
+            array_map(static fn ($outcome): array => $outcome->outputs, $outcomes),
+        );
+        self::assertSame([], $outcomes[3]->changes, 'the repeated document is inert');
+        self::assertSame(1, $harness->state()['version']);
+
+        $changed = ['limit' => 7];
+        $harness->feed(LatestDocumentRouter::document($changed));
+        self::assertSame([['A', $changed]], $harness->feed(LatestDocumentRouter::traffic('A'))->outputs);
+        self::assertTrue($harness->assertReplayEquals());
     }
 
     public function testStableIdIsDistinctPerInvocationAndStableAcrossReplay(): void

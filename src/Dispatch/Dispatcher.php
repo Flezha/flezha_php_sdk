@@ -7,6 +7,7 @@ namespace Flezha\Dispatch;
 use Flezha\Codec\ActivationCodec;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
+use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\ChannelSpec;
@@ -268,7 +269,7 @@ final class Dispatcher
         $channel = $registered->spec->channels[$item['channel']] ?? null;
         // A filtered value is consumed and reaches no handler. It still
         // produces an effect, so its offset advances and nothing is retried.
-        // A fanned one reaches the handler once per value.
+        // A fanned one reaches the handler once per value routed to this entity.
         // This node's own edge off the channel: a transform chain declared
         // before one `into` belongs to that consumer and to no other. It is
         // evaluated here only for a payload that reached us untransformed — an
@@ -281,6 +282,9 @@ final class Dispatcher
             || $registered->spec->structuredWorkflow();
         $edge = $untransformed ? self::edgeInto($channel, $node->index) : null;
         foreach (self::valuesOf($channel, $edge, (string) $item['payload']) as $input) {
+            if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->entityKey)) {
+                continue;
+            }
             $ctx->emitReturned($definition->instance->run($input, $ctx));
         }
     }
@@ -345,11 +349,7 @@ final class Dispatcher
                 $keys = [];
                 if ($request['want_keys']) {
                     foreach ($values as $value) {
-                        if ($edge?->keyBy !== null) {
-                            $keys[] = (string) ($edge->keyBy)($value);
-                        } elseif ($definition?->declares('entitiesFor') === true) {
-                            array_push($keys, ...$definition->entitiesFor($value));
-                        }
+                        array_push($keys, ...(self::keysOf($edge, $definition, $value) ?? []));
                     }
                 }
 
@@ -475,6 +475,41 @@ final class Dispatcher
         $decoded = $channel?->decode !== null ? ($channel->decode)($payload) : Json::decode($payload);
 
         return Transforms::apply($edge?->transforms ?? [], $decoded);
+    }
+
+    /**
+     * The entity keys one value routes to: the edge's key, else the consumer's
+     * `entitiesFor`, else null when neither routes it.
+     *
+     * The prepare crossing and the delivery filter both read this, so an entity
+     * keeps exactly the values the crossing named it for.
+     *
+     * @return list<string>|null
+     */
+    private static function keysOf(?ConsumerEdge $edge, ?Definition $definition, mixed $value): ?array
+    {
+        if ($edge?->keyBy !== null) {
+            return [(string) ($edge->keyBy)($value)];
+        }
+        if ($definition?->declares('entitiesFor') === true) {
+            return $definition->entitiesFor($value);
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether one value of an untransformed payload belongs to this entity.
+     *
+     * The core admits the payload to every entity the prepare crossing named
+     * for any of its values, so a payload fanned across keys reaches each of
+     * them whole, and each keeps only the values routed to it.
+     */
+    private static function routesTo(ConsumerEdge $edge, Definition $definition, mixed $value, ?string $entityKey): bool
+    {
+        $keys = $entityKey === null ? null : self::keysOf($edge, $definition, $value);
+
+        return $keys === null || in_array($entityKey, $keys, true);
     }
 
     /** The channel's edge that feeds `$node`, or null when it feeds none. */

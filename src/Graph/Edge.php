@@ -121,6 +121,18 @@ final class Edge
     {
         $node = $this->builder->nodeFor($class, $nodeName);
 
+        return $this->wire($node, ['link' => 'into', 'procedure' => $node->index]);
+    }
+
+    /**
+     * Close this edge's chain on `$node` with `$link`: an `into`, or one source
+     * of a merge. Not an authoring call; `into` and `Merge::into` are.
+     *
+     * @internal
+     * @param array<string, mixed> $link
+     */
+    public function wire(ProcNode $node, array $link): self
+    {
         // Creates this edge's channel and applies its pending options, before
         // the link that closes on it is recorded.
         $this->channel();
@@ -133,7 +145,7 @@ final class Edge
         $this->builder->linkChain(
             $this->from,
             $this->pending['chain'] ?? null,
-            ['link' => 'into', 'procedure' => $node->index],
+            $link,
             new ConsumerEdge($node->index, $this->transforms(), $this->pending['keyBy'] ?? null),
         );
 

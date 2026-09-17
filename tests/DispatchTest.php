@@ -43,7 +43,8 @@ final class DispatchTest extends TestCase
         foreach (
             [EchoOperative::class, CounterOperative::class, KeyedOperative::class, StampOperative::class,
                 MixedStampOperative::class, WfEmitOperative::class,
-                WfEmitStreamOperative::class, JsonEntryOperative::class] as $class
+                WfEmitStreamOperative::class, JsonEntryOperative::class, MergeOperative::class,
+                RouteLatestOperative::class, FannedOperative::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -539,14 +540,111 @@ final class DispatchTest extends TestCase
         self::assertSame([10], $this->delivered('wf_emit', 2, $released));
     }
 
-    /** What `procedure` was handed when `payload` arrived on the handoff channel. @return list<mixed> */
-    private function delivered(string $factory, int $procedure, string $payload): array
-    {
+    /**
+     * What `procedure` was handed when `payload` arrived on `channel`, the
+     * handoff channel unless named.
+     *
+     * @return list<mixed>
+     */
+    private function delivered(
+        string $factory,
+        int $procedure,
+        string $payload,
+        int $channel = 1,
+        ?string $entityKey = null,
+    ): array {
         Delivered::$values = [];
-        $effect = $this->work($factory, $procedure, [self::input($payload, channel: 1)])['effects'][0];
+        $effect = $this->work($factory, $procedure, [self::input($payload, channel: $channel)], $entityKey)['effects'][0];
         self::assertSame('ok', $effect['verdict']);
 
         return Delivered::$values;
+    }
+
+    // --- merges, the router and fanned keys ---------------------------------
+
+    /** Two sources into one node: each channel's edge carries its own mapping, in arrival order. */
+    public function testMergedSourcesReachTheProcedureEachUnderItsOwnMapping(): void
+    {
+        Delivered::$values = [];
+        $result = $this->work('merge_operative', 0, [
+            self::input('"A:1"'),
+            self::input('"A:2"'),
+            self::input('"A:3"', channel: 1),
+        ], 'A');
+
+        self::assertSame(['ok', 'ok', 'ok'], array_column($result['effects'], 'verdict'));
+        self::assertSame([
+            ['A', ['tick' => 'A:1', 'symbol' => 'A']],
+            ['A', ['tick' => 'A:2', 'symbol' => 'A']],
+            ['A', ['quote' => 'A:3', 'symbol' => 'A']],
+        ], Delivered::$values);
+    }
+
+    /** The merge's key reads a field only the mapping sets. */
+    public function testTheMergeKeyIsComputedOnTheMappedValue(): void
+    {
+        self::assertSame(
+            [['keys' => ['B'], 'event_time' => null]],
+            $this->prepare(['"B:1"'], 'merge_operative', channel: 1),
+        );
+    }
+
+    public function testRouteLatestHandsAKeyTheDocumentOnItsOwnTraffic(): void
+    {
+        $result = $this->work('route_latest_operative', 0, [
+            self::input('{"limit":5}'),
+            self::input('{"symbol":"A"}', channel: 1),
+        ]);
+
+        self::assertSame([[], ['["A",{"limit":5}]']], array_map(
+            static fn (array $effect): array => array_column($effect['outputs'], 'payload'),
+            $result['effects'],
+        ));
+    }
+
+    public function testAFanOfThreeRunsTheHandlerOncePerValueUnderOneInput(): void
+    {
+        Delivered::$values = [];
+        $result = $this->work('fanned_operative', 0, [self::input('"a:1,a:2,a:3"', offset: 7)], 'a');
+
+        self::assertCount(1, $result['effects']);
+        self::assertSame(7, $result['effects'][0]['consumed_offset']);
+        self::assertSame([['a', 'a:1'], ['a', 'a:2'], ['a', 'a:3']], Delivered::$values);
+    }
+
+    public function testAFanOfNoneIsADrop(): void
+    {
+        self::assertSame([], $this->delivered('fanned_operative', 0, '"none"', channel: 0, entityKey: 'a'));
+        self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_operative'));
+    }
+
+    public function testAFanFollowedByAKeyAnswersEveryKeyAtTheCrossing(): void
+    {
+        self::assertSame(
+            [['keys' => ['a', 'b', 'c'], 'event_time' => null]],
+            $this->prepare(['"a:1,b:2,c:3"'], 'fanned_operative'),
+        );
+    }
+
+    /**
+     * The core admits a fanned entry payload whole to every entity its values
+     * keyed, so each entity keeps only its own: by the edge's key, or by a
+     * static procedure's `entitiesFor`.
+     *
+     * @return iterable<string, array{int, int}>
+     */
+    public static function fannedAcrossEntities(): iterable
+    {
+        yield 'a keyed edge' => [0, 0];
+        yield 'a static key set' => [1, 1];
+    }
+
+    /** @dataProvider fannedAcrossEntities */
+    public function testEachEntityAFanReachesRunsOnlyTheValuesRoutedToIt(int $procedure, int $channel): void
+    {
+        foreach (['a' => [['a', 'a:1'], ['a', 'a:3']], 'b' => [['b', 'b:2']]] as $entity => $routed) {
+            self::assertSame($routed, $this->delivered('fanned_operative', $procedure, '"a:1,b:2,a:3"', $channel, $entity));
+        }
     }
 
     /** @return array<string, mixed> */
@@ -590,18 +688,18 @@ final class DispatchTest extends TestCase
     }
 
     /** @param list<string> $payloads @return list<array<string, mixed>> */
-    private function prepare(array $payloads): array
+    private function prepare(array $payloads, string $factory = 'keyed_operative', int $channel = 0): array
     {
         return $this->dispatcher->answer([
             'token' => 1,
-            'factory' => 'keyed_operative',
+            'factory' => $factory,
             'procedure' => 0,
             'operative' => 'op',
             'entity_key' => null,
             'change_seq' => 0,
             'kind' => 'key_request',
             'key_request' => [
-                'channel' => 0,
+                'channel' => $channel,
                 'payloads' => $payloads,
                 'want_keys' => true,
                 'want_event_time' => false,

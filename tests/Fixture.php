@@ -316,7 +316,7 @@ final class WfProducer extends Procedure
     }
 }
 
-/** What a consumer of the `handoff` channel was handed, in delivery order. */
+/** What a recording consumer was handed, in delivery order. */
 final class Delivered
 {
     /** @var list<mixed> */
@@ -376,4 +376,75 @@ final class WfEmitOperative extends WorkflowOperative
 final class WfEmitStreamOperative extends StreamOperative
 {
     use WorkflowEmitGraph;
+}
+
+// -- merges, the router and fanned keys -------------------------------------
+
+/** What it was handed, under which entity. */
+#[Proc(name: 'recorder', dynamicEntities: true)]
+final class Recorder extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        Delivered::$values[] = [$ctx->entityKey, $input];
+
+        return null;
+    }
+}
+
+#[Proc(name: 'static_recorder', entityKeys: ['a', 'b'])]
+final class StaticRecorder extends Procedure
+{
+    public function entitiesFor(mixed $input): array
+    {
+        return [explode(':', (string) $input)[0]];
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        Delivered::$values[] = [$ctx->entityKey, $input];
+
+        return null;
+    }
+}
+
+/** Two entries merged into one procedure, each tagged by its own mapping and keyed on the tag's symbol. */
+#[Operative(factoryId: 'merge_operative')]
+final class MergeOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $ticks = $c->input('ticks');
+        $quotes = $c->input('quotes');
+        $c->merge()
+            ->from($ticks, static fn (mixed $v): array => ['tick' => $v, 'symbol' => explode(':', (string) $v)[0]])
+            ->from($quotes, static fn (mixed $v): array => ['quote' => $v, 'symbol' => explode(':', (string) $v)[0]])
+            ->keyBy(static fn (array $v): string => $v['symbol'])
+            ->into(Recorder::class);
+    }
+}
+
+#[Operative(factoryId: 'route_latest_operative')]
+final class RouteLatestOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->routeLatest($c->input('config'), $c->input('trades'), static fn (array $t): string => $t['symbol'])
+            ->sink('routed');
+    }
+}
+
+/** An entry payload fanned into several values, keyed on the wiring and by a static key set. */
+#[Operative(factoryId: 'fanned_operative')]
+final class FannedOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $split = static fn (mixed $v): array => $v === 'none' ? [] : explode(',', (string) $v);
+        $c->input('keyed')
+            ->flatMap($split)
+            ->keyBy(static fn (mixed $v): string => explode(':', (string) $v)[0])
+            ->into(Recorder::class);
+        $c->input('static')->flatMap($split)->into(StaticRecorder::class);
+    }
 }

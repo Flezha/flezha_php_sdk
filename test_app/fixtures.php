@@ -325,6 +325,74 @@ final class HybridChannelOperative extends StreamOperative
     }
 }
 
+// -- merged_input ------------------------------------------------------------
+//
+// Two entry channels merged into one procedure. Each source's mapping tags the
+// value with the channel it came from, the merge keys on the symbol the mapping
+// read, and the emitted line is `<source>:<payload>`.
+
+#[Proc(name: 'merge_label_procedure', dynamicEntities: true)]
+final class MergeLabel extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return "{$input['source']}:{$input['payload']}";
+    }
+}
+
+#[Operative(factoryId: 'merged_input')]
+final class MergedInputOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $ticks = $c->input('ticks', codec: ChannelCodec::Text);
+        $quotes = $c->input('quotes', codec: ChannelCodec::Text);
+        $c->merge()
+            ->from($ticks, self::tagged('ticks'))
+            ->from($quotes, self::tagged('quotes'))
+            ->keyBy(static fn (array $value): string => $value['symbol'])
+            ->into(MergeLabel::class)
+            ->keyed()
+            ->sink('merged');
+    }
+
+    /** @return callable(string):array{source: string, symbol: string, payload: string} */
+    private static function tagged(string $source): callable
+    {
+        return static fn (string $payload): array => [
+            'source' => $source,
+            'symbol' => Wire::prefix($payload),
+            'payload' => $payload,
+        ];
+    }
+}
+
+// -- transform_chain ---------------------------------------------------------
+//
+// Every value transform on one edge: `drop` is filtered out, a comma list fans
+// out into one value per element, each is upper-cased and keyed on its prefix.
+
+#[Proc(name: 'transform_label_procedure', dynamicEntities: true)]
+final class TransformLabel extends PassThrough
+{
+}
+
+#[Operative(factoryId: 'transform_chain')]
+final class TransformChainOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('trades', codec: ChannelCodec::Text)
+            ->filter(static fn (string $trade): bool => $trade !== 'drop')
+            ->flatMap(static fn (string $trade): array => explode(',', $trade))
+            ->map(strtoupper(...))
+            ->keyBy(Wire::prefix(...))
+            ->into(TransformLabel::class)
+            ->keyed()
+            ->sink('transformed');
+    }
+}
+
 // -- entity_stress -----------------------------------------------------------
 
 #[Proc(name: 'stress_a', entityKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
@@ -659,6 +727,8 @@ final class Fixtures
             SugarDoNothingOperative::class,
             SugarStoreInputOperative::class,
             HybridChannelOperative::class,
+            MergedInputOperative::class,
+            TransformChainOperative::class,
             EntityStressOperative::class,
             BenchKeyedNoPersistOperative::class,
             StoreInputOperative::class,

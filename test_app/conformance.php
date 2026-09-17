@@ -38,6 +38,7 @@ use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
+use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
 use Flezha\Overflow;
 use Flezha\Procedure;
@@ -189,9 +190,7 @@ final class RowInterpreter
         match ($verb) {
             'entry' => $this->handles[$arg] = $c->input($arg),
             'branch' => $this->branch($arg),
-            'merge' => throw new \RuntimeException(
-                'this SDK carries no merge terminator; the row needs the `merge` surface'
-            ),
+            'merge' => $this->merge($c, $arg),
             default => $this->dotted($c, $step),
         };
     }
@@ -221,6 +220,8 @@ final class RowInterpreter
 
         return match ($verb) {
             'map' => $edge->map(static fn (mixed $value): mixed => $value),
+            'filter' => $edge->filter(static fn (mixed $value): bool => true),
+            'flat_map' => $edge->flatMap(static fn (mixed $value): array => [$value]),
             'key' => $edge->keyBy(static fn (mixed $value): string => (string) $value),
             'named' => $edge->named($arg),
             'keyed' => $edge->keyed(),
@@ -238,12 +239,27 @@ final class RowInterpreter
     }
 
     /**
-     * `<x>.into(<role>)` — the palette role bound to its fixture procedure. The
-     * result is that procedure's output channel, addressed by its role.
+     * `<x>.into(<role>)`, or a merge's close: the palette role bound to its
+     * fixture procedure. The result is that procedure's output channel,
+     * addressed by its role.
      */
-    private function wire(Edge $edge, string $role): Edge
+    private function wire(Edge|Merge $closing, string $role): Edge
     {
-        return $this->handles[$role] = $edge->into($this->procedureClass($role));
+        return $this->handles[$role] = $closing->into($this->procedureClass($role));
+    }
+
+    /**
+     * `merge(<role>, <x>, <x>…)`: one merge over the listed sources, each
+     * mapped as it stands.
+     */
+    private function merge(Builder $c, string $arg): void
+    {
+        [$role, $sources] = array_map(trim(...), explode(',', $arg, 2));
+        $merge = $c->merge();
+        foreach (array_map(trim(...), explode(',', $sources)) as $source) {
+            $merge->from($this->handle($source), static fn (mixed $value): mixed => $value);
+        }
+        $this->wire($merge, $role);
     }
 
     /**
@@ -330,7 +346,7 @@ final class RowInterpreter
  * One class for the whole table rather than one per row: PHP reads a factory
  * id off a class attribute, which is a constant expression, so the row's own
  * id arrives by overriding the reader. `spec()` is overridden for the same
- * reason — the base memoises one spec per class, and a run declares 39 rows
+ * reason — the base memoises one spec per class, and a run declares every row
  * through this one.
  */
 final class ConformanceRow extends StreamOperative
@@ -369,11 +385,10 @@ final class Conformance
     /**
      * The authoring surfaces this builder carries — the same list the app's
      * `conformance.json` declares. A row needing anything else is skipped BY
-     * NAME, which is what makes the skip checkable. There is no merge
-     * terminator in this SDK; the class flag a typed builder cannot spell is a
-     * plain builder call here.
+     * NAME, which is what makes the skip checkable. The class flag a typed
+     * builder cannot spell is a plain builder call here.
      */
-    private const SURFACES = ['branch', 'workflow', 'sync_durability'];
+    private const SURFACES = ['branch', 'merge', 'workflow', 'sync_durability'];
 
     /**
      * The two topologies the fixture cites rather than re-spells: this app's

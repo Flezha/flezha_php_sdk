@@ -41,6 +41,8 @@ final class Builder
 
     private bool $sealed = false;
 
+    private int $mergeGroups = 0;
+
     public bool $effectivelyOnce = false;
     public bool $checkpointAck = false;
     public ?int $checkpointEvery = null;
@@ -144,6 +146,62 @@ final class Builder
         return new Edge($this, ['entry', $channel], []);
     }
 
+    /** Merge several channels into one procedure; see {@see Merge}. */
+    public function merge(): Merge
+    {
+        return new Merge($this);
+    }
+
+    /**
+     * The group id one closed merge ties its sources together with, across the
+     * channels they are declared on.
+     *
+     * @internal
+     */
+    public function nextMergeGroup(): int
+    {
+        return $this->mergeGroups++;
+    }
+
+    /**
+     * Turn an operative-wide document stream into per-key deliveries: every key
+     * seen on `$traffic` receives each distinct document once, on that key's
+     * own next traffic item, as a `[$key, $document]` pair.
+     *
+     * Delivering on the key's own traffic, never over a remembered key set, is
+     * what keeps every emitted key one this member owns after a rescale. The
+     * price is one tick of latency per key, and a key with no traffic receives
+     * nothing. A document whose JSON is identical to the retained one is inert.
+     *
+     * The node is `route_latest` like any procedure node, so a second router in
+     * one operative needs {@see routeLatestNamed()}.
+     *
+     * @param callable(mixed):string $keyFn
+     */
+    public function routeLatest(Edge $documents, Edge $traffic, callable $keyFn): Edge
+    {
+        return $this->wireRouteLatest($documents, $traffic, $keyFn, null);
+    }
+
+    /** {@see routeLatest()} under an explicit node identity. */
+    public function routeLatestNamed(Edge $documents, Edge $traffic, callable $keyFn, string $nodeName): Edge
+    {
+        return $this->wireRouteLatest($documents, $traffic, $keyFn, $nodeName);
+    }
+
+    /**
+     * The expansion both spellings share: the key function is a transform on
+     * the traffic edge, so the router holds keys rather than traffic values,
+     * and the two edges are one merge into the packaged procedure.
+     */
+    private function wireRouteLatest(Edge $documents, Edge $traffic, callable $keyFn, ?string $nodeName): Edge
+    {
+        return $this->merge()
+            ->from($documents, LatestDocumentRouter::document(...))
+            ->from($traffic->map($keyFn), LatestDocumentRouter::traffic(...))
+            ->into(LatestDocumentRouter::class, $nodeName);
+    }
+
     /** A codec named beside the channel's own decoder or encoder is refused. */
     public function refuseCodecBesideCallable(ChannelSpec $channel, ?ChannelCodec $codec, ?callable $callable): void
     {
@@ -228,8 +286,8 @@ final class Builder
      * branch point extends the prefix twice, and two sequences sharing one
      * list would each see the other's links.
      *
-     * `$edge` is the consumer an `into` sequence closes on, held aside for the
-     * core to name back on the edge it derives from this chain.
+     * `$edge` is the consumer an `into` or a merge source closes on, held aside
+     * for the core to name back on the edge it derives from this chain.
      *
      * @param array{string, ChannelSpec|ProcNode} $source
      * @param array<string, mixed>                $link

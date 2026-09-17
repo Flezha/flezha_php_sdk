@@ -166,6 +166,37 @@ final class DeclKeysTest extends RepositoryTestCase
     }
 
     /**
+     * A merge source is a chain like any other: its mapping and the merge's key
+     * are ordinary links, closed by the `merge` link the core deserializes, and
+     * every closed merge takes a group of its own.
+     */
+    public function testAMergeChainIsRecordedInTheCoresLinkShape(): void
+    {
+        $merged = static fn (int $group): array => [
+            ['link' => 'transform'],
+            ['link' => 'key'],
+            ['link' => 'merge', 'procedure' => 0, 'group' => $group],
+        ];
+        self::assertSame(
+            [[$merged(0)], [$merged(0)]],
+            array_column(HostClassDecl::of(MergeOperative::spec())['channels'], 'chains'),
+        );
+
+        $same = static fn (mixed $v): mixed => $v;
+        $c = new Builder('two_merges');
+        $a = $c->input('a');
+        $b = $c->input('b');
+        $c->merge()->from($a, $same)->from($b, $same)->into(Echoer::class);
+        $c->merge()->from($a, $same)->from($b, $same)->into(Echoer::class, 'second');
+        $c->seal();
+
+        self::assertSame(
+            [['link' => 'transform'], ['link' => 'merge', 'procedure' => 1, 'group' => 1]],
+            $c->channels[0]->chains[1],
+        );
+    }
+
+    /**
      * The cross-language topology golden.
      *
      * `test/fixtures/reference_topologies.txt` is the Rust reference's channel

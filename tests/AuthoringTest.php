@@ -23,6 +23,7 @@ use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Procedure;
 use Flezha\StreamOperative;
+use Flezha\Transforms;
 use Flezha\WorkflowOperative;
 
 #[Proc(clock: Clock::EventTime)]
@@ -385,10 +386,13 @@ final class AuthoringTest extends RepositoryTestCase
      * Read off the DERIVED declaration: the consumers, the plugin kind and the
      * sink name are what the core made of the chains this builder recorded.
      *
+     * @param ClassSpec|array<string, mixed> $declaration a class, or what the core already derived
      * @return list<array{string, string, ?int, list<int>, ?string}>
      */
-    private static function channelsOf(ClassSpec $spec): array
+    private static function channelsOf(ClassSpec|array $declaration): array
     {
+        $derived = $declaration instanceof ClassSpec ? self::derived($declaration) : $declaration;
+
         return array_map(
             static fn (array $c): array => [
                 $c['name'],
@@ -397,7 +401,7 @@ final class AuthoringTest extends RepositoryTestCase
                 array_map(static fn (array $e): int => $e['procedure'], $c['consumers']),
                 $c['sink'],
             ],
-            self::derived($spec)['channels'],
+            $derived['channels'],
         );
     }
 
@@ -428,6 +432,104 @@ final class AuthoringTest extends RepositoryTestCase
             static fn ($edge): array => [$edge->procedure, count($edge->transforms)],
             $builder->channels[0]->consumers,
         ));
+    }
+
+    // -- merge and the router --------------------------------------------------
+
+    /** Each source is its own consumer edge into the one node, with its own mapping and the merge's key. */
+    public function testTwoSourcesMergeIntoOneNodeThroughEdgesOfTheirOwn(): void
+    {
+        $spec = MergeOperative::spec();
+
+        self::assertSame(
+            [['ticks', 'entry', null, [0], null], ['quotes', 'entry', null, [0], null]],
+            self::channelsOf($spec),
+        );
+        [$ticks, $quotes] = array_map(static fn ($channel) => $channel->consumers[0], $spec->channels);
+        self::assertSame([['tick' => 'A:1', 'symbol' => 'A']], Transforms::apply($ticks->transforms, 'A:1'));
+        self::assertSame([['quote' => 'A:2', 'symbol' => 'A']], Transforms::apply($quotes->transforms, 'A:2'));
+        self::assertSame('A', ($quotes->keyBy)(['symbol' => 'A']));
+    }
+
+    public function testAnEntryAndAProcedureOutputMergeIntoOneNode(): void
+    {
+        $same = static fn (mixed $v): mixed => $v;
+        $derived = self::validate(static function (Builder $c) use ($same): void {
+            $upstream = $c->input('a')->into(Echoer::class);
+            $c->merge()->from($upstream, $same)->from($c->input('b'), $same)->into(Counter::class);
+        });
+
+        self::assertSame(
+            [['a', 'entry', null, [0], null], ['b', 'entry', null, [1], null], ['echoer', 'inter_proc', 0, [1], null]],
+            self::channelsOf($derived),
+        );
+    }
+
+    /** @return iterable<string, array{callable(Builder):void, string}> */
+    public static function malformedMerges(): iterable
+    {
+        $same = static fn (mixed $v): mixed => $v;
+        yield 'one source' => [
+            static function (Builder $c) use ($same): void {
+                $c->merge()->from($c->input('in'), $same)->into(Echoer::class);
+            },
+            'MergeTooFewSources',
+        ];
+        yield 'one source twice' => [
+            static function (Builder $c) use ($same): void {
+                $in = $c->input('in');
+                $c->input('other');
+                $c->merge()->from($in, $same)->from($in, $same)->into(Echoer::class);
+            },
+            'DuplicateMergeSource',
+        ];
+        yield 'a source already mapped into the node' => [
+            static function (Builder $c) use ($same): void {
+                $in = $c->input('in');
+                $in->map($same)->into(Echoer::class);
+                $c->merge()->from($in, $same)->from($c->input('other'), $same)->into(Echoer::class);
+            },
+            'EdgeAlreadyWired',
+        ];
+    }
+
+    /** @dataProvider malformedMerges */
+    public function testAMalformedMergeIsRefusedByTheCoresName(callable $declare, string $name): void
+    {
+        try {
+            self::validate($declare);
+            self::fail("the core refuses the merge with $name");
+        } catch (DeclarationException $e) {
+            self::assertContains($name, $e->refusals);
+        }
+    }
+
+    /** The router is one node both edges merge into; a second router in the class names its own. */
+    public function testEachRouterIsOneNodeItsDocumentsAndKeysMergeInto(): void
+    {
+        $builder = null;
+        $key = static fn (array $t): string => $t['symbol'];
+        $derived = self::validate(static function (Builder $c) use (&$builder, $key): void {
+            $c->routeLatest($c->input('config'), $c->input('trades'), $key)->sink('routed');
+            $c->routeLatestNamed($c->input('limits'), $c->input('orders'), $key, 'limits_router')->sink('limited');
+            $builder = $c;
+        });
+
+        self::assertSame(['route_latest', 'limits_router'], array_map(
+            static fn ($node): string => $node->name,
+            $builder->procedures,
+        ));
+        self::assertSame(
+            [
+                ['config', 'entry', null, [0], null],
+                ['trades', 'entry', null, [0], null],
+                ['routed', 'plugin', 0, [], 'routed'],
+                ['limits', 'entry', null, [1], null],
+                ['orders', 'entry', null, [1], null],
+                ['limited', 'plugin', 1, [], 'limited'],
+            ],
+            self::channelsOf($derived),
+        );
     }
 
     public function testBranchAndTwoIntoStatementsBuildTheIdenticalDeclaration(): void
