@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
+use Flezha\Operative;
 use Flezha\Procedure;
 
 /**
@@ -57,7 +58,7 @@ final class Merge
     /**
      * Close every source on one procedure node, and answer that node's edge.
      *
-     * @param class-string<Procedure> $class
+     * @param class-string<Procedure>|class-string<Operative> $class
      */
     public function into(string $class, ?string $nodeName = null): Edge
     {

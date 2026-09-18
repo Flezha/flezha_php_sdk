@@ -43,11 +43,11 @@ use Flezha\Graph\Edge;
 use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
 use Flezha\Operative;
-use Flezha\OperativeKind;
 use Flezha\Overflow;
 use Flezha\Procedure;
 use Flezha\Runner;
 use Flezha\StreamOperative;
+use Flezha\WorkflowOperative;
 
 /**
  * The palette. One fixture procedure per role the fixture header names; the
@@ -344,71 +344,47 @@ final class RowInterpreter
     }
 }
 
+// ---------------------------------------------------------------------------
+// The §5 short-form palette. PHP writes a short form's arguments in an
+// attribute, which is written where the class is, so each spelling the
+// fixture's `shorthand(...)` step describes is one class here. Nothing
+// registers them but a row that names them.
+
+/** Half of the duplicate row's pair. */
+#[OperativeAttribute(factoryId: 'plain', sink: 'out')]
+final class ShorthandDupStream extends StreamOperative
+{
+    use PassesThrough;
+}
+
+/** The other half: a workflow claiming the id the stream holds. */
+#[OperativeAttribute(factoryId: 'plain', sink: 'twin_sink')]
+final class ShorthandDupWorkflow extends WorkflowOperative
+{
+    use PassesThrough;
+}
+
+/** A short form that also carries a topology body. */
+#[OperativeAttribute(factoryId: 'plain', sink: 'out')]
+final class ShorthandWithTopology extends StreamOperative
+{
+    use PassesThrough;
+
+    public static function channels(Builder $c): void
+    {
+        $c->input('input')->into(PalettePlain::class)->sink('out');
+    }
+}
+
 /**
  * A row's operative class.
  *
  * One class for the whole table rather than one per row: PHP reads a factory
  * id off a class attribute, which is a constant expression, so the row's own
  * id arrives by overriding the reader. `spec()` is overridden for the same
- * reason — the base memoises one spec per class, and a run declares every row
+ * reason: the base memoises one spec per class, and a run declares every row
  * through this one.
  */
-// ---------------------------------------------------------------------------
-// The §5 short-form palette. PHP writes a short form in an attribute, which is
-// written where the class is, so each spelling the fixture's `shorthand(...)`
-// step describes is one class here. Nothing registers them but a row that
-// names them.
-
-/** A `sink` whose factory id would be derived from the class. */
-#[Proc(kind: OperativeKind::Stream, sink: 'out')]
-final class ShorthandSinkWithoutId extends Procedure
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
-}
-
-/** A `sink` with no `kind`. */
-#[Proc(name: 'plain', sink: 'out')]
-final class ShorthandSinkWithoutKind extends Procedure
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
-}
-
-/** A short-form key on a class with no `sink`. */
-#[Proc(name: 'plain', input: 'prices')]
-final class ShorthandKeyWithoutSink extends Procedure
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
-}
-
-/** Half of the duplicate row's pair. */
-#[Proc(name: 'plain', kind: OperativeKind::Stream, sink: 'out')]
-final class ShorthandDupStream extends Procedure
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
-}
-
-/** The other half: a workflow claiming the id the stream holds. */
-#[Proc(name: 'plain', kind: OperativeKind::Workflow, sink: 'twin_sink')]
-final class ShorthandDupWorkflow extends Procedure
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
-}
-
 final class ConformanceRow extends StreamOperative
 {
     public static ?RowInterpreter $row = null;
@@ -423,7 +399,7 @@ final class ConformanceRow extends StreamOperative
         self::row()->declare($c);
     }
 
-    protected static function declaration(): OperativeAttribute
+    public static function declaration(): OperativeAttribute
     {
         $row = self::row();
 
@@ -454,7 +430,6 @@ final class Conformance
         'workflow',
         'sync_durability',
         'shorthand',
-        'shorthand_omittable_sink',
     ];
 
     /**
@@ -463,15 +438,15 @@ final class Conformance
      * attribute, which is written where the class is, so the step selects the
      * class whose declaration is that shape rather than building one.
      *
-     * Keyed by `<id?>|<kind?>|<sink?>|<input?>` with `-` for an unwritten
-     * field, and `.noout` for a procedure declaring no output.
+     * Keyed by `<kind> <id>|<sink>|<input>` with `-` for an unwritten field,
+     * then the step's modifier: `.topology` for a declaration that also
+     * carries a topology body. A row's first step is a stream and its second
+     * a workflow, so a collision crosses kinds.
      */
     private const SHORTHAND_PALETTE = [
-        '-|stream|out|-' => ShorthandSinkWithoutId::class,
-        'plain|-|out|-' => ShorthandSinkWithoutKind::class,
-        'plain|-|-|prices' => ShorthandKeyWithoutSink::class,
-        'plain|stream|out|-' => ShorthandDupStream::class,
-        'plain|workflow|twin_sink|-' => ShorthandDupWorkflow::class,
+        'stream plain|out|-' => ShorthandDupStream::class,
+        'workflow plain|twin_sink|-' => ShorthandDupWorkflow::class,
+        'stream plain|out|-.topology' => ShorthandWithTopology::class,
     ];
 
     /**
@@ -511,11 +486,11 @@ final class Conformance
     }
 
     /**
-     * The `shorthand(<id>|-, <kind>|-, <sink>|-, <input>|-)` steps of a row,
-     * each resolved to the palette class whose attribute is that declaration.
+     * The `shorthand(<id>|-, <sink>|-, <input>|-)` steps of a row, each
+     * resolved to the palette class whose attribute is that declaration.
      *
      * @param array{steps: string} $row
-     * @return list<class-string<\Flezha\Procedure>>
+     * @return list<class-string<Operative>>
      */
     private static function shorthandSteps(array $row): array
     {
@@ -525,14 +500,14 @@ final class Conformance
             if (!str_starts_with($step, 'shorthand(')) {
                 continue;
             }
-            $noout = str_ends_with($step, '.noout');
-            $body = $noout ? substr($step, 0, -strlen('.noout')) : $step;
-            [, $args] = RowInterpreter::splitCall($body);
+            $close = strrpos($step, ')');
+            [, $args] = RowInterpreter::splitCall(substr($step, 0, $close + 1));
             $fields = array_map('trim', explode(',', $args));
-            if (count($fields) !== 4) {
-                throw new \RuntimeException("a shorthand step declares four fields: read `$step`");
+            if (count($fields) !== 3) {
+                throw new \RuntimeException("a shorthand step declares three fields: read `$step`");
             }
-            $key = implode('|', $fields) . ($noout ? '.noout' : '');
+            $kind = $classes === [] ? 'stream' : 'workflow';
+            $key = "$kind " . implode('|', $fields) . substr($step, $close + 1);
             $classes[] = self::SHORTHAND_PALETTE[$key]
                 ?? throw new \RuntimeException("the palette has no class for `$step`");
         }
@@ -546,7 +521,7 @@ final class Conformance
      * for real.
      *
      * @param array{topology: string} $row
-     * @param list<class-string<\Flezha\Procedure>> $classes
+     * @param list<class-string<Operative>> $classes
      * @return array<string, mixed>
      */
     private static function judgeShorthand(array $row, array $classes): array

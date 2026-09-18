@@ -99,6 +99,16 @@ final class HarnessTest extends TestCase
         self::assertSame(['count' => 1, 'seen' => ['timer:4200']], $harness->state());
     }
 
+    /** `ShortCounter` defines neither `onTimer` nor `compensate`, and neither does `Echoer`. */
+    public function testAHookAShortFormDoesNotDefineDoesWhatAProceduresDefaultDoes(): void
+    {
+        $procedure = new Harness(Echoer::class);
+        $shortForm = new Harness(ShortCounter::class);
+
+        self::assertEquals($procedure->fireTimer('processing_time', 1), $shortForm->fireTimer('processing_time', 1));
+        self::assertEquals($procedure->compensate(['placed']), $shortForm->compensate(['placed']));
+    }
+
     public function testARestoreRebuildsTheStateAChangeLogDescribes(): void
     {
         $harness = new Harness(Counter::class);

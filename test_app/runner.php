@@ -58,10 +58,6 @@ if ($topology !== false && $topology !== '') {
     foreach (Fixtures::all() as $operative) {
         $runner->registerFactory($operative);
     }
-    // A short form is the procedure class itself; the same call takes it.
-    foreach (Fixtures::shorthand() as $shortForm) {
-        $runner->registerFactory($shortForm);
-    }
     foreach (WorkflowFixtures::all() as $operative) {
         $runner->registerFactory($operative);
     }

@@ -9,10 +9,13 @@ use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
 use Flezha\Codec\ValueCodec;
 use Flezha\Exception\DeclarationException;
-use Flezha\Graph\ClassSpec;
 use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionIntersectionType;
 use ReflectionMethod;
+use ReflectionNamedType;
+use ReflectionType;
+use ReflectionUnionType;
 
 /**
  * What a declared procedure resolves to: the scalar declarations, and the one
@@ -26,6 +29,9 @@ use ReflectionMethod;
  * overrides, not from a second list: `applyChange` overridden means it folds
  * changes, `onTimer` overridden means it may register timers. A declaration
  * and its implementation therefore cannot disagree.
+ *
+ * The class is a `Procedure` subclass, or a §5 short form: an operative class
+ * whose own `run` and hooks are its one procedure, named its factory id.
  */
 final class Definition
 {
@@ -34,20 +40,20 @@ final class Definition
 
     public readonly string $name;
     public readonly Proc $decl;
-    public readonly Procedure $instance;
+    public readonly Procedure|Operative $instance;
     public readonly ?ValueCodec $stateCodec;
     public readonly ?ValueCodec $changeCodec;
 
     /** @var array<string, bool> */
     private readonly array $overrides;
 
-    /** @param class-string<Procedure> $class */
+    /** @param class-string<Procedure>|class-string<Operative> $class */
     private function __construct(public readonly string $class)
     {
         $reflection = new ReflectionClass($class);
         $this->decl = self::declarationOf($reflection);
-        $this->name = $this->decl->name ?? self::defaultName($reflection->getShortName());
-        $this->overrides = self::overrides($reflection);
+        $this->name = self::nameOf($reflection, $this->decl);
+        $this->overrides = self::hooksOf($class, $this->name);
         $this->stateCodec = $this->decl->stateType === null
             ? null
             : new TypeCodec($this->decl->stateType, 'state');
@@ -70,72 +76,11 @@ final class Definition
      * The resolved declaration, built once per class: it instantiates the
      * procedure, and the dispatcher reads it on the hot path.
      *
-     * @param class-string<Procedure> $class
+     * @param class-string<Procedure>|class-string<Operative> $class
      */
     public static function of(string $class): self
     {
         return self::$cache[$class] ??= new self($class);
-    }
-
-    /**
-     * The operative this class's §5 short form generates, or `null` when it
-     * declares no `sink`.
-     *
-     * Built here, at registration, as the PHP contract places every refusal;
-     * each refusal's message begins with its own name
-     * (`docs/sdk/authoring_contract.md` §5.2).
-     *
-     * `SinkWithoutOutput` is not among them. {@see Procedure::run()} is
-     * declared `: mixed`, and PHP forbids an override from narrowing that to
-     * `: void`, so a procedure declaring no output cannot be written — and a
-     * refusal nothing can reach is a refusal nobody reads. The PHP manifest
-     * therefore leaves `shorthand_typed_output` off `topology_surfaces`.
-     */
-    public function shortForm(): ?ClassSpec
-    {
-        if ($this->decl->sink === null) {
-            $keys = array_keys(array_filter([
-                'kind' => $this->decl->kind !== null,
-                'input' => $this->decl->input !== null,
-                'codec' => $this->decl->codec !== null,
-            ]));
-            if ($keys !== []) {
-                throw new DeclarationException($this->class, $this->name, sprintf(
-                    'ShorthandKeyWithoutSink: `%s` name(s) of the operative a `sink` generates; '
-                    . 'this class declares no `sink`, so there is nothing for them to describe',
-                    implode('`, `', $keys),
-                ), ['ShorthandKeyWithoutSink']);
-            }
-
-            return null;
-        }
-        if ($this->decl->name === null) {
-            throw new DeclarationException(
-                $this->class,
-                $this->name,
-                'SinkWithoutId: a `sink` makes this class a whole operative, whose factory id is '
-                . 'an address an operator types; write it as `name:` rather than deriving it from '
-                . 'the class',
-                ['SinkWithoutId']
-            );
-        }
-        if ($this->decl->kind === null) {
-            throw new DeclarationException(
-                $this->class,
-                $this->name,
-                'SinkWithoutKind: a `sink` makes this class a whole operative; write '
-                . '`kind: OperativeKind::Stream` or `kind: OperativeKind::Workflow`',
-                ['SinkWithoutKind']
-            );
-        }
-        return Operative::shortForm(
-            $this->class,
-            $this->name,
-            $this->decl->kind,
-            $this->decl->sink,
-            $this->decl->input ?? 'input',
-            $this->decl->codec,
-        );
     }
 
     /** `single` | `static` | `dynamic`, as the core's declaration spells it. */
@@ -223,7 +168,7 @@ final class Definition
      * there. The one field never inherited is `name`: a node identity is per
      * class, and an inherited one would make two procedures claim one node.
      *
-     * @param ReflectionClass<Procedure> $reflection
+     * @param ReflectionClass<Procedure>|ReflectionClass<Operative> $reflection
      */
     private static function declarationOf(ReflectionClass $reflection): Proc
     {
@@ -244,6 +189,16 @@ final class Definition
                 unset($own['name']);
             }
             $arguments = [...$arguments, ...$own];
+        }
+        foreach (['kind', 'sink', 'input', 'codec'] as $operativeArgument) {
+            if (array_key_exists($operativeArgument, $arguments)) {
+                throw new DeclarationException($reflection->getName(), $arguments['name'] ?? null, sprintf(
+                    '#[Proc] takes no `%s`: a procedure is not an operative. A one-procedure operative '
+                    . 'is a class extending StreamOperative or WorkflowOperative that defines `run`, '
+                    . 'with `sink`, `input` and `codec` on its #[Operative]',
+                    $operativeArgument,
+                ));
+            }
         }
 
         return new Proc(...$arguments);
@@ -269,26 +224,189 @@ final class Definition
     }
 
     /**
-     * Which of the base class's overridable hooks this class actually
-     * replaced. Reflection once, at registration, so the dispatcher asks an
-     * array.
+     * Which of the procedure hooks this class actually defines: the methods
+     * `Procedure` gives a default. Reflection once, at registration, so the
+     * dispatcher asks an array.
      *
-     * @param ReflectionClass<Procedure> $reflection
+     * PHP holds a `Procedure` subclass's hooks to `Procedure`'s signatures
+     * when it loads the class. A short form declares no hook to PHP, so each
+     * one it defines is held to them here: an `applyChange` taking the state
+     * by value would otherwise fold nothing.
+     *
+     * @param class-string<Procedure>|class-string<Operative> $class
      * @return array<string, bool>
      */
-    private static function overrides(ReflectionClass $reflection): array
+    private static function hooksOf(string $class, string $name): array
     {
+        $checkedByPhp = is_subclass_of($class, Procedure::class);
         $overrides = [];
-        $hooks = [
-            'state', 'applyChange', 'onTimer', 'entitiesFor', 'eventTime', 'compensate',
-            'migrateState', 'migrateChange',
-        ];
-        foreach ($hooks as $hook) {
-            $method = new ReflectionMethod($reflection->getName(), $hook);
-            $overrides[$hook] = $method->getDeclaringClass()->getName() !== Procedure::class;
+        foreach ((new ReflectionClass(Procedure::class))->getMethods() as $hook) {
+            if ($hook->isAbstract()) {
+                continue;
+            }
+            $overrides[$hook->name] = self::overrides($class, $hook->name);
+            $defect = $overrides[$hook->name] && !$checkedByPhp
+                ? self::incompatibility(new ReflectionMethod($class, $hook->name), $hook)
+                : null;
+            if ($defect !== null) {
+                throw new DeclarationException($class, $name, sprintf(
+                    '`%s` must be compatible with Procedure::%s, as a procedure\'s is: %s',
+                    $hook->name,
+                    $hook->name,
+                    $defect,
+                ));
+            }
         }
 
         return $overrides;
+    }
+
+    /**
+     * Why `$ours` could not override `$reference`, or null when it could: PHP's
+     * inheritance rule, read from reflection. The reference's arguments must
+     * all still fit, each passed as the reference passes it and accepted at
+     * every type the reference accepts, and the return type may only narrow.
+     */
+    private static function incompatibility(ReflectionMethod $ours, ReflectionMethod $reference): ?string
+    {
+        if (!$ours->isPublic() || $ours->isStatic()) {
+            return 'it must be a public instance method';
+        }
+        if ($ours->getNumberOfRequiredParameters() > $reference->getNumberOfRequiredParameters()) {
+            return sprintf(
+                'it requires %d arguments, and the hook is passed %d',
+                $ours->getNumberOfRequiredParameters(),
+                $reference->getNumberOfParameters(),
+            );
+        }
+        $parameters = $ours->getParameters();
+        $variadic = $ours->isVariadic() ? $parameters[array_key_last($parameters)] : null;
+        foreach ($reference->getParameters() as $i => $expected) {
+            $parameter = $parameters[$i] ?? $variadic;
+            if ($parameter === null) {
+                return sprintf('it has no parameter for `$%s`', $expected->getName());
+            }
+            if ($parameter->isPassedByReference() !== $expected->isPassedByReference()) {
+                return sprintf(
+                    '`$%s` is taken by %s',
+                    $parameter->getName(),
+                    $expected->isPassedByReference() ? 'value, not by reference' : 'reference, not by value',
+                );
+            }
+            if (!self::narrows($expected->getType(), $parameter->getType())) {
+                return sprintf(
+                    '`$%s` is typed `%s`, which does not accept every `%s`',
+                    $parameter->getName(),
+                    $parameter->getType(),
+                    $expected->getType(),
+                );
+            }
+        }
+        $returns = $ours->getReturnType();
+        if ($returns === null) {
+            return sprintf('it declares no return type, not `%s`', $reference->getReturnType());
+        }
+
+        return self::narrows($returns, $reference->getReturnType())
+            ? null
+            : sprintf('it returns `%s`, not `%s`', $returns, $reference->getReturnType());
+    }
+
+    /**
+     * Whether every value of `$sub` is a value of `$super`, as PHP's variance
+     * check reads types: each a union of intersections, a missing type
+     * `mixed`, and every alternative of `$sub` narrowing each name of some
+     * alternative of `$super`.
+     */
+    private static function narrows(?ReflectionType $sub, ?ReflectionType $super): bool
+    {
+        return array_all(self::alternatives($sub), static fn (array $narrow): bool => array_any(
+            self::alternatives($super),
+            static fn (array $wide): bool => array_all($wide, static fn (string $name): bool => array_any(
+                $narrow,
+                static fn (string $own): bool => self::narrowsName($own, $name),
+            )),
+        ));
+    }
+
+    /** @return list<list<string>> the type as a union of intersections of names */
+    private static function alternatives(?ReflectionType $type): array
+    {
+        return match (true) {
+            $type === null => [['mixed']],
+            $type instanceof ReflectionUnionType => array_merge(
+                ...array_map(self::alternatives(...), $type->getTypes()),
+            ),
+            $type instanceof ReflectionIntersectionType => [array_map(
+                static fn (ReflectionNamedType $member): string => $member->getName(),
+                $type->getTypes(),
+            )],
+            $type instanceof ReflectionNamedType => $type->allowsNull()
+                    && !in_array($type->getName(), ['mixed', 'null'], true)
+                ? [[$type->getName()], ['null']]
+                : [[$type->getName()]],
+        };
+    }
+
+    /** One type name narrowing another: the builtin pairs PHP relates, or a class and its ancestor. */
+    private static function narrowsName(string $sub, string $super): bool
+    {
+        return strcasecmp($sub, $super) === 0
+            || $sub === 'never'
+            || ($super === 'mixed' && $sub !== 'void')
+            || ($super === 'iterable' && $sub === 'array')
+            || ((class_exists($sub) || interface_exists($sub)) && ($super === 'object' || is_a($sub, $super, true)));
+    }
+
+    /**
+     * Whether `$class` defines `$method` rather than taking the SDK base's
+     * default: how a procedure's hooks, a short form's `run` and an
+     * operative's `channels()` are all read.
+     *
+     * @param class-string $class
+     * @internal Read by {@see Operative} too.
+     */
+    public static function overrides(string $class, string $method): bool
+    {
+        if (!method_exists($class, $method)) {
+            return false;
+        }
+        $declaring = (new ReflectionMethod($class, $method))->getDeclaringClass()->getName();
+
+        return $declaring !== Procedure::class && $declaring !== Operative::class;
+    }
+
+    /**
+     * The node identity: the written name or the class's own, and a short
+     * form's factory id verbatim, because a procedure's name is part of every
+     * entity's durable path and a short form grown into its full form must
+     * keep it.
+     *
+     * @param ReflectionClass<Procedure>|ReflectionClass<Operative> $reflection
+     */
+    private static function nameOf(ReflectionClass $reflection, Proc $decl): string
+    {
+        $class = $reflection->getName();
+        if (!$reflection->isSubclassOf(Operative::class)) {
+            return $decl->name ?? self::defaultName($reflection->getShortName());
+        }
+        if (!self::overrides($class, 'run')) {
+            throw new DeclarationException(
+                $class,
+                null,
+                'is an operative with no `run`, so it is no procedure; wire the procedures its '
+                . '`channels()` declares',
+            );
+        }
+        if ($decl->name !== null) {
+            throw new DeclarationException(
+                $class,
+                $decl->name,
+                'a short form\'s procedure is named after its factory id; drop `name` from its #[Proc]',
+            );
+        }
+
+        return $class::declaration()->factoryId;
     }
 
     /**

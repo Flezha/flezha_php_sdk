@@ -17,6 +17,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\ProcNode;
+use Flezha\Operative;
 use Flezha\Procedure;
 use Flezha\SpawnBridge;
 use Flezha\Timer;
@@ -50,7 +51,7 @@ final class Harness implements SpawnBridge
 
     private int $spawnCount = 0;
 
-    /** @param class-string<Procedure> $procedureClass */
+    /** @param class-string<Procedure>|class-string<Operative> $procedureClass */
     public function __construct(
         string $procedureClass,
         private readonly ?string $entityKey = null,
@@ -109,7 +110,9 @@ final class Harness implements SpawnBridge
     public function fireTimer(string $kind, int $scheduledAt): Outcome
     {
         return $this->drive($scheduledAt, false, function (Ctx $ctx) use ($kind, $scheduledAt): mixed {
-            $this->definition->instance->onTimer(new Timer($kind, $scheduledAt), $ctx);
+            if ($this->definition->declares('onTimer')) {
+                $this->definition->instance->onTimer(new Timer($kind, $scheduledAt), $ctx);
+            }
 
             return null;
         });
@@ -123,7 +126,9 @@ final class Harness implements SpawnBridge
     public function compensate(array $outputs): Outcome
     {
         return $this->drive(0, false, function (Ctx $ctx) use ($outputs): mixed {
-            $this->definition->instance->compensate($outputs, $ctx);
+            if ($this->definition->declares('compensate')) {
+                $this->definition->instance->compensate($outputs, $ctx);
+            }
 
             return null;
         });
@@ -217,8 +222,8 @@ final class Harness implements SpawnBridge
     /**
      * Drive `procedure_class` over `$inputs` and assert the replay agrees.
      *
-     * @param class-string<Procedure> $procedureClass
-     * @param list<mixed>             $inputs
+     * @param class-string<Procedure>|class-string<Operative> $procedureClass
+     * @param list<mixed>                                     $inputs
      */
     public static function replayEquals(string $procedureClass, array $inputs, ?string $entityKey = null): bool
     {

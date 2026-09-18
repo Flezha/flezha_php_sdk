@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Attribute\Operative as OperativeAttribute;
+use Flezha\Attribute\Proc;
 use Flezha\Attribute\Workflow as WorkflowAttribute;
 use Flezha\Exception\DeclarationException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
+use LogicException;
 use ReflectionClass;
 
 /**
  * The base an authored operative extends: an `#[Operative]` attribute for the
- * factory id, and `channels()` for the graph.
+ * factory id, and either `channels()` for the graph or, as the §5 short form,
+ * the one procedure's `run`.
  */
 abstract class Operative
 {
@@ -25,6 +28,23 @@ abstract class Operative
     {
     }
 
+    /**
+     * The body of the one procedure a §5 short form is, defined instead of
+     * `channels()`: the entry channel its `#[Operative]` names feeds that
+     * procedure, named the factory id, whose output reaches the `sink` if one
+     * is written. A short form may also define the hooks {@see Procedure}
+     * declares (`state`, `applyChange`, ...), which that procedure takes, held
+     * to the signatures `Procedure` gives them.
+     *
+     * Declared here, `: mixed`, so an override narrowing it to `: void` does
+     * not load: a body declaring no output cannot be written, and this SDK
+     * owes no `SinkWithoutOutput`.
+     */
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        throw new LogicException(static::class . ' defines no `run`; its channels() wires its procedures');
+    }
+
     /** The resolved declaration, built once per class. */
     public static function spec(): ClassSpec
     {
@@ -32,7 +52,7 @@ abstract class Operative
     }
 
     /** The `#[Operative]` attribute, refusing a class that carries none. */
-    protected static function declaration(): OperativeAttribute
+    public static function declaration(): OperativeAttribute
     {
         // Not inherited on purpose: two operatives cannot share a factory id,
         // and PHP attributes are per class, which is the behaviour this wants.
@@ -58,7 +78,17 @@ abstract class Operative
     protected static function builder(OperativeAttribute $declaration): Builder
     {
         $builder = new Builder($declaration->factoryId);
-        static::channels($builder);
+        if (self::isShortForm($declaration)) {
+            // The class is its own procedure, which `Definition` names after
+            // the factory id.
+            $edge = $builder->input($declaration->input ?? 'input', null, $declaration->codec)
+                ->into(static::class);
+            if ($declaration->sink !== null) {
+                $edge->sink($declaration->sink);
+            }
+        } else {
+            static::channels($builder);
+        }
 
         // Sealed before the channels are read: filing every declared sequence
         // on its channel is what can still create one.
@@ -96,57 +126,94 @@ abstract class Operative
     }
 
     /**
-     * The spec a registration call was handed: an operative class answers its
-     * own, and a `Procedure` subclass the one its `sink` generates.
+     * The spec a registration call was handed, refusing a procedure, which
+     * declares no operative. The one resolver, so the runner and a local run
+     * cannot disagree about what a class declares.
      *
-     * The one resolver, so the runner and a local run cannot disagree about
-     * what a short form declares.
-     *
-     * @param class-string<Operative>|class-string<Procedure> $class
+     * @param class-string<Operative> $class
      */
     public static function specFor(string $class): ClassSpec
     {
-        if (!is_subclass_of($class, Procedure::class)) {
-            return $class::spec();
+        if (is_subclass_of($class, Procedure::class)) {
+            // Read first, so a procedure carrying an operative's argument is
+            // refused naming it.
+            Definition::of($class);
+
+            throw new DeclarationException(
+                $class,
+                null,
+                'is a procedure, which declares no operative; register the operative that wires '
+                . 'it, or write it as one: a class extending StreamOperative or WorkflowOperative '
+                . 'that defines `run`',
+            );
         }
 
-        return Definition::of($class)->shortForm() ?? throw new DeclarationException(
-            $class,
-            null,
-            'is a procedure with no `sink`, so it declares no operative; register the operative '
-            . 'that wires it, or declare a `sink` on it',
-        );
+        return $class::spec();
     }
 
     /**
-     * The spec a §5 short form generates: one entry channel into that one
-     * procedure, that procedure to one plugin sink, and every class-level
-     * setting at its kind's default.
-     *
-     * Assembled here, beside the assembly both hand-written kinds use, so a
-     * short form and a full form cannot drift apart in what they declare.
-     *
-     * @param class-string<Procedure> $procedure
-     * @internal Called by {@see Definition::shortForm()}.
+     * Whether this class is a §5 short form, read from the body it defines:
+     * `run` for one procedure, `channels()` for a topology of its own.
      */
-    public static function shortForm(
-        string $procedure,
-        string $factoryId,
-        OperativeKind $kind,
-        string $sink,
-        string $entry,
-        ?ChannelCodec $codec,
-    ): ClassSpec {
-        $builder = new Builder($factoryId);
-        $builder->input($entry, null, $codec)->into($procedure)->sink($sink);
-        // Sealed before the channels are read, as `builder()` seals a
-        // hand-written class's.
-        $builder = $builder->seal();
-        $declaration = new OperativeAttribute(factoryId: $factoryId);
+    private static function isShortForm(OperativeAttribute $declaration): bool
+    {
+        $body = Definition::overrides(static::class, 'run');
+        $topology = Definition::overrides(static::class, 'channels');
+        if ($body && $topology) {
+            throw new DeclarationException(
+                $declaration->factoryId,
+                null,
+                'ShortFormWithTopology: this class defines both `run` and `channels()`; a short '
+                . 'form is its one procedure\'s `run`, and a topology wires procedures of its own '
+                . 'in `channels()`, so define one of them',
+                ['ShortFormWithTopology'],
+            );
+        }
+        if (!$body && !$topology) {
+            throw new DeclarationException(
+                $declaration->factoryId,
+                null,
+                'defines neither `run` nor `channels()`; define `run` for a one-procedure short '
+                . 'form, or `channels()` to wire a topology',
+            );
+        }
+        if ($topology) {
+            $shortFormArguments = [
+                'sink' => $declaration->sink,
+                'input' => $declaration->input,
+                'codec' => $declaration->codec,
+            ];
+            foreach ($shortFormArguments as $argument => $value) {
+                if ($value !== null) {
+                    throw new DeclarationException($declaration->factoryId, null, sprintf(
+                        '`%s` names a channel a short form generates, and this class declares its '
+                        . 'own in `channels()`; drop it from #[Operative]',
+                        $argument,
+                    ));
+                }
+            }
+            if ((new ReflectionClass(static::class))->getAttributes(Proc::class) !== []) {
+                throw new DeclarationException(
+                    $declaration->factoryId,
+                    null,
+                    '#[Proc] carries a procedure\'s settings, and this class wires its procedures in '
+                    . '`channels()`; a full form\'s procedure settings go on its procedure classes',
+                );
+            }
 
-        return $kind === OperativeKind::Workflow
-            ? static::assemble($declaration, $builder, 'workflow', false, new WorkflowAttribute())
-            : static::assemble($declaration, $builder, 'stream', $builder->syncDurability);
+            return false;
+        }
+        // By value: a `#[Workflow]` restating every default sets nothing.
+        if (!$declaration->persistent || static::workflowDeclaration() != new WorkflowAttribute()) {
+            throw new DeclarationException(
+                $declaration->factoryId,
+                null,
+                'a short form keeps every class-level setting at its default; `persistent: false` '
+                . 'and #[Workflow] are the full form\'s, written beside `channels()`',
+            );
+        }
+
+        return true;
     }
 
     abstract protected static function buildSpec(OperativeAttribute $declaration): ClassSpec;

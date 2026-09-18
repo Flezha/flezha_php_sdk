@@ -9,6 +9,7 @@ use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
 use Flezha\Definition;
 use Flezha\Exception\DeclarationException;
+use Flezha\Operative;
 use Flezha\Overflow;
 use Flezha\Procedure;
 
@@ -219,7 +220,7 @@ final class Builder
      * node — the naming convention every SDK mirrors — so a diamond that fans
      * out and back in has one instance, not two.
      *
-     * @param class-string<Procedure> $class
+     * @param class-string<Procedure>|class-string<Operative> $class
      */
     public function nodeFor(string $class, ?string $name = null): ProcNode
     {

@@ -6,6 +6,7 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
 use Flezha\Attribute\Proc;
+use Flezha\ChannelCodec;
 use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
@@ -21,13 +22,20 @@ use Flezha\WorkflowOperative;
  * One file, so a test that needs "a stateful keyed procedure" names one rather
  * than declaring a fourth almost-identical class.
  */
-#[Proc]
-final class Echoer extends Procedure
+
+/** The echo body, for a procedure and a short-form operative alike. */
+trait Echoes
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
         return $input;
     }
+}
+
+#[Proc]
+final class Echoer extends Procedure
+{
+    use Echoes;
 }
 
 #[Proc(name: 'counter')]
@@ -94,6 +102,28 @@ final class CounterOperative extends StreamOperative
     public static function channels(Builder $c): void
     {
         $c->input('input')->into(Counter::class)->sink('out');
+    }
+}
+
+/** A short form that only keeps state: no `sink`, and a body answering nothing. */
+#[Operative(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
+final class ShortCounter extends StreamOperative
+{
+    public function state(?string $entityKey): mixed
+    {
+        return ['seen' => []];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['seen'][] = $change;
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $ctx->change($input);
+
+        return null;
     }
 }
 

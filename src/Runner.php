@@ -87,15 +87,14 @@ final class Runner
     }
 
     /**
-     * Register an operative class of either kind, or a `Procedure` subclass
-     * whose `sink` makes it one. The kind is read from the class, never named
-     * by the call.
+     * Register an operative class of either kind, a full form or a §5 short
+     * form alike. The kind is read from the class, never named by the call.
      *
-     * @param class-string<Operative>|class-string<Procedure> $class
+     * @param class-string<Operative> $class
      */
     public function registerFactory(string $class): self
     {
-        // Resolved here so a malformed short form is refused at the call the
+        // Resolved here so a malformed declaration is refused at the call the
         // author wrote, not at the first connection.
         Operative::specFor($class);
         $this->classes[] = $class;
@@ -111,7 +110,7 @@ final class Runner
      * from a registry the executor already holds, and it cannot stop serving
      * one. Saying so is what makes the call honest rather than ignored.
      *
-     * @param class-string<Operative>|class-string<Procedure> $class
+     * @param class-string<Operative> $class
      */
     public function unregisterFactory(string $class): self
     {

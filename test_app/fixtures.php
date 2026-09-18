@@ -22,11 +22,11 @@ use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
-use Flezha\OperativeKind;
 use Flezha\Overflow;
 use Flezha\Procedure;
 use Flezha\StreamOperative;
 use Flezha\Timer;
+use Flezha\WorkflowOperative;
 
 /** The readings of a text input every fixture that talks to another SDK shares. */
 final class Wire
@@ -149,13 +149,19 @@ final class MacroStaticEntry extends StaticEntry
 {
 }
 
-#[Proc]
-class PassThrough extends Procedure
+/** The body that answers its input unchanged, for a procedure and a short form alike. */
+trait PassesThrough
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
         return $input;
     }
+}
+
+#[Proc]
+class PassThrough extends Procedure
+{
+    use PassesThrough;
 }
 
 #[Proc(name: 'static_downstream_procedure')]
@@ -220,27 +226,18 @@ final class MixedOperative extends StreamOperative
 
 // -- the §5 short forms ------------------------------------------------------
 //
-// One attribute each: the `sink` makes the procedure a whole operative of its
-// `kind`, and `runner.php` registers the class itself. No hand-written
-// operative stands beside them.
+// One class each: an operative that defines its one procedure's `run` instead
+// of `channels()`, and `runner.php` registers the class itself. No procedure
+// class stands beside them.
 
-#[Proc(
-    name: 'sugar_do_nothing',
-    kind: OperativeKind::Stream,
-    sink: 'sugar_do_nothing_echo',
-    codec: ChannelCodec::Text,
-)]
-final class SugarDoNothing extends PassThrough
+#[Operative(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
+final class SugarDoNothing extends StreamOperative
 {
+    use PassesThrough;
 }
 
-#[Proc(
-    name: 'sugar_store_input',
-    kind: OperativeKind::Stream,
-    sink: 'sugar_store_sink',
-    codec: ChannelCodec::Text,
-)]
-final class SugarStoreInput extends Procedure
+#[Operative(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
+final class SugarStoreInput extends StreamOperative
 {
     public function state(?string $entityKey): mixed
     {
@@ -260,26 +257,43 @@ final class SugarStoreInput extends Procedure
     }
 }
 
-#[Proc(
-    name: 'sugar_named_input',
-    kind: OperativeKind::Stream,
+#[Operative(
+    factoryId: 'sugar_named_input',
     sink: 'sugar_named_input_sink',
     input: 'prices',
     codec: ChannelCodec::Text,
 )]
-final class SugarNamedInput extends PassThrough
+final class SugarNamedInput extends StreamOperative
 {
+    use PassesThrough;
 }
 
-#[Proc(
-    name: 'sugar_workflow',
-    kind: OperativeKind::Workflow,
-    sink: 'sugar_workflow_placed',
-    input: 'order',
-    codec: ChannelCodec::Text,
-)]
-final class SugarWorkflow extends PassThrough
+#[Operative(factoryId: 'sugar_workflow', sink: 'sugar_workflow_placed', input: 'order', codec: ChannelCodec::Text)]
+final class SugarWorkflow extends WorkflowOperative
 {
+    use PassesThrough;
+}
+
+/** No `sink`: the procedure only keeps what it is sent, and answers nothing. */
+#[Operative(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
+final class SugarStateOnly extends StreamOperative
+{
+    public function state(?string $entityKey): mixed
+    {
+        return ['seen' => []];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['seen'][] = $change;
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $ctx->change($input);
+
+        return null;
+    }
 }
 
 // -- hybrid_channel ----------------------------------------------------------
@@ -766,22 +780,12 @@ final class Fixtures
             PartitionRelayOperative::class,
             DynamicEntityOperative::class,
             SpawnRequesterOperative::class,
-        ];
-    }
-
-    /**
-     * The §5 short forms this app registers: each is the procedure class
-     * itself, whose `sink` makes it a whole operative.
-     *
-     * @return list<class-string<Procedure>>
-     */
-    public static function shorthand(): array
-    {
-        return [
+            // The §5 short forms.
             SugarDoNothing::class,
             SugarStoreInput::class,
             SugarNamedInput::class,
             SugarWorkflow::class,
+            SugarStateOnly::class,
         ];
     }
 }

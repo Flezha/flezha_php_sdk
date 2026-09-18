@@ -9,6 +9,7 @@ use Flezha\Dropped;
 use Flezha\Fanned;
 use Flezha\Overflow;
 use Flezha\Exception\DeclarationException;
+use Flezha\Operative;
 use Flezha\Procedure;
 
 /**
@@ -113,9 +114,10 @@ final class Edge
     }
 
     /**
-     * Wire this edge into a procedure.
+     * Wire this edge into a procedure: a `Procedure` subclass, or a short-form
+     * operative class, which is its own.
      *
-     * @param class-string<Procedure> $class
+     * @param class-string<Procedure>|class-string<Operative> $class
      */
     public function into(string $class, ?string $nodeName = null): self
     {

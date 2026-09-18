@@ -6,16 +6,20 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
 use Flezha\Attribute\Proc;
+use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
 use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Definition;
+use Flezha\Dispatch\Registry;
 use Flezha\Exception\DeclarationException;
 use Flezha\Exception\DecodeException;
 use Flezha\Exception\EmitException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Exception\UnrepresentableValueException;
 use Flezha\Ffi\Core;
+use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
@@ -23,93 +27,280 @@ use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\LoopMode;
 use Flezha\Operative as OperativeBase;
-use Flezha\OperativeKind;
 use Flezha\Procedure;
+use Flezha\Runner;
 use Flezha\StreamOperative;
+use Flezha\Testing\Harness;
+use Flezha\Timer;
 use Flezha\Transforms;
 use Flezha\WorkflowOperative;
 
 // ---------------------------------------------------------------------------
 // The §5 short form
 
-#[Proc(name: 'sf_upcase', kind: OperativeKind::Stream, sink: 'out', codec: ChannelCodec::Text)]
-final class ShortUpcase extends Procedure
+#[Operative(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
+final class ShortUpcase extends StreamOperative
 {
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
+    use Echoes;
 }
 
-#[Proc(name: 'sf_upcase_twin')]
-final class ShortUpcaseTwin extends Procedure
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return $input;
-    }
-}
-
-#[Operative(factoryId: 'sf_upcase_twin')]
+/** `ShortUpcase` as its full form, the procedure named after the factory id. */
+#[Operative(factoryId: 'sf_upcase')]
 final class ShortUpcaseTwinOperative extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
-            ->into(ShortUpcaseTwin::class)
+            ->into(Echoer::class, 'sf_upcase')
             ->sink('out');
     }
 }
 
-#[Proc(
-    name: 'sf_place',
-    kind: OperativeKind::Workflow,
-    sink: 'placed',
-    input: 'order',
-    codec: ChannelCodec::Text,
-)]
-final class ShortPlace extends Procedure
+#[Operative(factoryId: 'sf_place', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+final class ShortPlace extends WorkflowOperative
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    use Echoes;
+}
+
+#[Operative(factoryId: 'sf_place')]
+final class ShortPlaceTwinOperative extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
     {
-        return $input;
+        $c->input('order', codec: ChannelCodec::Text)
+            ->into(Echoer::class, 'sf_place')
+            ->sink('placed');
     }
 }
 
-#[Proc(kind: OperativeKind::Stream, sink: 'out')]
-final class ShortDerivedName extends Procedure
+/** A workflow short form under the id `ShortUpcase` already holds. */
+#[Operative(factoryId: 'sf_upcase', sink: 'placed')]
+final class ShortUpcaseWorkflow extends WorkflowOperative
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    use Echoes;
+}
+
+#[Operative(factoryId: 'sf_both', sink: 'out')]
+final class ShortWithTopology extends StreamOperative
+{
+    use Echoes;
+
+    public static function channels(Builder $c): void
     {
-        return $input;
+        $c->input('input')->into(Echoer::class)->sink('out');
     }
 }
 
-#[Proc(name: 'sf_no_kind', sink: 'out')]
-final class ShortNoKind extends Procedure
+#[Operative(factoryId: 'sf_no_body')]
+final class ShortNoBody extends StreamOperative
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+}
+
+final class ShortUnattributed extends StreamOperative
+{
+    use Echoes;
+}
+
+#[Operative(factoryId: 'sf_renamed')]
+#[Proc(name: 'elsewhere')]
+final class ShortRenamed extends StreamOperative
+{
+    use Echoes;
+}
+
+#[Operative(factoryId: 'sf_unpersisted', persistent: false)]
+final class ShortUnpersisted extends StreamOperative
+{
+    use Echoes;
+}
+
+#[Operative(factoryId: 'sf_per_input')]
+#[Workflow(loopMode: LoopMode::PerInput)]
+final class ShortPerInput extends WorkflowOperative
+{
+    use Echoes;
+}
+
+#[Operative(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
+final class ShortCodecOnTopology extends StreamOperative
+{
+    public static function channels(Builder $c): void
     {
-        return $input;
+        $c->input('input')->into(Echoer::class)->sink('out');
     }
 }
 
-#[Proc(name: 'sf_no_sink', kind: OperativeKind::Stream)]
-final class ShortKeyWithoutSink extends Procedure
+#[Operative(factoryId: 'sf_proc_on_topology')]
+#[Proc(mailboxCapacity: 8)]
+final class ShortProcOnTopology extends StreamOperative
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public static function channels(Builder $c): void
     {
-        return $input;
+        $c->input('input')->into(Echoer::class)->sink('out');
     }
 }
 
-#[Proc(name: 'sf_plain')]
-final class ShortPlain extends Procedure
+/** A fold taking the state by value, which would fold into a copy. */
+#[Operative(factoryId: 'sf_fold_by_value')]
+final class ShortFoldByValue extends StreamOperative
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    use Echoes;
+
+    public function state(?string $entityKey): mixed
     {
-        return $input;
+        return ['seen' => []];
     }
+
+    public function applyChange(mixed $state, mixed $change): void
+    {
+        $state['seen'][] = $change;
+    }
+}
+
+#[Operative(factoryId: 'sf_narrowed_key')]
+final class ShortNarrowedKey extends StreamOperative
+{
+    use Echoes;
+
+    public function state(string $entityKey): mixed
+    {
+        return [];
+    }
+}
+
+#[Operative(factoryId: 'sf_wider_keys')]
+final class ShortWiderKeys extends StreamOperative
+{
+    use Echoes;
+
+    public function entitiesFor(mixed $input): ?array
+    {
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'sf_void_state')]
+final class ShortVoidState extends StreamOperative
+{
+    use Echoes;
+
+    public function state(?string $entityKey): void
+    {
+    }
+}
+
+#[Operative(factoryId: 'sf_untyped_return')]
+final class ShortUntypedReturn extends WorkflowOperative
+{
+    use Echoes;
+
+    public function compensate(array $outputs, Ctx $ctx)
+    {
+    }
+}
+
+#[Operative(factoryId: 'sf_extra_argument')]
+final class ShortExtraArgument extends StreamOperative
+{
+    use Echoes;
+
+    public function onTimer(Timer $timer, Ctx $ctx, int $extra): void
+    {
+    }
+}
+
+#[Operative(factoryId: 'sf_dropped_argument')]
+final class ShortDroppedArgument extends StreamOperative
+{
+    use Echoes;
+
+    public function onTimer(Timer $timer): void
+    {
+    }
+}
+
+#[Operative(factoryId: 'sf_intersected_timer')]
+final class ShortIntersectedTimer extends StreamOperative
+{
+    use Echoes;
+
+    public function onTimer(Timer&\Countable $timer, Ctx $ctx): void
+    {
+    }
+}
+
+#[Operative(factoryId: 'sf_static_hook')]
+final class ShortStaticHook extends StreamOperative
+{
+    use Echoes;
+
+    public static function eventTime(mixed $input): int
+    {
+        return 0;
+    }
+}
+
+#[Operative(factoryId: 'sf_hidden_hook')]
+final class ShortHiddenHook extends WorkflowOperative
+{
+    use Echoes;
+
+    protected function compensate(array $outputs, Ctx $ctx): void
+    {
+    }
+}
+
+/** Every widening PHP lets an override of these hooks make. */
+#[Operative(factoryId: 'sf_widened_hooks')]
+final class ShortWidenedHooks extends WorkflowOperative
+{
+    use Echoes;
+
+    public function state($entityKey): array
+    {
+        return [];
+    }
+
+    public function applyChange(&$state, $change, bool $unused = false): void
+    {
+    }
+
+    public function onTimer(object $timer, ?Ctx $ctx): void
+    {
+    }
+
+    public function migrateState(int|string ...$record): never
+    {
+        throw new \LogicException('nothing was written at an older version');
+    }
+
+    public function compensate(iterable $outputs, Ctx $ctx): void
+    {
+    }
+}
+
+#[Proc(name: 'sf_proc_kind', kind: 'stream')]
+final class ProcWithKind extends Procedure
+{
+    use Echoes;
+}
+
+#[Proc(name: 'sf_proc_sink', sink: 'out')]
+final class ProcWithSink extends Procedure
+{
+    use Echoes;
+}
+
+#[Proc(name: 'sf_proc_input', input: 'prices')]
+final class ProcWithInput extends Procedure
+{
+    use Echoes;
+}
+
+#[Proc(name: 'sf_proc_codec', codec: ChannelCodec::Text)]
+final class ProcWithCodec extends Procedure
+{
+    use Echoes;
 }
 
 #[Proc(clock: Clock::EventTime)]
@@ -208,7 +399,10 @@ final class AuthoringTest extends RepositoryTestCase
         ];
     }
 
-    /** @dataProvider refusals */
+    /**
+     * @dataProvider refusals
+     * @dataProvider shortFormRefusals
+     */
     public function testTheDeclarationIsRefusedWithItsDefectNamed(callable $declare, string $defect): void
     {
         $this->expectException(DeclarationException::class);
@@ -821,67 +1015,239 @@ final class AuthoringTest extends RepositoryTestCase
 
     // -- the §5 short form -------------------------------------------------
 
-    public function testAStreamShortFormIsItsHandWrittenTwin(): void
+    /** @return iterable<string, array{class-string<OperativeBase>, class-string<OperativeBase>}> */
+    public static function shortFormTwins(): iterable
     {
-        $short = OperativeBase::specFor(ShortUpcase::class);
-        $hand = ShortUpcaseTwinOperative::spec();
+        yield 'a stream' => [ShortUpcase::class, ShortUpcaseTwinOperative::class];
+        yield 'a workflow' => [ShortPlace::class, ShortPlaceTwinOperative::class];
+    }
 
-        self::assertSame('stream', $short->kind);
-        self::assertSame('sf_upcase', $short->factoryId);
-        self::assertSame(
-            array_map(static fn ($c): array => [$c->name, $c->kind], $hand->channels),
-            array_map(static fn ($c): array => [$c->name, $c->kind], $short->channels),
-        );
+    /**
+     * The declaration a short form hands the core is the one its full form
+     * hands it, byte for byte, down to the procedure named after the factory
+     * id: which is what keeps every entity where it was when a short form
+     * grows into its full form.
+     *
+     * @dataProvider shortFormTwins
+     * @param class-string<OperativeBase> $short
+     * @param class-string<OperativeBase> $hand
+     */
+    public function testAShortFormDeclaresWhatItsHandWrittenTwinDeclares(string $short, string $hand): void
+    {
+        $spec = $short::spec();
+
+        self::assertSame($hand::spec()->kind, $spec->kind);
+        self::assertSame(HostClassDecl::of($hand::spec()), HostClassDecl::of($spec));
+        self::assertSame([$spec->factoryId], array_column($spec->procedures, 'name'));
+        self::derived($spec);
     }
 
     public function testAWorkflowShortFormIsAOnceWorkflow(): void
     {
-        $spec = OperativeBase::specFor(ShortPlace::class);
+        self::assertSame(LoopMode::Once, ShortPlace::spec()->workflow?->loopMode);
+    }
 
-        self::assertSame('workflow', $spec->kind);
-        self::assertSame(LoopMode::Once, $spec->workflow?->loopMode);
+    public function testASinklessShortFormDeclaresItsEntryIntoItsProcedureAndNothingElse(): void
+    {
+        $spec = ShortCounter::spec();
+
         self::assertSame(
-            ['order', 'placed'],
-            array_map(static fn ($c): string => $c->name, $spec->channels),
+            [['ticks', 'entry']],
+            array_map(static fn ($c): array => [$c->name, $c->kind], $spec->channels),
         );
+        self::assertSame(['sf_counter'], array_column($spec->procedures, 'name'));
+        // The codec reached the entry with no sink written: JSON would refuse this.
+        self::assertSame('one', ($spec->channels[0]->decode)('one'));
+        // The core takes a channel ending at a procedure, as it does a full form's.
+        self::assertCount(1, self::derived($spec)['channels']);
     }
 
-    public function testASinkWithoutAWrittenNameIsRefused(): void
+    public function testAShortFormsProcedureRunsItsBodyThroughItsOwnHooks(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessageMatches('/SinkWithoutId/');
-        OperativeBase::specFor(ShortDerivedName::class);
+        $harness = new Harness(ShortCounter::class);
+        $harness->feed('one');
+        $harness->feed('two');
+
+        self::assertSame(['seen' => ['one', 'two']], $harness->state());
+        self::assertTrue(Harness::replayEquals(ShortCounter::class, ['one', 'two']));
     }
 
-    public function testASinkWithoutAKindIsRefused(): void
+    public function testAChannelsBodyStillDeclaresAFullForm(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessageMatches('/SinkWithoutKind/');
-        OperativeBase::specFor(ShortNoKind::class);
+        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinOperative::spec()->procedures, 'class'));
+    }
+
+    public function testTheRunnerRegistersAShortFormAsTheClassTheAuthorWrote(): void
+    {
+        $runner = Flezha::createRunner('test')
+            ->registerFactory(ShortUpcase::class)
+            ->registerFactory(ShortPlace::class);
+        $registered = new \ReflectionProperty(Runner::class, 'classes');
+
+        self::assertSame([ShortUpcase::class, ShortPlace::class], $registered->getValue($runner));
+        $runner->unregisterFactory(ShortUpcase::class)->unregisterFactory(ShortPlace::class);
+        self::assertSame([], $registered->getValue($runner));
     }
 
     /**
-     * fails when: `Procedure::run` stops being declared `: mixed`, which is
-     * what makes a no-output procedure unwritable in PHP — and a
-     * `SinkWithoutOutput` this SDK could then owe.
+     * The shapes a short form, or a class mistaken for one, is refused for:
+     * fed to {@see testTheDeclarationIsRefusedWithItsDefectNamed()}.
+     *
+     * @return iterable<string, array{callable, string}>
      */
-    public function testAProcedureCannotDeclareNoOutput(): void
+    public static function shortFormRefusals(): iterable
     {
-        $returns = (new \ReflectionMethod(Procedure::class, 'run'))->getReturnType();
-        self::assertInstanceOf(\ReflectionNamedType::class, $returns);
-        self::assertSame('mixed', $returns->getName());
+        yield 'a short form with neither body' => [
+            static fn (): mixed => Flezha::createRunner('test')->registerFactory(ShortNoBody::class),
+            'defines neither `run` nor `channels()`',
+        ];
+        yield 'a short form whose factory id would be derived' => [
+            static fn (): mixed => Flezha::createRunner('test')->registerFactory(ShortUnattributed::class),
+            'declares no #[Flezha\Attribute\Operative(factoryId: ...)]',
+        ];
+        yield 'a short form naming its procedure' => [
+            static fn (): mixed => ShortRenamed::spec(),
+            'a short form\'s procedure is named after its factory id',
+        ];
+        // A class-level setting is the full form's to write.
+        yield 'a short form with persistence off' => [
+            static fn (): mixed => ShortUnpersisted::spec(),
+            'a short form keeps every class-level setting at its default',
+        ];
+        yield 'a short form with a workflow setting' => [
+            static fn (): mixed => ShortPerInput::spec(),
+            'a short form keeps every class-level setting at its default',
+        ];
+        yield 'a short-form argument beside a topology body' => [
+            static fn (): mixed => ShortCodecOnTopology::spec(),
+            '`codec` names a channel a short form generates',
+        ];
+        yield 'a procedure setting beside a topology body' => [
+            static fn (): mixed => ShortProcOnTopology::spec(),
+            '#[Proc] carries a procedure\'s settings, and this class wires its procedures in '
+            . '`channels()`; a full form\'s procedure settings go on its procedure classes',
+        ];
+        yield 'an operative with no run wired as a procedure' => [
+            static fn (): mixed => Definition::of(ShortUpcaseTwinOperative::class),
+            'is an operative with no `run`',
+        ];
+        yield 'a procedure registered as an operative' => [
+            static fn (): mixed => Flezha::createRunner('test')->registerFactory(Echoer::class),
+            'is a procedure, which declares no operative',
+        ];
     }
 
-    public function testAShortFormKeyWithoutASinkIsRefused(): void
+    public function testARunBodyBesideAChannelsBodyIsRefused(): void
+    {
+        try {
+            Flezha::createRunner('test')->registerFactory(ShortWithTopology::class);
+            self::fail('a class carrying both bodies declares two operatives in one');
+        } catch (DeclarationException $e) {
+            self::assertSame(['ShortFormWithTopology'], $e->refusals);
+            self::assertStringContainsString("\n  - ShortFormWithTopology: ", $e->getMessage());
+        }
+    }
+
+    /** @return iterable<string, array{class-string<OperativeBase>, string, string}> */
+    public static function shortFormsWithAHookAProcedureCouldNotDeclare(): iterable
+    {
+        yield 'a fold by value' => [
+            ShortFoldByValue::class,
+            'applyChange',
+            '`$state` is taken by value, not by reference',
+        ];
+        yield 'a narrowed parameter' => [
+            ShortNarrowedKey::class,
+            'state',
+            '`$entityKey` is typed `string`, which does not accept every `?string`',
+        ];
+        yield 'a wider return' => [ShortWiderKeys::class, 'entitiesFor', 'it returns `?array`, not `array`'];
+        yield 'a void for a mixed' => [ShortVoidState::class, 'state', 'it returns `void`, not `mixed`'];
+        yield 'no return type' => [ShortUntypedReturn::class, 'compensate', 'it declares no return type, not `void`'];
+        yield 'an extra required argument' => [
+            ShortExtraArgument::class,
+            'onTimer',
+            'it requires 3 arguments, and the hook is passed 2',
+        ];
+        yield 'a dropped argument' => [ShortDroppedArgument::class, 'onTimer', 'it has no parameter for `$ctx`'];
+        yield 'a narrowing intersection' => [
+            ShortIntersectedTimer::class,
+            'onTimer',
+            '`$timer` is typed `Flezha\Timer&Countable`, which does not accept every `Flezha\Timer`',
+        ];
+        yield 'a static hook' => [ShortStaticHook::class, 'eventTime', 'it must be a public instance method'];
+        yield 'a protected hook' => [ShortHiddenHook::class, 'compensate', 'it must be a public instance method'];
+    }
+
+    /**
+     * PHP refuses to load a `Procedure` subclass declaring any of these, and
+     * a short form declares no hook to PHP, so the SDK holds it to the same
+     * rule: a fold by value would otherwise fold nothing, silently.
+     *
+     * @dataProvider shortFormsWithAHookAProcedureCouldNotDeclare
+     * @param class-string<OperativeBase> $class
+     */
+    public function testAShortFormsHookKeepsAProceduresSignature(string $class, string $hook, string $defect): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessageMatches('/ShorthandKeyWithoutSink/');
-        OperativeBase::specFor(ShortKeyWithoutSink::class);
+        $this->expectExceptionMessage("`$hook` must be compatible with Procedure::$hook, as a procedure's is: $defect");
+
+        $class::spec();
     }
 
-    public function testAProcedureWithNoSinkDeclaresNoOperative(): void
+    public function testAShortFormsHookMayWidenWhatAProceduresMay(): void
     {
-        self::assertNull(Definition::of(ShortPlain::class)->shortForm());
+        $definition = Definition::of(ShortWidenedHooks::class);
+
+        foreach (['state', 'applyChange', 'onTimer', 'migrateState', 'compensate'] as $hook) {
+            self::assertTrue($definition->declares($hook), $hook);
+        }
+    }
+
+    /** @return iterable<string, array{class-string<Procedure>, string}> */
+    public static function proceduresWithAnOperativeArgument(): iterable
+    {
+        yield 'kind' => [ProcWithKind::class, 'kind'];
+        yield 'sink' => [ProcWithSink::class, 'sink'];
+        yield 'input' => [ProcWithInput::class, 'input'];
+        yield 'codec' => [ProcWithCodec::class, 'codec'];
+    }
+
+    /**
+     * @dataProvider proceduresWithAnOperativeArgument
+     * @param class-string<Procedure> $class
+     */
+    public function testAProcedureCarryingAnOperativeArgumentIsRefusedNamingIt(string $class, string $argument): void
+    {
+        $this->expectException(DeclarationException::class);
+        $this->expectExceptionMessageMatches("/#\\[Proc\\] takes no `$argument`.*#\\[Operative\\]/");
+
+        Flezha::createRunner('test')->registerFactory($class);
+    }
+
+    public function testAStreamAndAWorkflowShortFormUnderOneIdCollide(): void
+    {
+        $registry = new Registry();
+        $registry->add(ShortUpcase::spec());
+
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionMessageMatches('/^DuplicateFactoryId: `sf_upcase`/');
+
+        $registry->add(ShortUpcaseWorkflow::spec());
+    }
+
+    /**
+     * fails when: either `run` a body can override stops being declared
+     * `: mixed`, which is what makes a body declaring no output unwritable in
+     * PHP, and so a `SinkWithoutOutput` this SDK does not owe.
+     */
+    public function testNoBodyCanDeclareNoOutput(): void
+    {
+        foreach ([Procedure::class, OperativeBase::class] as $base) {
+            $returns = (new \ReflectionMethod($base, 'run'))->getReturnType();
+            self::assertInstanceOf(\ReflectionNamedType::class, $returns);
+            self::assertSame('mixed', $returns->getName(), $base);
+        }
     }
 }
 
@@ -956,6 +1322,9 @@ final class Unattributed extends StreamOperative
 #[Operative(factoryId: 'empty_workflow')]
 final class EmptyWorkflow extends WorkflowOperative
 {
+    public static function channels(Builder $c): void
+    {
+    }
 }
 
 #[Operative(factoryId: 'named_sink')]
