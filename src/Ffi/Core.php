@@ -285,38 +285,6 @@ final class Core implements SpawnBridge
         $this->ffi->flz_core_watch_stdin_eof($graceMs);
     }
 
-    /** Emit one output payload from a live workflow run-sugar body. */
-    public function workflowEmit(string $instanceId, string $payload): void
-    {
-        $this->check(
-            $this->ffi->flz_core_workflow_emit($this->live(), $instanceId, $payload, strlen($payload)),
-        );
-    }
-
-    /** The next inbox item of a live run-sugar body, or null on timeout. */
-    public function workflowRecv(string $instanceId, int $timeoutMs): ?string
-    {
-        $payload = null;
-        $this->check($this->outBuffer(
-            fn (CData $out, CData $len): int => $this->ffi->flz_core_workflow_recv(
-                $this->live(),
-                $instanceId,
-                $timeoutMs,
-                FFI::addr($out),
-                FFI::addr($len),
-            ),
-            $payload,
-        ));
-
-        return $payload;
-    }
-
-    /** Whether the named body's cancellation token has tripped. */
-    public function workflowCancelled(string $instanceId): bool
-    {
-        return $this->ffi->flz_core_workflow_cancelled($this->live(), $instanceId) === 1;
-    }
-
     public function spawnRequest(
         int $token,
         string $factoryId,

@@ -20,10 +20,7 @@ abstract class Operative
     /** @var array<class-string, ClassSpec> */
     private static array $cache = [];
 
-    /**
-     * Declare the channels graph. A run-sugar workflow leaves it alone and
-     * writes {@see WorkflowOperative::run()} instead.
-     */
+    /** Declare the channels graph. */
     public static function channels(Builder $c): void
     {
     }
@@ -70,10 +67,7 @@ abstract class Operative
 
     /**
      * The declaration both kinds carry, assembled once. A stream class names
-     * only what the builder holds; a workflow adds its own attribute and, for
-     * a run-sugar body, the callable.
-     *
-     * @param (callable(mixed, WorkflowCtx):mixed)|null $run
+     * only what the builder holds; a workflow adds its own attribute.
      */
     protected static function assemble(
         OperativeAttribute $declaration,
@@ -81,7 +75,6 @@ abstract class Operative
         string $kind,
         bool $syncDurability,
         ?WorkflowAttribute $workflow = null,
-        ?\Closure $run = null,
     ): ClassSpec {
         return new ClassSpec(
             factoryId: $declaration->factoryId,
@@ -99,7 +92,6 @@ abstract class Operative
             procedures: $builder->procedures,
             channels: $builder->channels,
             workflow: $workflow,
-            run: $run,
         );
     }
 

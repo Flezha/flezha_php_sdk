@@ -245,10 +245,10 @@ final class AuthoringTest extends RepositoryTestCase
         Unattributed::spec();
     }
 
-    public function testAWorkflowDeclaringNeitherFormIsRefused(): void
+    public function testAWorkflowDeclaringNoProceduresIsRefused(): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('declares neither a run body nor a channels graph');
+        $this->expectExceptionMessage('declares no procedures; a workflow runs a graph of procedures');
 
         EmptyWorkflow::spec();
     }

@@ -68,28 +68,19 @@ final class SchemaFixtureTest extends RepositoryTestCase
 
     public function testTheResultFixtureIsEncodedByteForByte(): void
     {
-        $encoded = ActivationCodec::encodeResult([
-            'token' => 42,
-            'outcome' => 'work',
-            'effects' => [[
-                'verdict' => 'ok',
-                'changes' => ["\x01"],
-                'outputs' => [[
-                    'target' => 'plugin',
-                    'plugin_channel' => 'out',
-                    'key' => 'k2',
-                    'event_time' => null,
-                    'metadata' => [],
-                    'payload' => "\x02",
-                ]],
-                'consumed_offset' => 7,
-                'event_time' => 1_000,
-                'timers' => [['kind' => 'processing_time', 'scheduled_at' => 2_000, 'register' => false]],
-                'checkpoint' => true,
-            ]],
-        ]);
+        self::assertSame($this->pinnedHex()[1], bin2hex(ActivationCodec::encodeResult(self::resultFixture())));
+    }
 
-        self::assertSame($this->pinnedHex()[1], bin2hex($encoded));
+    /**
+     * The fixture's effect carries no completion, so its last byte is the
+     * absent option; a request replaces exactly that byte with the present
+     * one, which is what places it after the DLQ entry.
+     */
+    public function testACompletionIsTheEffectsLastField(): void
+    {
+        $encoded = ActivationCodec::encodeResult(self::resultFixture(complete: 'done'));
+
+        self::assertSame(substr($this->pinnedHex()[1], 0, -2) . '0104' . bin2hex('done'), bin2hex($encoded));
     }
 
     /**
@@ -117,7 +108,6 @@ final class SchemaFixtureTest extends RepositoryTestCase
                 'want_keys' => true,
                 'want_event_time' => false,
             ]],
-            'workflow_run' => ['args' => 'go'],
             'compensate_run' => ['outputs' => ["\x0A"]],
         ];
 
@@ -154,7 +144,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
         return [$matches[1][0], $matches[1][1]];
     }
 
-    /** @return list<string> the eight command-kind encodings, in declaration order */
+    /** @return list<string> the seven command-kind encodings, in declaration order */
     private function commandKindHex(): array
     {
         $source = $this->schemaSource();
@@ -165,6 +155,32 @@ final class SchemaFixtureTest extends RepositoryTestCase
         preg_match_all('/"([0-9a-f]{6,})"/', $table, $matches);
 
         return $matches[1];
+    }
+
+    /** @return array<string, mixed> the values the core's result fixture encodes */
+    private static function resultFixture(?string $complete = null): array
+    {
+        return [
+            'token' => 42,
+            'outcome' => 'work',
+            'effects' => [[
+                'verdict' => 'ok',
+                'changes' => ["\x01"],
+                'outputs' => [[
+                    'target' => 'plugin',
+                    'plugin_channel' => 'out',
+                    'key' => 'k2',
+                    'event_time' => null,
+                    'metadata' => [],
+                    'payload' => "\x02",
+                ]],
+                'consumed_offset' => 7,
+                'event_time' => 1_000,
+                'timers' => [['kind' => 'processing_time', 'scheduled_at' => 2_000, 'register' => false]],
+                'checkpoint' => true,
+                'complete' => $complete,
+            ]],
+        ];
     }
 
     private static function bytes(string $hex): string

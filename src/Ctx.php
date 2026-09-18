@@ -32,6 +32,7 @@ final class Ctx
     public array $timers = [];
 
     private bool $checkpointed = false;
+    private ?string $completion = null;
     private int $ordinal = 0;
     private int $emitOrdinal = 0;
     private ?string $identity = null;
@@ -183,6 +184,19 @@ final class Ctx
     }
 
     /**
+     * End this procedure's workflow instance with `$result` once the current
+     * iteration commits, instead of waiting for its next input. The rest of
+     * the iteration still runs, and a later call replaces an earlier one. The
+     * result travels as a sink naming no codec sends a value: a string as it
+     * stands, anything else as JSON, and `null` as no result. In a stream
+     * operative, which never completes, the item fails.
+     */
+    public function complete(mixed $result = null): void
+    {
+        $this->completion = $result === null ? '' : ChannelCodec::plain($result, $this->node->name);
+    }
+
+    /**
      * Ask the controller for a workflow instance of `$factoryId`, with
      * `$payload` as its first input. Returns the handle at once: the call never
      * waits, and a refusal reaches only a read of the handle.
@@ -239,6 +253,7 @@ final class Ctx
             'event_time' => $this->now,
             'timers' => $this->timers,
             'checkpoint' => $this->checkpointed,
+            'complete' => $this->completion,
         ];
     }
 

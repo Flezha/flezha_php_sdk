@@ -44,7 +44,8 @@ final class DispatchTest extends TestCase
             [EchoOperative::class, CounterOperative::class, KeyedOperative::class, StampOperative::class,
                 MixedStampOperative::class, WfEmitOperative::class,
                 WfEmitStreamOperative::class, JsonEntryOperative::class, MergeOperative::class,
-                RouteLatestOperative::class, FannedOperative::class] as $class
+                RouteLatestOperative::class, FannedOperative::class, CompletingWorkflow::class,
+                CompletingStream::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -290,42 +291,40 @@ final class DispatchTest extends TestCase
         self::assertStringContainsString('declares no compensate hook', $result['error']);
     }
 
-    /** Run-sugar: the seed args cross once and the body answers the driver. */
-    public function testARunSugarBodyCompletesWithItsResult(): void
+    /**
+     * A workflow procedure's `complete` rides its item's effect as JSON, the
+     * latest call winning, and the rest of the item still runs: the driver
+     * ends the instance only after the iteration commits.
+     */
+    public function testAWorkflowProcedureCompletionRidesItsEffect(): void
     {
-        $this->registry->add(RunSugarOperative::spec());
-        $result = $this->dispatcher->answer([
-            'token' => 6,
-            'factory' => 'run_sugar_operative',
-            'procedure' => 0,
-            'operative' => 'instance-1',
-            'entity_key' => null,
-            'change_seq' => 0,
-            'kind' => 'workflow_run',
-            'args' => '{"order":7}',
-        ]);
+        $effect = $this->work('completing_workflow', 0, [self::input('{"order":7}')])['effects'][0];
 
-        self::assertSame('workflow_done', $result['outcome']);
-        self::assertTrue($result['workflow_completed']);
-        self::assertSame('{"seeded":{"order":7}}', $result['workflow_result']);
+        self::assertSame('ok', $effect['verdict']);
+        self::assertSame('{"seeded":{"order":7}}', $effect['complete']);
+        self::assertSame('{"order":7}', $effect['outputs'][0]['payload']);
+        self::assertNull($this->work('echo_operative', 0, [self::input('"x"')])['effects'][0]['complete']);
     }
 
-    /** A class handed a body it does not declare fails non-retryably. */
-    public function testAWorkflowBodyOnAClassThatDeclaresNoneIsRefused(): void
+    /**
+     * A stream procedure's request is carried the same way, and the core
+     * refuses it; a string result rides as it stands, as a sink sends one.
+     */
+    public function testAStreamProcedureCompletionIsCarriedTheSameWay(): void
     {
-        $result = $this->dispatcher->answer([
-            'token' => 7,
-            'factory' => 'echo_operative',
-            'procedure' => 0,
-            'operative' => 'instance-1',
-            'entity_key' => null,
-            'change_seq' => 0,
-            'kind' => 'workflow_run',
-            'args' => '',
-        ]);
+        $effect = $this->work('completing_stream', 0, [self::input('"bye"')])['effects'][0];
 
-        self::assertSame('failed', $result['outcome']);
-        self::assertStringContainsString('declares none', $result['error']);
+        self::assertSame('ok', $effect['verdict']);
+        self::assertSame('bye', $effect['complete']);
+    }
+
+    /** A failed item carries no completion, so a failed iteration cannot end the instance. */
+    public function testAnItemThatFailsAfterCompletingCarriesNoCompletion(): void
+    {
+        $effect = $this->work('completing_workflow', 0, [self::input('"fail"')])['effects'][0];
+
+        self::assertSame('retryable', $effect['verdict']);
+        self::assertArrayNotHasKey('complete', $effect);
     }
 
     public function testAnUnregisteredFactoryFailsNonRetryably(): void

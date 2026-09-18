@@ -249,15 +249,46 @@ final class SagaOperative extends \Flezha\WorkflowOperative
     }
 }
 
-#[\Flezha\Attribute\Operative(factoryId: 'run_sugar_operative')]
-final class RunSugarOperative extends \Flezha\WorkflowOperative
-{
-    public static function run(mixed $args, \Flezha\WorkflowCtx $ctx): mixed
-    {
-        $ctx->complete(['seeded' => $args]);
+// -- a procedure's completion ------------------------------------------------
+//
+// One procedure under both kinds: the SDK carries the request either way, and
+// the core decides what it means, ending a workflow or failing a stream's item.
 
-        return null;
+#[Proc(name: 'completer')]
+final class Completer extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        // Twice, so the effect shows the later call replacing the earlier one;
+        // a string input completes with itself, which rides unquoted.
+        $ctx->complete(['first' => $input]);
+        $ctx->complete(is_string($input) ? $input : ['seeded' => $input]);
+        if ($input === 'fail') {
+            throw new \RuntimeException('failed after completing');
+        }
+
+        return $input;
     }
+}
+
+trait CompletingGraph
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Completer::class)->sink('out');
+    }
+}
+
+#[Operative(factoryId: 'completing_workflow')]
+final class CompletingWorkflow extends WorkflowOperative
+{
+    use CompletingGraph;
+}
+
+#[Operative(factoryId: 'completing_stream')]
+final class CompletingStream extends StreamOperative
+{
+    use CompletingGraph;
 }
 
 #[Proc(name: 'timing', clock: Clock::EventTime)]

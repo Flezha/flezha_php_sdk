@@ -19,7 +19,6 @@ use Flezha\LoopMode;
 use Flezha\Procedure;
 use Flezha\RollbackMode;
 use Flezha\StreamOperative;
-use Flezha\WorkflowCtx;
 use Flezha\WorkflowOperative;
 
 /**
@@ -364,9 +363,11 @@ final class FullStream extends StreamOperative
 )]
 final class FullWorkflow extends WorkflowOperative
 {
-    public static function run(mixed $args, WorkflowCtx $ctx): mixed
+    public static function channels(Builder $c): void
     {
-        return $args;
+        // A chained loop seeds each iteration from the terminal's handoff, so
+        // the terminal's output channel is not plugin-bound.
+        $c->input('in')->into(Echoer::class)->named('carry');
     }
 }
 

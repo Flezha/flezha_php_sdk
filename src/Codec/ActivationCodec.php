@@ -34,7 +34,6 @@ final class ActivationCodec
         'apply_state',
         'migration_serialize',
         'key_request',
-        'workflow_run',
         'compensate_run',
     ];
 
@@ -48,7 +47,6 @@ final class ActivationCodec
         'migration_state',
         'prepared',
         'failed',
-        'workflow_done',
     ];
 
     /** `TimerKind` variants, in declaration order. */
@@ -167,7 +165,6 @@ final class ActivationCodec
                     'want_event_time' => $c->bool('want event time'),
                 ],
             ],
-            'workflow_run' => ['args' => $c->bytes('workflow args')],
             'compensate_run' => [
                 'outputs' => $c->seq('compensate outputs', fn (PostcardCursor $p): string => $p->bytes('output')),
             ],
@@ -221,8 +218,6 @@ final class ActivationCodec
                 (string) ($result['error'] ?? ''),
                 (bool) ($result['non_retryable'] ?? false),
             ),
-            'workflow_done' => Postcard::bool((bool) ($result['workflow_completed'] ?? false))
-                . Postcard::bytes((string) ($result['workflow_result'] ?? '')),
             default => '',
         };
     }
@@ -246,7 +241,8 @@ final class ActivationCodec
             . Postcard::bool((bool) ($effect['checkpoint'] ?? false))
             // The core mints the DLQ entry when its own ladder parks, so a
             // host effect never carries one.
-            . Postcard::option(null);
+            . Postcard::option(null)
+            . Postcard::option(isset($effect['complete']) ? Postcard::bytes((string) $effect['complete']) : null);
     }
 
     /** @param array<string, mixed> $output */

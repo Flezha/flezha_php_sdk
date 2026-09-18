@@ -28,12 +28,10 @@ use Flezha\Attribute\Operative;
 use Flezha\Attribute\Proc;
 use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
-use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Graph\Builder;
 use Flezha\Procedure;
-use Flezha\WorkflowCtx;
 use Flezha\WorkflowOperative;
 
 // -- the release gate --------------------------------------------------------
@@ -203,18 +201,26 @@ abstract class FailingStep extends Procedure
 
 // -- echo_workflow -----------------------------------------------------------
 //
-// The run-sugar shape (workflow.rs:14): emits its args back once and completes,
-// so the SDK ships the completion and the controller deregisters it.
+// The run-once shape (workflow.rs:14): one procedure emits its start values back
+// once and the pass ends, so the controller deregisters the instance.
+
+#[Proc(name: 'echo_args')]
+final class EchoArgs extends Procedure
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        return "echo:$input";
+    }
+}
 
 #[Operative(factoryId: 'echo_workflow')]
 final class EchoWorkflow extends WorkflowOperative
 {
-    public static function run(mixed $args, WorkflowCtx $ctx): mixed
+    public static function channels(Builder $c): void
     {
-        $ctx->emit('echo:' . Json::encode($args));
-        $ctx->complete();
-
-        return null;
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(EchoArgs::class)
+            ->sink('out');
     }
 }
 

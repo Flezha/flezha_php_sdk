@@ -3,13 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Run-sugar: one imperative body that receives, emits and completes.
+ * A chat session as a `PerInput` workflow: one iteration per message.
  *
- * `recv()` takes a timeout and answers null on expiry rather than parking
- * indefinitely, so the body observes cancellation between attempts — which is
- * what makes a long-lived body stoppable. Under `SyncExecutor` a run-sugar body
- * owns the process for its duration; under `SwooleExecutor` it owns one thread
- * of the pool. Size such a deployment by concurrent instances, not by cores.
+ * The conversation lives in entity state, so a crash resumes at the last
+ * committed turn, and between messages the instance parks without holding a
+ * runner thread. The message whose `kind` is `end` ends the instance through
+ * `$ctx->complete()`, once its iteration commits.
  */
 
 namespace Flezha\Examples\E06;
@@ -17,36 +16,49 @@ namespace Flezha\Examples\E06;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
+use Flezha\Attribute\Proc;
 use Flezha\Attribute\Workflow;
+use Flezha\Ctx;
 use Flezha\Flezha;
+use Flezha\Graph\Builder;
 use Flezha\LoopMode;
-use Flezha\WorkflowCtx;
+use Flezha\Procedure;
 use Flezha\WorkflowOperative;
 
-#[Operative(factoryId: 'chat')]
-#[Workflow(loopMode: LoopMode::Once, maxDurationMs: 3_600_000)]
-final class ChatWorkflow extends WorkflowOperative
+#[Proc]
+final class ChatTurn extends Procedure
 {
-    public static function run(mixed $args, WorkflowCtx $ctx): mixed
+    public function state(?string $entityKey): mixed
     {
-        $history = [];
+        return ['history' => []];
+    }
 
-        while (!$ctx->isCancelled()) {
-            $message = $ctx->recv(1_000);
-            if ($message === null) {
-                continue;
-            }
-            if (($message['kind'] ?? null) === 'end') {
-                break;
-            }
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['history'][] = $change;
+    }
 
-            $history[] = $message['text'];
-            $ctx->emit(['reply' => 'noted: ' . $message['text'], 'seen' => count($history)]);
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        if (($input['kind'] ?? null) === 'end') {
+            $ctx->complete(['messages' => count($ctx->state['history'])]);
+
+            return null;
         }
 
-        $ctx->complete(['messages' => count($history)]);
+        $ctx->change($input['text']);
 
-        return null;
+        return ['reply' => 'noted: ' . $input['text'], 'seen' => count($ctx->state['history'])];
+    }
+}
+
+#[Operative(factoryId: 'chat')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 3_600_000)]
+final class ChatWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('messages')->into(ChatTurn::class)->sink('replies');
     }
 }
 

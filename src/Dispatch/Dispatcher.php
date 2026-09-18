@@ -17,7 +17,6 @@ use Flezha\Logger;
 use Flezha\SpawnBridge;
 use Flezha\Timer;
 use Flezha\Transforms;
-use Flezha\WorkflowCtx;
 use Throwable;
 
 /**
@@ -91,13 +90,6 @@ final class Dispatcher
                     'no class registered for factory `%s`',
                     $activation['factory'],
                 ), true);
-            }
-
-            // The workflow body is the one kind addressed to a class rather
-            // than to a procedure, so it is answered before the procedure is
-            // resolved — which is what lets every arm below hold one.
-            if ($activation['kind'] === 'workflow_run') {
-                return $this->runWorkflow($activation, $registered);
             }
 
             $node = $registered->spec->procedures[$activation['procedure']] ?? null;
@@ -369,33 +361,6 @@ final class Dispatcher
         }
 
         return ['token' => $activation['token'], 'outcome' => 'prepared', 'prepared' => $answers];
-    }
-
-    /**
-     * @param array<string, mixed> $activation
-     * @return array<string, mixed>
-     */
-    private function runWorkflow(array $activation, RegisteredClass $registered): array
-    {
-        $run = $registered->spec->run;
-        if ($run === null) {
-            return self::failed($activation['token'], sprintf(
-                'class `%s` was handed a workflow body but declares none',
-                $activation['factory'],
-            ), true);
-        }
-
-        $ctx = new WorkflowCtx((string) $activation['operative'], $this->core);
-        $args = $activation['args'] === '' ? null : Json::decode((string) $activation['args']);
-        $returned = $run($args, $ctx);
-        $completed = $ctx->isCompleted() || $returned !== null;
-
-        return [
-            'token' => $activation['token'],
-            'outcome' => 'workflow_done',
-            'workflow_completed' => $completed,
-            'workflow_result' => Json::encode($ctx->isCompleted() ? $ctx->result() : $returned),
-        ];
     }
 
     /**

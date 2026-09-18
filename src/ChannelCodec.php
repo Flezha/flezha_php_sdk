@@ -63,9 +63,19 @@ enum ChannelCodec: string
      */
     public static function defaultEncoder(ChannelSpec $channel): Closure
     {
-        $json = self::Json->encoder($channel);
+        return static fn (mixed $value): string => self::plain($value, $channel->name);
+    }
 
-        return static fn (mixed $value): string => is_string($value) ? $value : $json($value);
+    /**
+     * What a sink naming no codec sends, and what a workflow completion
+     * carries: a string as it stands, any other value as JSON. `$owner` is
+     * what a refusal names.
+     */
+    public static function plain(mixed $value, string $owner): string
+    {
+        return is_string($value)
+            ? $value
+            : Json::guard($owner, static fn (): string => Json::encode($value));
     }
 
     private function refuse(ChannelSpec $channel, mixed $value): never

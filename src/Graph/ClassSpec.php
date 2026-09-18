@@ -14,7 +14,6 @@ final class ClassSpec
     /**
      * @param list<ProcNode>    $procedures
      * @param list<ChannelSpec> $channels
-     * @param (callable(mixed, \Flezha\WorkflowCtx):mixed)|null $run
      */
     public function __construct(
         public readonly string $factoryId,
@@ -34,7 +33,6 @@ final class ClassSpec
         public readonly array $procedures,
         public readonly array $channels,
         public readonly ?Workflow $workflow = null,
-        public $run = null,
     ) {
     }
 
@@ -49,6 +47,6 @@ final class ClassSpec
      */
     public function structuredWorkflow(): bool
     {
-        return $this->kind === 'workflow' && $this->channels !== [];
+        return $this->kind === 'workflow';
     }
 }

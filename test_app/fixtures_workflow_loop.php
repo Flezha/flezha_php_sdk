@@ -35,7 +35,9 @@ use Flezha\WorkflowOperative;
 // release variable is unset, so a SIGKILL lands with the earlier iterations
 // durable and that one in flight. Keying the park on the payload rather than on
 // an invocation count keeps it deterministic across the park/rehydrate cycles,
-// which re-run the driver but not the turns.
+// which re-run the driver but not the turns. The turn `bye` records nothing,
+// passes on like any turn, and completes the instance with the number of turns
+// recorded, as decimal text.
 //
 // stateless_loop_workflow is the same loop MINUS its stateful first procedure:
 // ChatReply alone holds no per-Entity state, so nothing writes an Entity WAL
@@ -51,6 +53,18 @@ use Flezha\WorkflowOperative;
 final class ChatTurn extends DurableStep
 {
     public const CRASH_TURN = 'mid-crash';
+    public const CLOSING_TURN = 'bye';
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        if ($input !== self::CLOSING_TURN) {
+            return parent::run($input, $ctx);
+        }
+        $this->release($input, $ctx);
+        $ctx->complete(count($ctx->state['items']));
+
+        return null;
+    }
 
     protected function gated(mixed $input): bool
     {
@@ -117,8 +131,8 @@ final class ChatReplyUndoable extends Procedure
 }
 
 #[Operative(factoryId: 'chat_loop_workflow')]
-// A chat session ends on an external stop, not on its own; the duration
-// backstop keeps a stray instance from outliving the test run.
+// A chat session ends on the turn `bye`; the duration backstop keeps a stray
+// instance from outliving the test run.
 #[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
 final class ChatLoopWorkflow extends WorkflowOperative
 {
