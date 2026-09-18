@@ -13,8 +13,8 @@ namespace Flezha;
  * package brings the authoring surface, the codec for user types, the
  * concurrency host and idiomatic errors.
  *
- *     #[Proc]
- *     final class Echo_ extends Procedure
+ *     #[Proc(name: 'echo')]
+ *     final class EchoProcedure extends Procedure
  *     {
  *         public function run(mixed $input, Ctx $ctx): mixed { return $input; }
  *     }
@@ -24,7 +24,7 @@ namespace Flezha;
  *     {
  *         public static function channels(Builder $c): void
  *         {
- *             $c->input('input')->into(Echo_::class)->sink('out');
+ *             $c->input('input')->into(EchoProcedure::class)->sink('out');
  *         }
  *     }
  *

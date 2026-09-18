@@ -18,6 +18,7 @@ use Flezha\Attribute\Proc;
  *     #[Proc(entityKeys: ['a', 'b'])]
  *     final class Totals extends Procedure
  *     {
+ *         public function entitiesFor(mixed $input): array { return ['a', 'b']; }
  *         public function state(?string $entityKey): mixed { return ['sum' => 0]; }
  *         public function applyChange(mixed &$state, mixed $change): void { $state['sum'] += $change; }
  *         public function run(mixed $input, Ctx $ctx): mixed { $ctx->change((int) $input); return null; }
