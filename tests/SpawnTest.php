@@ -123,7 +123,7 @@ final class SpawnTest extends TestCase
         $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p1'));
 
         self::assertSame(
-            [[self::TOKEN, 'worker', '', '"p1"', 'deliver', false]],
+            [[self::TOKEN, 'worker', '', 'p1', 'deliver', false]],
             $bridge->requests,
             'no id asks the controller to generate one, from the activation the call ran under',
         );
@@ -142,8 +142,26 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns(['{"id":"w1","outcome":"delivered"}']);
         $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p2', id: 'w1'));
 
-        self::assertSame([[self::TOKEN, 'worker', 'w1', '"p2"', 'deliver', false]], $bridge->requests);
+        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', 'deliver', false]], $bridge->requests);
         self::assertEquals(new SpawnResult('w1', SpawnOutcome::Delivered), $handle->wait());
+    }
+
+    /**
+     * The payload is the spawned instance's first message, sent as a sink
+     * naming no codec sends a value: a string as it stands, so a `Text` entry
+     * reads it, and anything else as JSON, so a `Json` entry reads it.
+     */
+    public function testThePayloadIsWhatATextOrJsonEntryReads(): void
+    {
+        $bridge = new ScriptedSpawns(['{"id":"a","outcome":"spawned"}', '{"id":"b","outcome":"spawned"}']);
+        self::spawn($bridge, static function (Ctx $ctx): SpawnHandle {
+            $ctx->spawnWorkflow('worker', 'ticket-1');
+
+            return $ctx->spawnWorkflow('worker', ['symbol' => 'AAPL', 'quantity' => 10]);
+        });
+
+        self::assertSame('ticket-1', $bridge->requests[0][3], 'a string travels as it stands');
+        self::assertSame(['symbol' => 'AAPL', 'quantity' => 10], Json::decode($bridge->requests[1][3]));
     }
 
     public function testIfRunningWithoutAnIdIsRefusedAtTheCallAndSendsNothing(): void
@@ -182,7 +200,7 @@ final class SpawnTest extends TestCase
             $bridge,
             static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p', id: 'w1', ifRunning: 'error'),
         );
-        self::assertSame([[self::TOKEN, 'worker', 'w1', '"p"', 'error', false]], $bridge->requests);
+        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p', 'error', false]], $bridge->requests);
 
         try {
             $handle->wait();

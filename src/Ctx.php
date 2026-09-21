@@ -212,6 +212,10 @@ final class Ctx
      * nothing and its handle answers `skipped_on_replay`. A timer on this same
      * context is registered on replay, because a timer is internal state.
      *
+     * `$payload` is an ordinary message on the instance's first entry channel,
+     * sent as a sink naming no codec sends a value (a string as it stands,
+     * anything else as JSON), so a `Text` or `Json` entry reads it.
+     *
      * @throws \InvalidArgumentException for an `$ifRunning` with no `$id`; nothing is sent
      */
     public function spawnWorkflow(
@@ -232,7 +236,7 @@ final class Ctx
             $this->token,
             $factoryId,
             $id ?? '',
-            Json::encode($payload),
+            ChannelCodec::plain($payload, $this->node->name),
             $ifRunning ?? 'deliver',
             $this->replay,
         ));

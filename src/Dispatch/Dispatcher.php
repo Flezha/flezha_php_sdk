@@ -229,12 +229,30 @@ final class Dispatcher
             ));
 
             return [
-                'verdict' => self::nonRetryable($e) ? 'non_retryable' : 'retryable',
-                'message' => self::message($e),
+                ...self::failureOf($e),
                 'event_time' => $now,
                 'consumed_offset' => $item['consumed_offset'] ?? null,
             ];
         }
+    }
+
+    /**
+     * A failed item's verdict and the message the wire carries: `unreadable`,
+     * reported as its cause, when the entrance could not read the payload,
+     * else what the handler's own exception says.
+     *
+     * @return array{verdict: string, message: string}
+     */
+    private static function failureOf(Throwable $e): array
+    {
+        if ($e instanceof UnreadablePayload) {
+            return ['verdict' => 'unreadable', 'message' => $e->getMessage()];
+        }
+
+        return [
+            'verdict' => self::nonRetryable($e) ? 'non_retryable' : 'retryable',
+            'message' => self::message($e),
+        ];
     }
 
     /**
@@ -274,7 +292,7 @@ final class Dispatcher
             || $channel->kind === 'entry'
             || $registered->spec->structuredWorkflow();
         $edge = $untransformed ? self::edgeInto($channel, $node->index) : null;
-        foreach (self::valuesOf($channel, $edge, (string) $item['payload']) as $input) {
+        foreach (self::entryValues($channel, $edge, (string) $item['payload']) as $input) {
             if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->cellKey)) {
                 continue;
             }
@@ -423,6 +441,26 @@ final class Dispatcher
                 $registered->stateOf($node, $activation['cell_key']),
             ),
         ];
+    }
+
+    /**
+     * `valuesOf` for a delivered item: a failure on an entry channel (the
+     * wire's bytes, not a producer's) is the entrance's, and is reported as
+     * such rather than as the handler's.
+     *
+     * @return list<mixed>
+     */
+    private static function entryValues(?ChannelSpec $channel, ?ConsumerEdge $edge, string $payload): array
+    {
+        try {
+            return self::valuesOf($channel, $edge, $payload);
+        } catch (Throwable $e) {
+            if ($channel === null || $channel->kind === 'entry') {
+                throw new UnreadablePayload(self::message($e), $e);
+            }
+
+            throw $e;
+        }
     }
 
     /**

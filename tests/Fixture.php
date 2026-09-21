@@ -254,6 +254,39 @@ final class PoisonOperative extends StreamOperative
     }
 }
 
+/** Throws on a value that did decode: a handler's failure, not the entrance's. */
+#[Task(name: 'flaky')]
+final class Flaky extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        if ($input === 'boom') {
+            throw new \RuntimeException('the handler rejected it');
+        }
+
+        return $input;
+    }
+}
+
+/** A text entry whose edge transform rejects `poison`, into a handler that rejects `boom`. */
+#[Operative(factoryId: 'flaky_entry_operative')]
+final class FlakyEntryOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->map(static function (string $text): string {
+                if ($text === 'poison') {
+                    throw new \RuntimeException('the mapping rejected it');
+                }
+
+                return $text;
+            })
+            ->into(Flaky::class)
+            ->sink('out');
+    }
+}
+
 #[Task(name: 'saga_step')]
 final class SagaStep extends Tasklet
 {

@@ -45,7 +45,7 @@ final class DispatchTest extends TestCase
                 MixedStampOperative::class, WfEmitOperative::class,
                 WfEmitStreamOperative::class, JsonEntryOperative::class, MergeOperative::class,
                 RouteLatestOperative::class, FannedOperative::class, CompletingWorkflow::class,
-                CompletingStream::class] as $class
+                CompletingStream::class, FlakyEntryOperative::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -80,17 +80,10 @@ final class DispatchTest extends TestCase
         );
     }
 
-    public function testAThrowingHandlerClimbsTheRetryLadder(): void
-    {
-        $result = $this->work('counter_operative', 0, [self::input('not json at all')]);
-
-        self::assertSame('retryable', $result['effects'][0]['verdict']);
-        self::assertStringContainsString('JsonException', $result['effects'][0]['message']);
-    }
-
     /**
      * An entry naming no codec reads JSON, so plain text fails its decode: the
-     * item rides the retry ladder and the handler is never handed it.
+     * item is reported unreadable, the entrance's failure rather than the
+     * handler's, and the core parks it under the entry channel.
      */
     public function testPlainTextIntoAnEntryNamingNoCodecNeverReachesTheHandler(): void
     {
@@ -98,11 +91,27 @@ final class DispatchTest extends TestCase
         $result = $this->work('json_entry_operative', 0, [self::input('{"a":1}'), self::input('hello')]);
 
         self::assertSame(
-            ['ok', 'retryable'],
+            ['ok', 'unreadable'],
             array_map(static fn (array $e): string => $e['verdict'], $result['effects']),
         );
-        self::assertStringContainsString('JsonException', $result['effects'][1]['message']);
+        self::assertStringStartsWith('JsonException: ', $result['effects'][1]['message']);
         self::assertSame([['a' => 1]], Delivered::$values);
+    }
+
+    /**
+     * An entry edge's transform runs at the entrance too, so its failure is
+     * the entrance's; a handler throwing on a value that did decode stays a
+     * handler failure, which is what the retry ladder is for.
+     */
+    public function testAnEntryTransformFailureIsUnreadableWhileAHandlerFailureIsRetryable(): void
+    {
+        $mapped = $this->work('flaky_entry_operative', 0, [self::input('poison')]);
+        self::assertSame('unreadable', $mapped['effects'][0]['verdict']);
+        self::assertStringContainsString('the mapping rejected it', $mapped['effects'][0]['message']);
+
+        $thrown = $this->work('flaky_entry_operative', 0, [self::input('boom')]);
+        self::assertSame('retryable', $thrown['effects'][0]['verdict']);
+        self::assertStringContainsString('the handler rejected it', $thrown['effects'][0]['message']);
     }
 
     public function testANonRetryableErrorParksImmediately(): void

@@ -52,8 +52,8 @@ final class ActivationCodec
     /** `TimerKind` variants, in declaration order. */
     private const TIMER_KINDS = ['event_time', 'processing_time'];
 
-    /** `Verdict` variants, in declaration order. */
-    private const VERDICTS = ['ok', 'retryable', 'non_retryable'];
+    /** `Verdict` variants, in the core's order; `unreadable` is an entry decode the core parks. */
+    private const VERDICTS = ['ok', 'retryable', 'non_retryable', 'unreadable'];
 
     private function __construct()
     {

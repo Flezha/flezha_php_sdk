@@ -20,6 +20,7 @@ use Flezha\Ctx;
 use Flezha\Exception\SpawnException;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
+use Flezha\SpawnHandle;
 use Flezha\Tasklet;
 use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
@@ -170,6 +171,39 @@ final class ChatRewindWorkflow extends WorkflowOperative
     }
 }
 
+// The reply that blocks on the turn `reply-crash` while the release env is
+// unset, after the root has committed.
+#[Task(name: 'blocking_reply')]
+final class BlockingReply extends Tasklet
+{
+    public const REPLY_CRASH_TURN = 'reply-crash';
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        if ($input === self::REPLY_CRASH_TURN) {
+            WorkflowGate::blockUntilReleased();
+        }
+        $ctx->emit("reply:$input");
+
+        return null;
+    }
+}
+
+// The chat loop with the block moved AFTER the root's commit, so a SIGKILL
+// lands between a root's `task_committed` and the pass's `iter_committed`.
+#[Operative(factoryId: 'reply_block_loop_workflow')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class ReplyBlockLoopWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(ChatTurn::class)->named('mid')
+            ->into(BlockingReply::class)
+            ->sink('out');
+    }
+}
+
 // -- spawn_requester ---------------------------------------------------------
 //
 // On each input it spawns stateless_loop_workflow once with no id and once under
@@ -186,15 +220,21 @@ final class SpawnRequester extends Tasklet
             'named' => $ctx->spawnWorkflow('stateless_loop_workflow', (string) $input, id: (string) $input),
         ];
         foreach ($handles as $label => $handle) {
-            try {
-                $result = $handle->wait();
-                echo "spawn_result $label {$result->id} {$result->outcome->value}\n";
-            } catch (SpawnException $e) {
-                echo "spawn_result $label error {$e->getMessage()}\n";
-            }
+            self::report($label, $handle);
         }
 
         return null;
+    }
+
+    /** A spawn handle's answer on stdout, as `spawn_result <label> <id> <outcome>`. */
+    public static function report(string $label, SpawnHandle $handle): void
+    {
+        try {
+            $result = $handle->wait();
+            echo "spawn_result $label {$result->id} {$result->outcome->value}\n";
+        } catch (SpawnException $e) {
+            echo "spawn_result $label error {$e->getMessage()}\n";
+        }
     }
 }
 
@@ -205,6 +245,34 @@ final class SpawnRequesterOperative extends StreamOperative
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SpawnRequester::class)
+            ->sink('out');
+    }
+}
+
+// -- spawn_once_requester ----------------------------------------------------
+//
+// On each input it spawns `typed_once_workflow` with no id, the input inside a
+// JSON object its entry channel decodes, and prints the result as
+// spawn_requester does.
+
+#[Task(name: 'spawn_once_requester')]
+final class SpawnOnceRequester extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        SpawnRequester::report('once', $ctx->spawnWorkflow('typed_once_workflow', ['text' => (string) $input]));
+
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'spawn_once_requester')]
+final class SpawnOnceRequesterOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(SpawnOnceRequester::class)
             ->sink('out');
     }
 }

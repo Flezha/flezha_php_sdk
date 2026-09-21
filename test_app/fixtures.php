@@ -780,6 +780,7 @@ final class Fixtures
             PartitionRelayOperative::class,
             DynamicCellOperative::class,
             SpawnRequesterOperative::class,
+            SpawnOnceRequesterOperative::class,
             // The §5 short forms.
             SugarDoNothing::class,
             SugarStoreInput::class,

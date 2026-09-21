@@ -201,8 +201,8 @@ abstract class FailingStep extends Tasklet
 
 // -- echo_workflow -----------------------------------------------------------
 //
-// The run-once shape (workflow.rs:14): one tasklet emits its start values back
-// once and the pass ends, so the controller deregisters the instance.
+// The run-once shape (workflow.rs:14): one tasklet emits its first message
+// back once and the pass ends, so the controller deregisters the instance.
 
 #[Task(name: 'echo_args')]
 final class EchoArgs extends Tasklet
@@ -221,6 +221,37 @@ final class EchoWorkflow extends WorkflowOperative
         $c->input('in', codec: ChannelCodec::Text)
             ->into(EchoArgs::class)
             ->sink('out');
+    }
+}
+
+// -- typed_once_workflow -----------------------------------------------------
+//
+// The KB-381 shape: a `once` workflow whose entry channel decodes the
+// payload's type. Its one tasklet prints what the entry decoded and completes
+// with it, because the runner's stdout and the completion record are the two
+// places the scenario can read.
+
+#[Task(name: 'once_placed')]
+final class OncePlaced extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $text = (string) $input['text'];
+        echo "once_ran $text\n";
+        $ctx->complete($text);
+
+        return "placed:$text";
+    }
+}
+
+#[Operative(factoryId: 'typed_once_workflow')]
+final class TypedOnceWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('order', codec: ChannelCodec::Json)
+            ->into(OncePlaced::class)
+            ->sink('placed');
     }
 }
 
@@ -659,6 +690,7 @@ final class WorkflowFixtures
     {
         return [
             EchoWorkflow::class,
+            TypedOnceWorkflow::class,
             CommitBlockWorkflow::class,
             SyncDurableWorkflow::class,
             OptoutCommitBlock::class,
@@ -669,6 +701,7 @@ final class WorkflowFixtures
             ChatLoopWorkflow::class,
             StatelessLoopWorkflow::class,
             ChatRewindWorkflow::class,
+            ReplyBlockLoopWorkflow::class,
             RetryWorkflow::class,
             BranchWorkflow::class,
             DiamondWorkflow::class,
