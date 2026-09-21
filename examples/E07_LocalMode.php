@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * The two-procedure word count, run in this process with no controller.
+ * The two-tasklet word count, run in this process with no controller.
  *
  *   scripts/build-php-sdk.sh
  *   php sdk/php/examples/E07_LocalMode.php
  *
- * `Split` and `Tally` are ordinary procedures with nothing local-mode about
+ * `Split` and `Tally` are ordinary tasklets with nothing local-mode about
  * them: the same classes deploy against a controller unchanged. What local
  * mode supplies is the sink — the values `Tally` releases arrive here instead
  * of on a socket.
@@ -21,18 +21,18 @@ namespace Flezha\Examples\E07;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\LocalOperative;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\SinkOutput;
 use Flezha\StreamOperative;
 
 /** One line into its words: the hop to `Tally` is the runtime's job. */
-#[Proc]
-final class Split extends Procedure
+#[Task]
+final class Split extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -44,11 +44,11 @@ final class Split extends Procedure
     }
 }
 
-/** One Entity per word, minted on first sight of it. */
-#[Proc(dynamicEntities: true)]
-final class Tally extends Procedure
+/** One Cell per word, minted on first sight of it. */
+#[Task(dynamicCells: true)]
+final class Tally extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return 0;
     }
@@ -74,7 +74,7 @@ final class WordCountOperative extends StreamOperative
     {
         $c->input('lines', codec: ChannelCodec::Text)
             ->into(Split::class)
-            // One Entity per word: the hop from `Split` to `Tally` is the
+            // One Cell per word: the hop from `Split` to `Tally` is the
             // runtime's, not this file's.
             ->keyBy(static fn (string $word): string => $word)
             ->into(Tally::class)->keyed()

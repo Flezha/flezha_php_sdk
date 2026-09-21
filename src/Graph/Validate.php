@@ -39,7 +39,7 @@ final class Validate
      */
     public static function spec(ClassSpec $spec, Core $core): array
     {
-        self::procedures($spec);
+        self::tasklets($spec);
 
         return self::submit($spec, $core);
     }
@@ -95,7 +95,7 @@ final class Validate
      */
     private static function bindEdges(ClassSpec $spec, array $derived): void
     {
-        /** @var list<array{index: int, consumers: list<array{procedure: int, chain: int}>}> $channels */
+        /** @var list<array{index: int, consumers: list<array{tasklet: int, chain: int}>}> $channels */
         $channels = $derived['channels'];
         foreach ($channels as $channel) {
             $target = $spec->channels[$channel['index']];
@@ -112,9 +112,9 @@ final class Validate
         throw new DeclarationException($spec->factoryId, $handler, $defect);
     }
 
-    private static function procedures(ClassSpec $spec): void
+    private static function tasklets(ClassSpec $spec): void
     {
-        foreach ($spec->procedures as $node) {
+        foreach ($spec->tasklets as $node) {
             self::clocks($spec, $node);
             self::schema($spec, $node);
         }
@@ -124,7 +124,7 @@ final class Validate
      * A clock is a promise about a method, and a record carries the clock but
      * not the class: only this package can see that the method is missing.
      */
-    private static function clocks(ClassSpec $spec, ProcNode $node): void
+    private static function clocks(ClassSpec $spec, TaskNode $node): void
     {
         $definition = $node->definition;
         $clock = $definition->decl->clock;
@@ -150,7 +150,7 @@ final class Validate
      * A schema floor promises a migration, and the migration is a method: the
      * record carries the versions and this package carries the class.
      */
-    private static function schema(ClassSpec $spec, ProcNode $node): void
+    private static function schema(ClassSpec $spec, TaskNode $node): void
     {
         $definition = $node->definition;
         $decl = $definition->decl;

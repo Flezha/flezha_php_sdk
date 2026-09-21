@@ -11,17 +11,17 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 
 // -- poison_probe / wedge_probe ----------------------------------------------
 
-#[Proc(name: 'poison_probe_procedure')]
-final class PoisonProbe extends Procedure
+#[Task(name: 'poison_probe_tasklet')]
+final class PoisonProbe extends Tasklet
 {
     private static bool $antidoteTaken = false;
 
@@ -59,11 +59,11 @@ final class PoisonProbeOperative extends StreamOperative
  *   "abort" — ends its activation as violently as this host allows, WITHOUT
  *     emitting, once per process. PHP has no way for user code to kill a
  *     worker outright — the dispatcher catches per item and the throw rides
- *     the retry ladder — so what the scenario asserts is that the entity is
+ *     the retry ladder — so what the scenario asserts is that the cell is
  *     served again and the aborting item does not produce twice.
  */
-#[Proc(name: 'wedge_probe_procedure')]
-final class WedgeProbe extends Procedure
+#[Task(name: 'wedge_probe_tasklet')]
+final class WedgeProbe extends Tasklet
 {
     private static bool $aborted = false;
 

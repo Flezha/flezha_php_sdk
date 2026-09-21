@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Per-entity timers: a session that closes itself after a quiet period.
+ * Per-cell timers: a session that closes itself after a quiet period.
  *
  * A timer's scheduled time is anchored on `$ctx->now()` — the core-evaluated
  * declared clock — never on an ambient read, which is what makes a replayed
@@ -17,20 +17,20 @@ namespace Flezha\Examples\E04;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 use Flezha\Timer;
 
-#[Proc(dynamicEntities: true, idleTtlMs: 3_600_000)]
-final class Session extends Procedure
+#[Task(dynamicCells: true, idleTtlMs: 3_600_000)]
+final class Session extends Tasklet
 {
     private const QUIET_MS = 30_000;
 
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['events' => 0, 'deadline' => null];
     }
@@ -49,7 +49,7 @@ final class Session extends Procedure
 
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        // Cancel the timer this entity is holding before arming the next one,
+        // Cancel the timer this cell is holding before arming the next one,
         // by the timestamp its registration answered.
         if ($ctx->state['deadline'] !== null) {
             $ctx->cancelTimer('processing_time', (int) $ctx->state['deadline']);
@@ -63,7 +63,7 @@ final class Session extends Procedure
     {
         $events = $ctx->state['events'];
         $ctx->change(['kind' => 'closed', 'deadline' => null]);
-        $ctx->emit(['session' => $ctx->entityKey, 'events' => $events, 'closed_at' => $ctx->now()]);
+        $ctx->emit(['session' => $ctx->cellKey, 'events' => $events, 'closed_at' => $ctx->now()]);
     }
 }
 

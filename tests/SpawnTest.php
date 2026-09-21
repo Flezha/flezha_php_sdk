@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\ActivationCodec;
 use Flezha\Codec\Json;
@@ -25,7 +25,7 @@ use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\SpawnBridge;
 use Flezha\SpawnHandle;
 use Flezha\SpawnOutcome;
@@ -34,8 +34,8 @@ use Flezha\StreamOperative;
 use PHPUnit\Framework\TestCase;
 
 /** Spawns once with no id and once with the id `w1`, reads both, then emits its input. */
-#[Proc]
-final class Spawner extends Procedure
+#[Task]
+final class Spawner extends Tasklet
 {
     /** @var list<SpawnResult|SpawnException> what each read answered, in order */
     public static array $read = [];
@@ -110,7 +110,7 @@ final class ScriptedSpawns implements SpawnBridge
 }
 
 /**
- * A procedure's spawn: the call returns a handle at once, and only a read of
+ * A tasklet's spawn: the call returns a handle at once, and only a read of
  * that handle reports what the controller decided.
  */
 final class SpawnTest extends TestCase
@@ -202,7 +202,7 @@ final class SpawnTest extends TestCase
     }
 
     /**
-     * Through the real core, with no control plane: the procedure's run
+     * Through the real core, with no control plane: the tasklet's run
      * completes and ships its emit, and the spawns report only through reads.
      */
     public function testWithNoControlPlaneTheRunCompletesAndEachReadThrowsUnavailable(): void
@@ -281,9 +281,9 @@ final class SpawnTest extends TestCase
         $spec = SpawnerOperative::spec();
         $handle = null;
         Dispatcher::invoke(
-            ['token' => self::TOKEN, 'operative' => 'op', 'entity_key' => null, 'change_seq' => 0],
+            ['token' => self::TOKEN, 'operative' => 'op', 'cell_key' => null, 'change_seq' => 0],
             new RegisteredClass($spec),
-            $spec->procedures[0],
+            $spec->tasklets[0],
             $bridge,
             0,
             false,

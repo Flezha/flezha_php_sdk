@@ -17,17 +17,17 @@ namespace Flezha\Examples\E03;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 
-#[Proc(dynamicEntities: true)]
-final class Ledger extends Procedure
+#[Task(dynamicCells: true)]
+final class Ledger extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['balance' => 0];
     }
@@ -48,7 +48,7 @@ final class Ledger extends Procedure
             $ctx->checkpoint();
         }
 
-        return ['account' => $ctx->entityKey, 'balance' => $ctx->state['balance']];
+        return ['account' => $ctx->cellKey, 'balance' => $ctx->state['balance']];
     }
 }
 

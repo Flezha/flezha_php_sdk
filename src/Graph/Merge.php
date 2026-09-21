@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Flezha\Graph;
 
 use Flezha\Operative;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 
 /**
- * Several channels merged into one procedure, each lifted into the merged value
+ * Several channels merged into one tasklet, each lifted into the merged value
  * by its own mapping.
  *
  *     $c->merge()
@@ -56,14 +56,14 @@ final class Merge
     }
 
     /**
-     * Close every source on one procedure node, and answer that node's edge.
+     * Close every source on one tasklet node, and answer that node's edge.
      *
-     * @param class-string<Procedure>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operative> $class
      */
     public function into(string $class, ?string $nodeName = null): Edge
     {
         $node = $this->builder->nodeFor($class, $nodeName);
-        $link = ['link' => 'merge', 'procedure' => $node->index, 'group' => $this->builder->nextMergeGroup()];
+        $link = ['link' => 'merge', 'tasklet' => $node->index, 'group' => $this->builder->nextMergeGroup()];
         foreach ($this->sources as $source) {
             foreach ($this->keys as $key) {
                 $source = $source->keyBy($key);
@@ -71,6 +71,6 @@ final class Merge
             $source->wire($node, $link);
         }
 
-        return new Edge($this->builder, ['procedure', $node], []);
+        return new Edge($this->builder, ['tasklet', $node], []);
     }
 }

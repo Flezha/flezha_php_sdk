@@ -15,7 +15,7 @@ use Flezha\Graph\ChannelSpec;
  *
  * A channel that names none reads its entry payload as JSON, and sends a sink
  * value by what it is: a string as it stands, anything else as JSON. A payload
- * between two procedures names none either way and stays JSON.
+ * between two tasklets names none either way and stays JSON.
  *
  * A refusal reads the channel's name when it is raised, so it names the
  * channel as the class finally declares it.

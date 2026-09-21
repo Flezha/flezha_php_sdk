@@ -8,7 +8,7 @@ use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
 
 /**
- * Rebuilding an entity's state from what was persisted.
+ * Rebuilding a cell's state from what was persisted.
  *
  * One implementation, and both of its callers are the real thing — the
  * dispatcher answering a restore fold, and the test harness constructing from
@@ -30,25 +30,25 @@ final class Restore
     public static function fold(
         Definition $definition,
         array $payload,
-        ?string $entityKey,
-        string $procedure,
+        ?string $cellKey,
+        string $tasklet,
     ): mixed {
-        $state = $definition->initialState($entityKey);
+        $state = $definition->initialState($cellKey);
 
         $snapshot = $payload['snapshot'] ?? null;
         if ($snapshot !== null) {
-            $state = self::body($definition, 'state', $snapshot, $procedure);
+            $state = self::body($definition, 'state', $snapshot, $tasklet);
         }
 
         foreach ($payload['changes'] ?? [] as $body) {
             if (!$definition->declares('applyChange')) {
                 throw new FlezhaException(sprintf(
-                    '%s was handed a change log but declares no applyChange; a procedure that '
+                    '%s was handed a change log but declares no applyChange; a tasklet that '
                     . 'records no changes should have no durable records to fold',
-                    $procedure,
+                    $tasklet,
                 ));
             }
-            $definition->foldChange($state, self::body($definition, 'change', $body, $procedure));
+            $definition->foldChange($state, self::body($definition, 'change', $body, $tasklet));
         }
 
         return $state;
@@ -56,12 +56,12 @@ final class Restore
 
     /**
      * Decode one durable body, choosing between the three things it could be:
-     * a payload from an older schema version, one the procedure declared its
+     * a payload from an older schema version, one the tasklet declared its
      * own codec for, or the JSON default.
      *
      * @param array{bytes: string, from_version: int|null} $body
      */
-    public static function body(Definition $definition, string $which, array $body, string $procedure): mixed
+    public static function body(Definition $definition, string $which, array $body, string $tasklet): mixed
     {
         $fromVersion = $body['from_version'];
         $bytes = $body['bytes'];
@@ -73,7 +73,7 @@ final class Restore
                     '%s was handed a %s record written at schema version %d and declares no %s; '
                     . 'declare one, or raise minReadableSchemaVersion so the record is refused '
                     . 'rather than misread',
-                    $procedure,
+                    $tasklet,
                     $which,
                     $fromVersion,
                     $hook,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Attribute\Operative as OperativeAttribute;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow as WorkflowAttribute;
 use Flezha\Exception\DeclarationException;
 use Flezha\Graph\Builder;
@@ -16,7 +16,7 @@ use ReflectionClass;
 /**
  * The base an authored operative extends: an `#[Operative]` attribute for the
  * factory id, and either `channels()` for the graph or, as the §5 short form,
- * the one procedure's `run`.
+ * the one tasklet's `run`.
  */
 abstract class Operative
 {
@@ -29,12 +29,12 @@ abstract class Operative
     }
 
     /**
-     * The body of the one procedure a §5 short form is, defined instead of
+     * The body of the one tasklet a §5 short form is, defined instead of
      * `channels()`: the entry channel its `#[Operative]` names feeds that
-     * procedure, named the factory id, whose output reaches the `sink` if one
-     * is written. A short form may also define the hooks {@see Procedure}
-     * declares (`state`, `applyChange`, ...), which that procedure takes, held
-     * to the signatures `Procedure` gives them.
+     * tasklet, named the factory id, whose output reaches the `sink` if one
+     * is written. A short form may also define the hooks {@see Tasklet}
+     * declares (`state`, `applyChange`, ...), which that tasklet takes, held
+     * to the signatures `Tasklet` gives them.
      *
      * Declared here, `: mixed`, so an override narrowing it to `: void` does
      * not load: a body declaring no output cannot be written, and this SDK
@@ -42,7 +42,7 @@ abstract class Operative
      */
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        throw new LogicException(static::class . ' defines no `run`; its channels() wires its procedures');
+        throw new LogicException(static::class . ' defines no `run`; its channels() wires its tasklets');
     }
 
     /** The resolved declaration, built once per class. */
@@ -79,7 +79,7 @@ abstract class Operative
     {
         $builder = new Builder($declaration->factoryId);
         if (self::isShortForm($declaration)) {
-            // The class is its own procedure, which `Definition` names after
+            // The class is its own tasklet, which `Definition` names after
             // the factory id.
             $edge = $builder->input($declaration->input ?? 'input', null, $declaration->codec)
                 ->into(static::class);
@@ -119,14 +119,14 @@ abstract class Operative
             beyondWindowPolicy: $builder->beyondWindowPolicy,
             compactAfterBytes: $builder->compactAfterBytes,
             syncDurability: $syncDurability,
-            procedures: $builder->procedures,
+            tasklets: $builder->tasklets,
             channels: $builder->channels,
             workflow: $workflow,
         );
     }
 
     /**
-     * The spec a registration call was handed, refusing a procedure, which
+     * The spec a registration call was handed, refusing a tasklet, which
      * declares no operative. The one resolver, so the runner and a local run
      * cannot disagree about what a class declares.
      *
@@ -134,15 +134,15 @@ abstract class Operative
      */
     public static function specFor(string $class): ClassSpec
     {
-        if (is_subclass_of($class, Procedure::class)) {
-            // Read first, so a procedure carrying an operative's argument is
+        if (is_subclass_of($class, Tasklet::class)) {
+            // Read first, so a tasklet carrying an operative's argument is
             // refused naming it.
             Definition::of($class);
 
             throw new DeclarationException(
                 $class,
                 null,
-                'is a procedure, which declares no operative; register the operative that wires '
+                'is a tasklet, which declares no operative; register the operative that wires '
                 . 'it, or write it as one: a class extending StreamOperative or WorkflowOperative '
                 . 'that defines `run`',
             );
@@ -153,7 +153,7 @@ abstract class Operative
 
     /**
      * Whether this class is a §5 short form, read from the body it defines:
-     * `run` for one procedure, `channels()` for a topology of its own.
+     * `run` for one tasklet, `channels()` for a topology of its own.
      */
     private static function isShortForm(OperativeAttribute $declaration): bool
     {
@@ -164,7 +164,7 @@ abstract class Operative
                 $declaration->factoryId,
                 null,
                 'ShortFormWithTopology: this class defines both `run` and `channels()`; a short '
-                . 'form is its one procedure\'s `run`, and a topology wires procedures of its own '
+                . 'form is its one tasklet\'s `run`, and a topology wires tasklets of its own '
                 . 'in `channels()`, so define one of them',
                 ['ShortFormWithTopology'],
             );
@@ -173,7 +173,7 @@ abstract class Operative
             throw new DeclarationException(
                 $declaration->factoryId,
                 null,
-                'defines neither `run` nor `channels()`; define `run` for a one-procedure short '
+                'defines neither `run` nor `channels()`; define `run` for a one-tasklet short '
                 . 'form, or `channels()` to wire a topology',
             );
         }
@@ -192,12 +192,12 @@ abstract class Operative
                     ));
                 }
             }
-            if ((new ReflectionClass(static::class))->getAttributes(Proc::class) !== []) {
+            if ((new ReflectionClass(static::class))->getAttributes(Task::class) !== []) {
                 throw new DeclarationException(
                     $declaration->factoryId,
                     null,
-                    '#[Proc] carries a procedure\'s settings, and this class wires its procedures in '
-                    . '`channels()`; a full form\'s procedure settings go on its procedure classes',
+                    '#[Task] carries a tasklet\'s settings, and this class wires its tasklets in '
+                    . '`channels()`; a full form\'s tasklet settings go on its tasklet classes',
                 );
             }
 

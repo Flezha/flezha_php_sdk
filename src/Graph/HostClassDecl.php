@@ -52,7 +52,7 @@ final class HostClassDecl
             'compact_after_bytes' => $spec->compactAfterBytes,
             'sync_durability' => $spec->syncDurability,
             'channels' => array_map(self::channel(...), $spec->channels),
-            'procedures' => array_map(self::procedure(...), $spec->procedures),
+            'tasklets' => array_map(self::tasklet(...), $spec->tasklets),
             'workflow' => $workflow === null ? null : self::compact([
                 'loop_mode' => $workflow->loopMode->value,
                 'rollback_mode' => $workflow->rollbackMode->value,
@@ -117,23 +117,23 @@ final class HostClassDecl
     }
 
     /** @return array<string, mixed> */
-    private static function procedure(ProcNode $node): array
+    private static function tasklet(TaskNode $node): array
     {
         $definition = $node->definition;
         $decl = $definition->decl;
 
         return self::compact([
             'name' => $node->name,
-            'entity_mode' => $definition->entityMode(),
-            'entity_keys' => $decl->entityKeys ?? [],
+            'cell_mode' => $definition->cellMode(),
+            'cell_keys' => $decl->cellKeys ?? [],
             'idle_ttl_ms' => $decl->idleTtlMs,
-            'max_entities' => $decl->maxEntities,
-            'entities_for_overridden' => $definition->declares('entitiesFor'),
+            'max_cells' => $decl->maxCells,
+            'cells_for_overridden' => $definition->declares('cellsFor'),
             'compensate_overridden' => $definition->declares('compensate'),
             'clock' => $decl->clock->value,
             'mailbox_capacity' => $decl->mailboxCapacity ?? 1024,
-            // A procedure with no state journals nothing, so a logical clock
-            // over it never advances. PHP has no per-procedure Change type;
+            // A tasklet with no state journals nothing, so a logical clock
+            // over it never advances. PHP has no per-tasklet Change type;
             // the presence of a state method IS the same statement.
             'change_is_nochange' => !$definition->declares('state'),
             'schema_version' => $decl->schemaVersion,

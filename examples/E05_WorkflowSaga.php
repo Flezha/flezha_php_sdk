@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * A structured workflow chain, and the compensation an abort runs.
  *
- * Each stage is a procedure; the core's driver hands out one step activation
+ * Each stage is a tasklet; the core's driver hands out one step activation
  * per stage and answers its barrier on completion. If a later stage fails, the
  * driver hands out `CompensateRun` for the stages that already committed, in
  * reverse — the SDK implements no driver of its own.
@@ -16,17 +16,17 @@ namespace Flezha\Examples\E05;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\RollbackMode;
 use Flezha\WorkflowOperative;
 
-#[Proc]
-final class ReserveStock extends Procedure
+#[Task]
+final class ReserveStock extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -41,8 +41,8 @@ final class ReserveStock extends Procedure
     }
 }
 
-#[Proc]
-final class ChargeCard extends Procedure
+#[Task]
+final class ChargeCard extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {

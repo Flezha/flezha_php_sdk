@@ -8,8 +8,8 @@ Three files, one for each part the guides describe:
 
 | File | Part | What it does |
 |---|---|---|
-| `src/EchoProcedure.php` | the procedure | the processing stage: prefixes each message |
-| `src/EchoOperative.php` | the operative | the graph: `in` feeds the procedure, output lands on `out` |
+| `src/EchoTasklet.php` | the tasklet | the processing stage: prefixes each message |
+| `src/EchoOperative.php` | the operative | the graph: `in` feeds the tasklet, output lands on `out` |
 | `runner.php` | the runner | this process: offers the operative and waits |
 
 ## Run it

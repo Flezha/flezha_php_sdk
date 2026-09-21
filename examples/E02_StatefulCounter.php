@@ -17,12 +17,12 @@ namespace Flezha\Examples\E02;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Codable;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 
 /** The durable bytes carry this array, never the class name — so a rename is safe. */
@@ -43,10 +43,10 @@ final class Totals implements Codable
     }
 }
 
-#[Proc(dynamicEntities: true, stateType: Totals::class)]
-final class Counter extends Procedure
+#[Task(dynamicCells: true, stateType: Totals::class)]
+final class Counter extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return new Totals();
     }
@@ -61,7 +61,7 @@ final class Counter extends Procedure
     {
         $ctx->change((int) $input['amount']);
 
-        return ['customer' => $ctx->entityKey, 'total' => $ctx->state->amount];
+        return ['customer' => $ctx->cellKey, 'total' => $ctx->state->amount];
     }
 }
 

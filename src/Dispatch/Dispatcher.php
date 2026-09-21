@@ -12,7 +12,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\ChannelSpec;
 use Flezha\Graph\ConsumerEdge;
-use Flezha\Graph\ProcNode;
+use Flezha\Graph\TaskNode;
 use Flezha\Logger;
 use Flezha\SpawnBridge;
 use Flezha\Timer;
@@ -22,9 +22,9 @@ use Throwable;
 /**
  * Turning one activation into one answer, exactly once.
  *
- * Per-entity exclusivity IS the handout: the core holds an entity's next
+ * Per-cell exclusivity IS the handout: the core holds a cell's next
  * activation until this one is answered, so an activation that returns
- * unanswered retires that entity for the life of the process. Every path out
+ * unanswered retires that cell for the life of the process. Every path out
  * of {@see dispatch()} therefore ends in a completion or an abandon, through a
  * `finally` rather than a rule applied at each return site — a throwing
  * handler, an encoding failure and a killed worker all reach the same guard.
@@ -75,7 +75,7 @@ final class Dispatcher
      * Produce the answer for one activation.
      *
      * Throwing is not an option here: every failure becomes a result the core
-     * can act on, because the alternative is an entity that never receives
+     * can act on, because the alternative is a cell that never receives
      * work again.
      *
      * @param array<string, mixed> $activation
@@ -92,12 +92,12 @@ final class Dispatcher
                 ), true);
             }
 
-            $node = $registered->spec->procedures[$activation['procedure']] ?? null;
+            $node = $registered->spec->tasklets[$activation['tasklet']] ?? null;
             if ($node === null) {
                 return self::failed($activation['token'], sprintf(
-                    'class `%s` has no procedure at index %d',
+                    'class `%s` has no tasklet at index %d',
                     $activation['factory'],
-                    $activation['procedure'],
+                    $activation['tasklet'],
                 ), true);
             }
 
@@ -120,21 +120,21 @@ final class Dispatcher
     }
 
     /**
-     * Run user code against one entity, and keep the state it produced.
+     * Run user code against one cell, and keep the state it produced.
      *
      * Every activation kind that reaches a handler goes through here — an
      * input, a timer firing, a compensation — so the context they receive and
      * the state they leave behind cannot differ between them. The state is
      * written back whether or not the body threw: a change recorded before the
      * throw is already journaled, and dropping it here would make the live
-     * entity disagree with its own log.
+     * cell disagree with its own log.
      *
      * @param array<string, mixed> $activation
      */
     public static function invoke(
         array $activation,
         RegisteredClass $registered,
-        ProcNode $node,
+        TaskNode $node,
         SpawnBridge $bridge,
         int $now,
         bool $replay,
@@ -145,11 +145,11 @@ final class Dispatcher
             node: $node,
             outgoing: $registered->outgoing[$node->index],
             operative: (string) $activation['operative'],
-            entityKey: $activation['entity_key'],
+            cellKey: $activation['cell_key'],
             changeSeq: (int) $activation['change_seq'],
             now: $now,
             replay: $replay,
-            state: $registered->stateOf($node, $activation['entity_key']),
+            state: $registered->stateOf($node, $activation['cell_key']),
             bridge: $bridge,
             token: (int) $activation['token'],
         );
@@ -157,7 +157,7 @@ final class Dispatcher
         try {
             $body($ctx);
         } finally {
-            $registered->setState($node, $activation['entity_key'], $ctx->state);
+            $registered->setState($node, $activation['cell_key'], $ctx->state);
         }
 
         return $ctx;
@@ -167,7 +167,7 @@ final class Dispatcher
      * @param array<string, mixed> $activation
      * @return array<string, mixed>
      */
-    private function runWork(array $activation, RegisteredClass $registered, ProcNode $node): array
+    private function runWork(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
         $effects = [];
 
@@ -177,7 +177,7 @@ final class Dispatcher
 
             if ($effect['verdict'] !== 'ok') {
                 // Items after a failure are re-handed by the core, so the
-                // batch stops here rather than reporting effects the entity
+                // batch stops here rather than reporting effects the cell
                 // never saw.
                 break;
             }
@@ -201,7 +201,7 @@ final class Dispatcher
     private function runItem(
         array $activation,
         RegisteredClass $registered,
-        ProcNode $node,
+        TaskNode $node,
         array $item,
     ): array {
         $now = (int) ($item['now'] ?? $item['scheduled_at'] ?? 0);
@@ -242,7 +242,7 @@ final class Dispatcher
      *
      * @param array<string, mixed> $item
      */
-    private function serve(Ctx $ctx, RegisteredClass $registered, ProcNode $node, array $item, int $now): void
+    private function serve(Ctx $ctx, RegisteredClass $registered, TaskNode $node, array $item, int $now): void
     {
         $definition = $node->definition;
 
@@ -262,7 +262,7 @@ final class Dispatcher
         $channel = $registered->spec->channels[$item['channel']] ?? null;
         // A filtered value is consumed and reaches no handler. It still
         // produces an effect, so its offset advances and nothing is retried.
-        // A fanned one reaches the handler once per value routed to this entity.
+        // A fanned one reaches the handler once per value routed to this cell.
         // This node's own edge off the channel: a transform chain declared
         // before one `into` belongs to that consumer and to no other. It is
         // evaluated here only for a payload that reached us untransformed — an
@@ -275,7 +275,7 @@ final class Dispatcher
             || $registered->spec->structuredWorkflow();
         $edge = $untransformed ? self::edgeInto($channel, $node->index) : null;
         foreach (self::valuesOf($channel, $edge, (string) $item['payload']) as $input) {
-            if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->entityKey)) {
+            if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->cellKey)) {
                 continue;
             }
             $ctx->emitReturned($definition->instance->run($input, $ctx));
@@ -286,12 +286,12 @@ final class Dispatcher
      * @param array<string, mixed> $activation
      * @return array<string, mixed>
      */
-    private function restoreFold(array $activation, RegisteredClass $registered, ProcNode $node): array
+    private function restoreFold(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
-        $registered->setState($node, $activation['entity_key'], Restore::fold(
+        $registered->setState($node, $activation['cell_key'], Restore::fold(
             $node->definition,
             ['snapshot' => $activation['snapshot'], 'changes' => $activation['changes']],
-            $activation['entity_key'],
+            $activation['cell_key'],
             $node->name,
         ));
 
@@ -302,11 +302,11 @@ final class Dispatcher
      * @param array<string, mixed> $activation
      * @return array<string, mixed>
      */
-    private function applyState(array $activation, RegisteredClass $registered, ProcNode $node): array
+    private function applyState(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
         $registered->setState(
             $node,
-            $activation['entity_key'],
+            $activation['cell_key'],
             $node->definition->decode('state', (string) $activation['state_json']),
         );
 
@@ -324,7 +324,7 @@ final class Dispatcher
         // The crossing answers one key set for the whole payload, so it reads
         // the first consumer edge — the one the core routes the answer to.
         $edge = $channel?->consumers[0] ?? null;
-        $node = $edge === null ? null : ($registered->spec->procedures[$edge->procedure] ?? null);
+        $node = $edge === null ? null : ($registered->spec->tasklets[$edge->tasklet] ?? null);
         $definition = $node?->definition;
 
         $answers = [];
@@ -333,7 +333,7 @@ final class Dispatcher
                 $values = self::valuesOf($channel, $edge, (string) $payload);
                 // A filtered payload answers no key. For a dynamic consumer
                 // that is what tells the core not to route it at all — the
-                // drop happens before an entity is minted rather than inside one.
+                // drop happens before a cell is minted rather than inside one.
                 if ($values === []) {
                     $answers[] = ['keys' => []];
                     continue;
@@ -367,7 +367,7 @@ final class Dispatcher
      * @param array<string, mixed> $activation
      * @return array<string, mixed>
      */
-    private function compensate(array $activation, RegisteredClass $registered, ProcNode $node): array
+    private function compensate(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
         $definition = $node->definition;
         if (!$definition->declares('compensate')) {
@@ -407,7 +407,7 @@ final class Dispatcher
      * @param array<string, mixed> $activation
      * @return array<string, mixed>
      */
-    private function serializedState(array $activation, RegisteredClass $registered, ProcNode $node): array
+    private function serializedState(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
         [$outcome, $field] = match ($activation['kind']) {
             'snapshot_request' => ['snapshot', 'state'],
@@ -420,14 +420,14 @@ final class Dispatcher
             'outcome' => $outcome,
             $field => $node->definition->encode(
                 'state',
-                $registered->stateOf($node, $activation['entity_key']),
+                $registered->stateOf($node, $activation['cell_key']),
             ),
         ];
     }
 
     /**
      * A payload as the handler sees it: the entry channel's decoder, or JSON for
-     * a payload between procedures, then the consuming edge's transforms in
+     * a payload between tasklets, then the consuming edge's transforms in
      * declaration order.
      *
      * One function for the two places a payload crosses in — an input item and
@@ -444,10 +444,10 @@ final class Dispatcher
     }
 
     /**
-     * The entity keys one value routes to: the edge's key, else the consumer's
-     * `entitiesFor`, else null when neither routes it.
+     * The cell keys one value routes to: the edge's key, else the consumer's
+     * `cellsFor`, else null when neither routes it.
      *
-     * The prepare crossing and the delivery filter both read this, so an entity
+     * The prepare crossing and the delivery filter both read this, so a cell
      * keeps exactly the values the crossing named it for.
      *
      * @return list<string>|null
@@ -457,32 +457,32 @@ final class Dispatcher
         if ($edge?->keyBy !== null) {
             return [(string) ($edge->keyBy)($value)];
         }
-        if ($definition?->declares('entitiesFor') === true) {
-            return $definition->entitiesFor($value);
+        if ($definition?->declares('cellsFor') === true) {
+            return $definition->cellsFor($value);
         }
 
         return null;
     }
 
     /**
-     * Whether one value of an untransformed payload belongs to this entity.
+     * Whether one value of an untransformed payload belongs to this cell.
      *
-     * The core admits the payload to every entity the prepare crossing named
+     * The core admits the payload to every cell the prepare crossing named
      * for any of its values, so a payload fanned across keys reaches each of
      * them whole, and each keeps only the values routed to it.
      */
-    private static function routesTo(ConsumerEdge $edge, Definition $definition, mixed $value, ?string $entityKey): bool
+    private static function routesTo(ConsumerEdge $edge, Definition $definition, mixed $value, ?string $cellKey): bool
     {
-        $keys = $entityKey === null ? null : self::keysOf($edge, $definition, $value);
+        $keys = $cellKey === null ? null : self::keysOf($edge, $definition, $value);
 
-        return $keys === null || in_array($entityKey, $keys, true);
+        return $keys === null || in_array($cellKey, $keys, true);
     }
 
     /** The channel's edge that feeds `$node`, or null when it feeds none. */
     private static function edgeInto(?ChannelSpec $channel, int $node): ?ConsumerEdge
     {
         foreach ($channel?->consumers ?? [] as $edge) {
-            if ($edge->procedure === $node) {
+            if ($edge->tasklet === $node) {
                 return $edge;
             }
         }

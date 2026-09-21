@@ -12,7 +12,7 @@ use Flezha\CheckpointOutputs;
 final class ClassSpec
 {
     /**
-     * @param list<ProcNode>    $procedures
+     * @param list<TaskNode>    $tasklets
      * @param list<ChannelSpec> $channels
      */
     public function __construct(
@@ -30,7 +30,7 @@ final class ClassSpec
         public readonly BeyondWindow $beyondWindowPolicy,
         public readonly ?int $compactAfterBytes,
         public readonly bool $syncDurability,
-        public readonly array $procedures,
+        public readonly array $tasklets,
         public readonly array $channels,
         public readonly ?Workflow $workflow = null,
     ) {

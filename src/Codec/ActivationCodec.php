@@ -71,8 +71,8 @@ final class ActivationCodec
         $activation = [
             'token' => $c->varint('activation token'),
             'operative' => $c->bytes('target operative'),
-            'procedure' => $c->varint('target procedure'),
-            'entity_key' => $c->some('target entity key') ? $c->bytes('target entity key') : null,
+            'tasklet' => $c->varint('target tasklet'),
+            'cell_key' => $c->some('target cell key') ? $c->bytes('target cell key') : null,
         ];
 
         $variant = $c->variant('activation kind');

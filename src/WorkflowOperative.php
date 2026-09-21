@@ -9,19 +9,19 @@ use Flezha\Exception\DeclarationException;
 use Flezha\Graph\ClassSpec;
 
 /**
- * A workflow operative: a chain of procedures over a channels graph, run by
- * the core's driver. A procedure ends its instance with {@see Ctx::complete()}.
+ * A workflow operative: a chain of tasklets over a channels graph, run by
+ * the core's driver. A tasklet ends its instance with {@see Ctx::complete()}.
  */
 abstract class WorkflowOperative extends Operative
 {
     protected static function buildSpec(OperativeAttribute $declaration): ClassSpec
     {
         $builder = static::builder($declaration);
-        if ($builder->procedures === []) {
+        if ($builder->tasklets === []) {
             throw new DeclarationException(
                 $declaration->factoryId,
                 null,
-                'declares no procedures; a workflow runs a graph of procedures, declared in channels()'
+                'declares no tasklets; a workflow runs a graph of tasklets, declared in channels()'
             );
         }
 

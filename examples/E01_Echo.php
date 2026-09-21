@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * The smallest operative: one entry channel, one stateless procedure, one
+ * The smallest operative: one entry channel, one stateless tasklet, one
  * plugin sink. What a handler returns is emitted, so a pass-through is a
  * `return`.
  *
@@ -15,16 +15,16 @@ namespace Flezha\Examples\E01;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 
-#[Proc]
-final class Echoer extends Procedure
+#[Task]
+final class Echoer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {

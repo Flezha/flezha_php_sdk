@@ -60,7 +60,7 @@ final class Json
      * A value the codec cannot carry, named by the declaring type and the path
      * to the offending field.
      *
-     * Walked once at registration against what the procedure's initial state
+     * Walked once at registration against what the tasklet's initial state
      * produces, so an author learns at startup rather than at the first
      * restore that their state does not survive one.
      */

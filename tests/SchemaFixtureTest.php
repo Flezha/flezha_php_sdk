@@ -46,8 +46,8 @@ final class SchemaFixtureTest extends RepositoryTestCase
         self::assertSame([
             'token' => 42,
             'operative' => 'op-1',
-            'procedure' => 3,
-            'entity_key' => 'k',
+            'tasklet' => 3,
+            'cell_key' => 'k',
             'kind' => 'work',
             'items' => [
                 [
@@ -120,8 +120,8 @@ final class SchemaFixtureTest extends RepositoryTestCase
             self::assertSame([
                 'token' => 1,
                 'operative' => 'o',
-                'procedure' => 0,
-                'entity_key' => null,
+                'tasklet' => 0,
+                'cell_key' => null,
                 'kind' => $kind,
                 ...$expected[$kind],
                 'change_seq' => 0,

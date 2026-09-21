@@ -13,11 +13,11 @@ use Throwable;
 
 /**
  * The poll loop on a pool of `Swoole\Thread`s over one shared `FlzContext`, so
- * a single runner — and therefore a single operative's procedure class — uses
+ * a single runner — and therefore a single operative's tasklet class — uses
  * more than one core.
  *
  * Each thread bootstraps the runner's entry script, rebuilds the PHP-side
- * procedure registry and *attaches* to the existing context by its address,
+ * tasklet registry and *attaches* to the existing context by its address,
  * without re-declaring classes to the core: `flz_core_declare_class` is per
  * context, not per thread. Ownership is asymmetric — the creating thread frees
  * the context, and only after every worker has been joined.

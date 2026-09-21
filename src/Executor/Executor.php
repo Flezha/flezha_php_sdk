@@ -16,8 +16,8 @@ use Flezha\Runner;
  * has exactly one possible implementation, the inline one. Loop multiplicity
  * is expressible under every PHP threading model; work distribution is not.
  *
- * **Safety comes from the core, not the adapter.** `PollCore` holds per-entity
- * exclusivity and will never hand out two activations for the same entity
+ * **Safety comes from the core, not the adapter.** `PollCore` holds per-cell
+ * exclusivity and will never hand out two activations for the same cell
  * concurrently, however many threads poll it, so no executor can produce a
  * race in user state. An executor can affect throughput and latency; it cannot
  * affect correctness. That is what makes it safe to ship two and to let a user

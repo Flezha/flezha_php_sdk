@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 
 /**
- * The single-entity procedure {@see Builder::routeLatest()} expands to: it
+ * The single-cell tasklet {@see Builder::routeLatest()} expands to: it
  * retains the latest document and hands it to a key on that key's own next
  * traffic item.
  *
  * Not part of the authoring surface. PHP has no package visibility, and the
- * dispatcher instantiates a procedure from its class, so this one is public.
+ * dispatcher instantiates a tasklet from its class, so this one is public.
  *
  * The document is opaque: retained and compared as the JSON the state codec
  * writes, never parsed, so parsing stays with the consumer.
  *
  * @internal
  */
-#[Proc(name: 'route_latest')]
-final class LatestDocumentRouter extends Procedure
+#[Task(name: 'route_latest')]
+final class LatestDocumentRouter extends Tasklet
 {
     /**
      * The merge mapping for a document.
@@ -47,8 +47,8 @@ final class LatestDocumentRouter extends Procedure
         return ['traffic' => (string) $key];
     }
 
-    /** `delivered` grows with the keys this member sees, which it already pays for as entities. */
-    public function state(?string $entityKey): mixed
+    /** `delivered` grows with the keys this member sees, which it already pays for as cells. */
+    public function state(?string $cellKey): mixed
     {
         return ['document' => null, 'version' => 0, 'delivered' => []];
     }

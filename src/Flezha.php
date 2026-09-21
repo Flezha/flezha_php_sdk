@@ -7,14 +7,14 @@ namespace Flezha;
 /**
  * The Flezha PHP SDK: a poll host over `flz_core`.
  *
- * The SDK contains no kernel code. Transport, framing, ordering, per-entity
+ * The SDK contains no kernel code. Transport, framing, ordering, per-cell
  * exclusivity, durability, retries, the retry-to-park ladder, timers, credit,
  * routing, the workflow driver and reconnect all live in the core; this
  * package brings the authoring surface, the codec for user types, the
  * concurrency host and idiomatic errors.
  *
- *     #[Proc(name: 'echo')]
- *     final class EchoProcedure extends Procedure
+ *     #[Task(name: 'echo')]
+ *     final class EchoTasklet extends Tasklet
  *     {
  *         public function run(mixed $input, Ctx $ctx): mixed { return $input; }
  *     }
@@ -24,7 +24,7 @@ namespace Flezha;
  *     {
  *         public static function channels(Builder $c): void
  *         {
- *             $c->input('input')->into(EchoProcedure::class)->sink('out');
+ *             $c->input('input')->into(EchoTasklet::class)->sink('out');
  *         }
  *     }
  *

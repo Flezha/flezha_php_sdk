@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 /**
  * Twins of the rust_runner e2e fixtures (test/apps/rust_runner/src/main.rs)
- * under the same factory ids, procedure names, channel names and output bytes.
+ * under the same factory ids, tasklet names, channel names and output bytes.
  *
  * Entry payloads and plugin frames are UTF-8 text on the wire, the same as the
  * reference: the SDK's default codec is JSON, so every fixture that exchanges
  * bytes with another SDK or with a plugin declares its own decoder and
- * encoder. An inter-procedure hop between two PHP procedures carries JSON,
+ * encoder. An inter-tasklet hop between two PHP tasklets carries JSON,
  * which no one else reads.
  */
 
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
 use Flezha\Overflow;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 use Flezha\Timer;
 use Flezha\WorkflowOperative;
@@ -46,8 +46,8 @@ final class Wire
 
 // -- do_nothing / bench_echo -------------------------------------------------
 
-#[Proc(name: 'do_nothing_procedure')]
-final class DoNothing extends Procedure
+#[Task(name: 'do_nothing_tasklet')]
+final class DoNothing extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -86,12 +86,12 @@ final class BenchEchoOperative extends StreamOperative
 
 /**
  * State seeded by the controller's init values and then only read: there is
- * nothing to journal, so the procedure declares no change fold.
+ * nothing to journal, so the tasklet declares no change fold.
  */
-#[Proc(name: 'compare_filter_procedure')]
-final class CompareFilter extends Procedure
+#[Task(name: 'compare_filter_tasklet')]
+final class CompareFilter extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['comparable' => 'default', 'inverted' => false];
     }
@@ -113,12 +113,12 @@ final class CompareFilterOperative extends StreamOperative
     }
 }
 
-// -- static_entity / sugar_static_entity / mixed_operative -------------------
+// -- static_cell / sugar_static_cell / mixed_operative -------------------
 
-#[Proc(name: 'static_entry_procedure', entityKeys: ['a', 'b', 'c', 'd'])]
-class StaticEntry extends Procedure
+#[Task(name: 'static_entry_tasklet', cellKeys: ['a', 'b', 'c', 'd'])]
+class StaticEntry extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -128,7 +128,7 @@ class StaticEntry extends Procedure
         $state['seen'][] = $change['push'];
     }
 
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         $first = substr((string) $input, 0, 1);
 
@@ -144,12 +144,12 @@ class StaticEntry extends Procedure
 }
 
 /** A subclass keeps every declaration its parent made, but not its node name. */
-#[Proc(name: 'macro_static_entry_procedure')]
+#[Task(name: 'macro_static_entry_tasklet')]
 final class MacroStaticEntry extends StaticEntry
 {
 }
 
-/** The body that answers its input unchanged, for a procedure and a short form alike. */
+/** The body that answers its input unchanged, for a tasklet and a short form alike. */
 trait PassesThrough
 {
     public function run(mixed $input, Ctx $ctx): mixed
@@ -158,24 +158,24 @@ trait PassesThrough
     }
 }
 
-#[Proc]
-class PassThrough extends Procedure
+#[Task]
+class PassThrough extends Tasklet
 {
     use PassesThrough;
 }
 
-#[Proc(name: 'static_downstream_procedure')]
+#[Task(name: 'static_downstream_tasklet')]
 final class StaticDownstream extends PassThrough
 {
 }
 
-#[Proc(name: 'macro_static_downstream_procedure')]
+#[Task(name: 'macro_static_downstream_tasklet')]
 final class MacroStaticDownstream extends PassThrough
 {
 }
 
-#[Operative(factoryId: 'static_entity')]
-final class StaticEntityOperative extends StreamOperative
+#[Operative(factoryId: 'static_cell')]
+final class StaticCellOperative extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
@@ -190,8 +190,8 @@ final class StaticEntityOperative extends StreamOperative
  * The reference pipeline sugar leaves the hop unnamed and lets the sink name
  * the producing channel.
  */
-#[Operative(factoryId: 'sugar_static_entity')]
-final class SugarStaticEntityOperative extends StreamOperative
+#[Operative(factoryId: 'sugar_static_cell')]
+final class SugarStaticCellOperative extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
@@ -202,12 +202,12 @@ final class SugarStaticEntityOperative extends StreamOperative
     }
 }
 
-#[Proc(name: 'mixed_macro_entry_procedure')]
+#[Task(name: 'mixed_macro_entry_tasklet')]
 final class MixedMacroEntry extends PassThrough
 {
 }
 
-#[Proc(name: 'mixed_hand_downstream')]
+#[Task(name: 'mixed_hand_downstream')]
 final class MixedHandDownstream extends PassThrough
 {
 }
@@ -226,8 +226,8 @@ final class MixedOperative extends StreamOperative
 
 // -- the §5 short forms ------------------------------------------------------
 //
-// One class each: an operative that defines its one procedure's `run` instead
-// of `channels()`, and `runner.php` registers the class itself. No procedure
+// One class each: an operative that defines its one tasklet's `run` instead
+// of `channels()`, and `runner.php` registers the class itself. No tasklet
 // class stands beside them.
 
 #[Operative(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
@@ -239,7 +239,7 @@ final class SugarDoNothing extends StreamOperative
 #[Operative(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
 final class SugarStoreInput extends StreamOperative
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['text_inputs' => []];
     }
@@ -274,11 +274,11 @@ final class SugarWorkflow extends WorkflowOperative
     use PassesThrough;
 }
 
-/** No `sink`: the procedure only keeps what it is sent, and answers nothing. */
+/** No `sink`: the tasklet only keeps what it is sent, and answers nothing. */
 #[Operative(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
 final class SugarStateOnly extends StreamOperative
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -298,13 +298,13 @@ final class SugarStateOnly extends StreamOperative
 
 // -- hybrid_channel ----------------------------------------------------------
 //
-// One emit reaching two destinations: an inter-procedure consumer and a plugin
+// One emit reaching two destinations: an inter-tasklet consumer and a plugin
 // wire with its own serializer. The serializer refuses a sentinel value, so an
 // operator can observe end to end that a refusal is isolated to the emit rather
 // than failing the item.
 
-#[Proc(name: 'hybrid_producer_procedure')]
-final class HybridProducer extends Procedure
+#[Task(name: 'hybrid_producer_tasklet')]
+final class HybridProducer extends Tasklet
 {
     public const SENTINEL = 0xDEADBEEF;
 
@@ -316,19 +316,19 @@ final class HybridProducer extends Procedure
         try {
             $ctx->emit($value);
         } catch (\Throwable $e) {
-            fwrite(STDERR, "hybrid_producer_procedure: serializer refused an emit: {$e->getMessage()}\n");
+            fwrite(STDERR, "hybrid_producer_tasklet: serializer refused an emit: {$e->getMessage()}\n");
         }
 
         return null;
     }
 }
 
-#[Proc(name: 'hybrid_consumer_procedure')]
-final class HybridConsumer extends Procedure
+#[Task(name: 'hybrid_consumer_tasklet')]
+final class HybridConsumer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        echo "hybrid_consumer_procedure: received $input\n";
+        echo "hybrid_consumer_tasklet: received $input\n";
 
         return null;
     }
@@ -356,12 +356,12 @@ final class HybridChannelOperative extends StreamOperative
 
 // -- merged_input ------------------------------------------------------------
 //
-// Two entry channels merged into one procedure. Each source's mapping tags the
+// Two entry channels merged into one tasklet. Each source's mapping tags the
 // value with the channel it came from, the merge keys on the symbol the mapping
 // read, and the emitted line is `<source>:<payload>`.
 
-#[Proc(name: 'merge_label_procedure', dynamicEntities: true)]
-final class MergeLabel extends Procedure
+#[Task(name: 'merge_label_tasklet', dynamicCells: true)]
+final class MergeLabel extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -401,7 +401,7 @@ final class MergedInputOperative extends StreamOperative
 // Every value transform on one edge: `drop` is filtered out, a comma list fans
 // out into one value per element, each is upper-cased and keyed on its prefix.
 
-#[Proc(name: 'transform_label_procedure', dynamicEntities: true)]
+#[Task(name: 'transform_label_tasklet', dynamicCells: true)]
 final class TransformLabel extends PassThrough
 {
 }
@@ -422,12 +422,12 @@ final class TransformChainOperative extends StreamOperative
     }
 }
 
-// -- entity_stress -----------------------------------------------------------
+// -- cell_stress -----------------------------------------------------------
 
-#[Proc(name: 'stress_a', entityKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
-final class StressA extends Procedure
+#[Task(name: 'stress_a', cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
+final class StressA extends Tasklet
 {
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
     }
@@ -438,10 +438,10 @@ final class StressA extends Procedure
     }
 }
 
-#[Proc(entityKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
-class StressToP0 extends Procedure
+#[Task(cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
+class StressToP0 extends Tasklet
 {
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return ['p0'];
     }
@@ -452,23 +452,23 @@ class StressToP0 extends Procedure
     }
 }
 
-#[Proc(name: 'stress_b')]
+#[Task(name: 'stress_b')]
 final class StressB extends StressToP0
 {
 }
 
-#[Proc(name: 'stress_c')]
+#[Task(name: 'stress_c')]
 final class StressC extends StressToP0
 {
 }
 
-#[Proc(name: 'stress_d')]
+#[Task(name: 'stress_d')]
 final class StressD extends StressToP0
 {
 }
 
-#[Operative(factoryId: 'entity_stress')]
-final class EntityStressOperative extends StreamOperative
+#[Operative(factoryId: 'cell_stress')]
+final class CellStressOperative extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
@@ -489,11 +489,11 @@ final class EntityStressOperative extends StreamOperative
 // the engine rewinds behind 200, replays the retained input log sorted by event
 // time, and the fold order becomes [100, 200, 300].
 
-#[Proc(name: 'candle_procedure', clock: Clock::EventTime)]
-final class Candle extends Procedure
+#[Task(name: 'candle_tasklet', clock: Clock::EventTime)]
+final class Candle extends Tasklet
 {
     /** Event times in fold order: the assertion surface. */
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['folded' => []];
     }
@@ -537,14 +537,14 @@ final class CandleOperative extends StreamOperative
 // -- session_timeout ---------------------------------------------------------
 //
 // The worked session-timeout shape: each input pushes the idle deadline out,
-// and the firing closes the session. Single-entity so the e2e's crash-resume
-// half exercises a durable Entity. The timeout is read from
+// and the firing closes the session. Single-cell so the e2e's crash-resume
+// half exercises a durable Cell. The timeout is read from
 // `TIMER_TEST_TIMEOUT_MS` (the e2e sets it short).
 
-#[Proc(name: 'session_timeout_procedure')]
-final class SessionTimeout extends Procedure
+#[Task(name: 'session_timeout_tasklet')]
+final class SessionTimeout extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['touched' => [], 'closed_at' => []];
     }
@@ -589,10 +589,10 @@ final class SessionTimeoutOperative extends StreamOperative
 // -- bounded_mailbox_{drop_nothing,drop_newest,drop_oldest} ------------------
 
 /** The capacity and the fold reach each subclass by inheritance. */
-#[Proc(mailboxCapacity: 4)]
-class BoundedMailbox extends Procedure
+#[Task(mailboxCapacity: 4)]
+class BoundedMailbox extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['processed' => 0];
     }
@@ -610,17 +610,17 @@ class BoundedMailbox extends Procedure
     }
 }
 
-#[Proc(name: 'drop_nothing_test_procedure')]
+#[Task(name: 'drop_nothing_test_tasklet')]
 final class DropNothingMailbox extends BoundedMailbox
 {
 }
 
-#[Proc(name: 'drop_newest_test_procedure')]
+#[Task(name: 'drop_newest_test_tasklet')]
 final class DropNewestMailbox extends BoundedMailbox
 {
 }
 
-#[Proc(name: 'drop_oldest_test_procedure')]
+#[Task(name: 'drop_oldest_test_tasklet')]
 final class DropOldestMailbox extends BoundedMailbox
 {
 }
@@ -666,10 +666,10 @@ final class BoundedMailboxDropOldestOperative extends StreamOperative
 // forwarded frame keeps its producing channel's name, and that is what selects
 // the receiving operative's entry channel — so the entry here is `in`.
 
-#[Proc(name: 'partition_relay_procedure', dynamicEntities: true)]
-final class PartitionRelay extends Procedure
+#[Task(name: 'partition_relay_tasklet', dynamicCells: true)]
+final class PartitionRelay extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -699,15 +699,15 @@ final class PartitionRelayOperative extends StreamOperative
     }
 }
 
-// -- dynamic_entity ----------------------------------------------------------
+// -- dynamic_cell ----------------------------------------------------------
 
 // Rust reads the eviction TTL from `DYN_TEST_TTL_MS`; an attribute argument
 // must be a constant expression, so this fixture declares none. Only the
 // reference-runtime scenario arms a TTL, so nothing here reads one.
-#[Proc(name: 'dynamic_entity_procedure', dynamicEntities: true)]
-final class DynamicEntity extends Procedure
+#[Task(name: 'dynamic_cell_tasklet', dynamicCells: true)]
+final class DynamicCell extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -725,17 +725,17 @@ final class DynamicEntity extends Procedure
     }
 }
 
-#[Operative(factoryId: 'dynamic_entity')]
-final class DynamicEntityOperative extends StreamOperative
+#[Operative(factoryId: 'dynamic_cell')]
+final class DynamicCellOperative extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             // Filtered before keying: a dropped value answers no key, so the
-            // core never mints an entity for it.
+            // core never mints a cell for it.
             ->filter(static fn (mixed $input): bool => $input !== 'drop')
             ->keyBy(Wire::prefix(...))
-            ->into(DynamicEntity::class)
+            ->into(DynamicCell::class)
             ->sink('kafka');
     }
 }
@@ -750,13 +750,13 @@ final class Fixtures
             DoNothingOperative::class,
             BenchEchoOperative::class,
             CompareFilterOperative::class,
-            StaticEntityOperative::class,
-            SugarStaticEntityOperative::class,
+            StaticCellOperative::class,
+            SugarStaticCellOperative::class,
             MixedOperative::class,
             HybridChannelOperative::class,
             MergedInputOperative::class,
             TransformChainOperative::class,
-            EntityStressOperative::class,
+            CellStressOperative::class,
             BenchKeyedNoPersistOperative::class,
             StoreInputOperative::class,
             StatefulCounterOperative::class,
@@ -778,7 +778,7 @@ final class Fixtures
             BoundedMailboxDropNewestOperative::class,
             BoundedMailboxDropOldestOperative::class,
             PartitionRelayOperative::class,
-            DynamicEntityOperative::class,
+            DynamicCellOperative::class,
             SpawnRequesterOperative::class,
             // The §5 short forms.
             SugarDoNothing::class,

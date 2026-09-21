@@ -8,7 +8,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\LocalOperative;
 use Flezha\SinkOutput;
 use Flezha\TestApp\BoundedMailboxDropNothingOperative;
-use Flezha\TestApp\DynamicEntityOperative;
+use Flezha\TestApp\DynamicCellOperative;
 use Flezha\TestApp\PartitionRelayOperative;
 use Flezha\TestApp\SessionTimeoutOperative;
 use Flezha\TestApp\SugarDoNothing;
@@ -80,7 +80,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         self::assertSame(
             ['a' => ['a:1', 'a:2'], 'b' => ['b:1']],
             $this->byKey($released),
-            'every value reached the Entity its own key resolved to, in the order it was fed',
+            'every value reached the Cell its own key resolved to, in the order it was fed',
         );
         foreach ($released as $output) {
             self::assertSame(
@@ -88,24 +88,24 @@ final class LocalModeCapabilitiesTest extends TestCase
                 $output->metadata['flz.key'],
                 'each release carries the key its own value resolved to',
             );
-            foreach (['flz.entity', 'flz.seq'] as $stamp) {
+            foreach (['flz.cell', 'flz.seq'] as $stamp) {
                 self::assertArrayHasKey($stamp, $output->metadata, "a keyed sink carries $stamp");
             }
         }
     }
 
-    public function testADynamicEntityFilterRunsBeforeKeyingAndNothingElseIsLost(): void
+    public function testADynamicCellFilterRunsBeforeKeyingAndNothingElseIsLost(): void
     {
-        // The class's sink is not keyed, so a released value carries no entity
+        // The class's sink is not keyed, so a released value carries no cell
         // stamp and the per-key minting is not visible on this channel. It is
-        // asserted above, on `partition_relay`, whose procedure is dynamic too
+        // asserted above, on `partition_relay`, whose tasklet is dynamic too
         // and whose sink IS keyed. What this class shows that that one does
         // not is the declared filter: a value it rejects answers no key, so
-        // the core is never asked to mint an Entity for it.
-        $this->declares('dynamic_entity', 'dynamic_entity');
+        // the core is never asked to mint a Cell for it.
+        $this->declares('dynamic_cell', 'dynamic_cell');
 
         $released = $this->release(
-            DynamicEntityOperative::class,
+            DynamicCellOperative::class,
             'input',
             'kafka',
             ['a:1', 'b:1', 'drop', 'a:2'],
@@ -114,7 +114,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         self::assertSame(
             ['a' => ['a:1', 'a:2'], 'b' => ['b:1']],
             $this->byKey($released),
-            'the filter dropped `drop` before it was keyed, and every other value reached its Entity',
+            'the filter dropped `drop` before it was keyed, and every other value reached its Cell',
         );
         foreach ($released as $output) {
             self::assertSame(
@@ -152,7 +152,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
     public function testADeclaredTimerFiresLocallyWithItsScheduledTime(): void
     {
-        $this->declares('entity_timers', 'session_timeout');
+        $this->declares('cell_timers', 'session_timeout');
 
         // The class reads its own deadline from the environment, the way the
         // e2e sets it; 200 ms keeps the run short without changing what is
@@ -234,7 +234,7 @@ final class LocalModeCapabilitiesTest extends TestCase
     /**
      * The released payloads under the key each of them resolved to.
      *
-     * One Entity drains at a time here, so releases arrive grouped by key
+     * One Cell drains at a time here, so releases arrive grouped by key
      * rather than interleaved as they were fed. What a keyed declaration
      * promises is the order within a key, which is what this compares.
      *

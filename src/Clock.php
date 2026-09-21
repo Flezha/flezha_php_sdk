@@ -12,8 +12,8 @@ enum Clock: string
 {
     /** The runner's wall clock at delivery. */
     case Wall = 'wall';
-    /** The entity's durable change sequence. */
+    /** The cell's durable change sequence. */
     case Logical = 'logical';
-    /** The time the procedure's own `eventTime()` extracts from the input. */
+    /** The time the tasklet's own `eventTime()` extracts from the input. */
     case EventTime = 'event_time';
 }

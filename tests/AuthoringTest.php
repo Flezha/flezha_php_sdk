@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
@@ -27,7 +27,7 @@ use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\LoopMode;
 use Flezha\Operative as OperativeBase;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\Runner;
 use Flezha\StreamOperative;
 use Flezha\Testing\Harness;
@@ -44,7 +44,7 @@ final class ShortUpcase extends StreamOperative
     use Echoes;
 }
 
-/** `ShortUpcase` as its full form, the procedure named after the factory id. */
+/** `ShortUpcase` as its full form, the tasklet named after the factory id. */
 #[Operative(factoryId: 'sf_upcase')]
 final class ShortUpcaseTwinOperative extends StreamOperative
 {
@@ -102,7 +102,7 @@ final class ShortUnattributed extends StreamOperative
 }
 
 #[Operative(factoryId: 'sf_renamed')]
-#[Proc(name: 'elsewhere')]
+#[Task(name: 'elsewhere')]
 final class ShortRenamed extends StreamOperative
 {
     use Echoes;
@@ -130,9 +130,9 @@ final class ShortCodecOnTopology extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_proc_on_topology')]
-#[Proc(mailboxCapacity: 8)]
-final class ShortProcOnTopology extends StreamOperative
+#[Operative(factoryId: 'sf_task_on_topology')]
+#[Task(mailboxCapacity: 8)]
+final class ShortTaskOnTopology extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
@@ -146,7 +146,7 @@ final class ShortFoldByValue extends StreamOperative
 {
     use Echoes;
 
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -162,7 +162,7 @@ final class ShortNarrowedKey extends StreamOperative
 {
     use Echoes;
 
-    public function state(string $entityKey): mixed
+    public function state(string $cellKey): mixed
     {
         return [];
     }
@@ -173,7 +173,7 @@ final class ShortWiderKeys extends StreamOperative
 {
     use Echoes;
 
-    public function entitiesFor(mixed $input): ?array
+    public function cellsFor(mixed $input): ?array
     {
         return null;
     }
@@ -184,7 +184,7 @@ final class ShortVoidState extends StreamOperative
 {
     use Echoes;
 
-    public function state(?string $entityKey): void
+    public function state(?string $cellKey): void
     {
     }
 }
@@ -256,7 +256,7 @@ final class ShortWidenedHooks extends WorkflowOperative
 {
     use Echoes;
 
-    public function state($entityKey): array
+    public function state($cellKey): array
     {
         return [];
     }
@@ -279,32 +279,32 @@ final class ShortWidenedHooks extends WorkflowOperative
     }
 }
 
-#[Proc(name: 'sf_proc_kind', kind: 'stream')]
-final class ProcWithKind extends Procedure
+#[Task(name: 'sf_task_kind', kind: 'stream')]
+final class TaskWithKind extends Tasklet
 {
     use Echoes;
 }
 
-#[Proc(name: 'sf_proc_sink', sink: 'out')]
-final class ProcWithSink extends Procedure
+#[Task(name: 'sf_task_sink', sink: 'out')]
+final class TaskWithSink extends Tasklet
 {
     use Echoes;
 }
 
-#[Proc(name: 'sf_proc_input', input: 'prices')]
-final class ProcWithInput extends Procedure
+#[Task(name: 'sf_task_input', input: 'prices')]
+final class TaskWithInput extends Tasklet
 {
     use Echoes;
 }
 
-#[Proc(name: 'sf_proc_codec', codec: ChannelCodec::Text)]
-final class ProcWithCodec extends Procedure
+#[Task(name: 'sf_task_codec', codec: ChannelCodec::Text)]
+final class TaskWithCodec extends Tasklet
 {
     use Echoes;
 }
 
-#[Proc(clock: Clock::EventTime)]
-final class NoExtractor extends Procedure
+#[Task(clock: Clock::EventTime)]
+final class NoExtractor extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -312,8 +312,8 @@ final class NoExtractor extends Procedure
     }
 }
 
-#[Proc(entityKeys: ['a'], dynamicEntities: true)]
-final class BothModes extends Procedure
+#[Task(cellKeys: ['a'], dynamicCells: true)]
+final class BothModes extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -321,8 +321,8 @@ final class BothModes extends Procedure
     }
 }
 
-#[Proc]
-final class FoldWithoutState extends Procedure
+#[Task]
+final class FoldWithoutState extends Tasklet
 {
     public function applyChange(mixed &$state, mixed $change): void
     {
@@ -342,7 +342,7 @@ final class FoldWithoutState extends Procedure
  * — not here. What is left here is the ergonomics: which shapes the fluent
  * builder BUILDS, the defects a record cannot carry (a PHP class that does not
  * define the method its declaration promises, a plugin sink on a channel no
- * procedure produces on), and that the core's verdict reaches an author as this
+ * tasklet produces on), and that the core's verdict reaches an author as this
  * package's own refusal.
  */
 final class AuthoringTest extends RepositoryTestCase
@@ -358,9 +358,9 @@ final class AuthoringTest extends RepositoryTestCase
             }),
             'declares an event_time clock but no eventTime method',
         ];
-        yield 'both entity modes' => [
+        yield 'both cell modes' => [
             static fn (): mixed => Definition::of(BothModes::class),
-            'declares both a static key set and dynamic entities',
+            'declares both a static key set and dynamic cells',
         ];
         yield 'a fold with nothing to fold into' => [
             static fn (): mixed => Definition::of(FoldWithoutState::class),
@@ -373,11 +373,11 @@ final class AuthoringTest extends RepositoryTestCase
             static fn (): mixed => self::validate(static function (Builder $c): void {
                 $c->input('in')->sink();
             }),
-            'a plugin sink is fed by a procedure',
+            'a plugin sink is fed by a tasklet',
         ];
         // The one refusal the builder raises under the core's vocabulary reads
         // the way the core's own verdicts do.
-        yield 'two procedures claiming one node identity' => [
+        yield 'two tasklets claiming one node identity' => [
             static fn (): mixed => self::validate(static function (Builder $c): void {
                 $in = $c->input('in');
                 $in->into(Echoer::class, 'twin');
@@ -439,31 +439,31 @@ final class AuthoringTest extends RepositoryTestCase
         Unattributed::spec();
     }
 
-    public function testAWorkflowDeclaringNoProceduresIsRefused(): void
+    public function testAWorkflowDeclaringNoTaskletsIsRefused(): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('declares no procedures; a workflow runs a graph of procedures');
+        $this->expectExceptionMessage('declares no tasklets; a workflow runs a graph of tasklets');
 
         EmptyWorkflow::spec();
     }
 
     /**
-     * Two unnamed mentions of one procedure are one node, so a diamond that
+     * Two unnamed mentions of one tasklet are one node, so a diamond that
      * fans out and back in has one instance rather than two.
      */
-    public function testOneProcedureMentionedTwiceIsOneNode(): void
+    public function testOneTaskletMentionedTwiceIsOneNode(): void
     {
         $spec = Diamond::spec();
         self::derived($spec);
 
         self::assertSame(['echoer', 'counter'], array_map(
             static fn ($node): string => $node->name,
-            $spec->procedures,
+            $spec->tasklets,
         ));
     }
 
     /**
-     * `named()` is honoured on the inter-proc path and was dropped on the
+     * `named()` is honoured on the inter-task path and was dropped on the
      * plugin path, so `named('input')->sink('relay_out')` produced a channel
      * called `relay_out` — and the channel name is what a forwarded frame
      * carries and what selects the receiving operative's entry channel.
@@ -497,22 +497,22 @@ final class AuthoringTest extends RepositoryTestCase
 
     /**
      * PHP does not inherit attributes, and taking that literally would make
-     * `class Sub extends Base {}` silently single-entity with the default
+     * `class Sub extends Base {}` silently single-cell with the default
      * capacity and schema version 1 — wrong at runtime, reported nowhere.
      */
     public function testASubclassKeepsEveryDeclarationItsParentMade(): void
     {
         $definition = Definition::of(SilentSubclass::class);
 
-        self::assertSame('static', $definition->entityMode());
-        self::assertSame(['a', 'b'], $definition->decl->entityKeys);
+        self::assertSame('static', $definition->cellMode());
+        self::assertSame(['a', 'b'], $definition->decl->cellKeys);
         self::assertSame(8, $definition->decl->mailboxCapacity);
         self::assertSame(3, $definition->decl->schemaVersion);
     }
 
     /**
      * The one declaration that is NOT inherited: a node identity is per class,
-     * and an inherited one would make two procedures claim one node.
+     * and an inherited one would make two tasklets claim one node.
      */
     public function testASubclassIsNamedAfterItselfRatherThanItsParent(): void
     {
@@ -530,8 +530,8 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $definition = Definition::of(RenamingSubclass::class);
 
-        self::assertSame('static', $definition->entityMode());
-        self::assertSame(['a', 'b'], $definition->decl->entityKeys);
+        self::assertSame('static', $definition->cellMode());
+        self::assertSame(['a', 'b'], $definition->decl->cellKeys);
         self::assertSame(8, $definition->decl->mailboxCapacity);
         self::assertSame(3, $definition->decl->schemaVersion);
     }
@@ -586,7 +586,7 @@ final class AuthoringTest extends RepositoryTestCase
                 beyondWindowPolicy: $builder->beyondWindowPolicy,
                 compactAfterBytes: $builder->compactAfterBytes,
                 syncDurability: $builder->syncDurability,
-                procedures: $builder->procedures,
+                tasklets: $builder->tasklets,
                 channels: $builder->channels,
             ), $core);
         } finally {
@@ -654,13 +654,13 @@ final class AuthoringTest extends RepositoryTestCase
         self::derived(OneSinkTwoChannels::spec());
     }
 
-    // -- one output channel per producing procedure --------------------------
+    // -- one output channel per producing tasklet --------------------------
     //
-    // The model Rust and Java carry: a procedure node owns ONE output channel,
+    // The model Rust and Java carry: a tasklet node owns ONE output channel,
     // created on first wiring and reused after. A held edge wired twice appends
     // a second consumer to it — it does not declare a second channel claiming
     // the same producer, which the core resolves by first match
-    // (`host/register.rs` `procedure_wiring`) and so silently truncates.
+    // (`host/register.rs` `tasklet_wiring`) and so silently truncates.
 
     /**
      * Read off the DERIVED declaration: the consumers, the plugin kind and the
@@ -678,7 +678,7 @@ final class AuthoringTest extends RepositoryTestCase
                 $c['name'],
                 $c['kind'],
                 $c['producer'],
-                array_map(static fn (array $e): int => $e['procedure'], $c['consumers']),
+                array_map(static fn (array $e): int => $e['tasklet'], $c['consumers']),
                 $c['sink'],
             ],
             $derived['channels'],
@@ -688,7 +688,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testAHeldEdgeWiredTwiceIsOneChannelWithTwoConsumers(): void
     {
         self::assertSame(
-            [['in', 'entry', null, [0], null], ['counter', 'inter_proc', 0, [1, 2], null]],
+            [['in', 'entry', null, [0], null], ['counter', 'inter_task', 0, [1, 2], null]],
             self::channelsOf(FanOut::spec()),
         );
     }
@@ -709,7 +709,7 @@ final class AuthoringTest extends RepositoryTestCase
         });
 
         self::assertSame([[0, 0]], array_map(
-            static fn ($edge): array => [$edge->procedure, count($edge->transforms)],
+            static fn ($edge): array => [$edge->tasklet, count($edge->transforms)],
             $builder->channels[0]->consumers,
         ));
     }
@@ -731,7 +731,7 @@ final class AuthoringTest extends RepositoryTestCase
         self::assertSame('A', ($quotes->keyBy)(['symbol' => 'A']));
     }
 
-    public function testAnEntryAndAProcedureOutputMergeIntoOneNode(): void
+    public function testAnEntryAndATaskletOutputMergeIntoOneNode(): void
     {
         $same = static fn (mixed $v): mixed => $v;
         $derived = self::validate(static function (Builder $c) use ($same): void {
@@ -740,7 +740,7 @@ final class AuthoringTest extends RepositoryTestCase
         });
 
         self::assertSame(
-            [['a', 'entry', null, [0], null], ['b', 'entry', null, [1], null], ['echoer', 'inter_proc', 0, [1], null]],
+            [['a', 'entry', null, [0], null], ['b', 'entry', null, [1], null], ['echoer', 'inter_task', 0, [1], null]],
             self::channelsOf($derived),
         );
     }
@@ -797,7 +797,7 @@ final class AuthoringTest extends RepositoryTestCase
 
         self::assertSame(['route_latest', 'limits_router'], array_map(
             static fn ($node): string => $node->name,
-            $builder->procedures,
+            $builder->tasklets,
         ));
         self::assertSame(
             [
@@ -822,7 +822,7 @@ final class AuthoringTest extends RepositoryTestCase
         self::assertSame(
             [
                 ['in', 'entry', null, [0], null],
-                ['hybrid_indicator', 'inter_proc', 0, [1], 'hybrid_indicator'],
+                ['hybrid_indicator', 'inter_task', 0, [1], 'hybrid_indicator'],
             ],
             self::channelsOf(Hybrid::spec()),
         );
@@ -845,7 +845,7 @@ final class AuthoringTest extends RepositoryTestCase
         self::assertSame(
             [[1, 1], [2, 0]],
             array_map(
-                static fn ($edge): array => [$edge->procedure, count($edge->transforms)],
+                static fn ($edge): array => [$edge->tasklet, count($edge->transforms)],
                 $spec->channels[1]->consumers,
             ),
         );
@@ -1024,8 +1024,8 @@ final class AuthoringTest extends RepositoryTestCase
 
     /**
      * The declaration a short form hands the core is the one its full form
-     * hands it, byte for byte, down to the procedure named after the factory
-     * id: which is what keeps every entity where it was when a short form
+     * hands it, byte for byte, down to the tasklet named after the factory
+     * id: which is what keeps every cell where it was when a short form
      * grows into its full form.
      *
      * @dataProvider shortFormTwins
@@ -1038,7 +1038,7 @@ final class AuthoringTest extends RepositoryTestCase
 
         self::assertSame($hand::spec()->kind, $spec->kind);
         self::assertSame(HostClassDecl::of($hand::spec()), HostClassDecl::of($spec));
-        self::assertSame([$spec->factoryId], array_column($spec->procedures, 'name'));
+        self::assertSame([$spec->factoryId], array_column($spec->tasklets, 'name'));
         self::derived($spec);
     }
 
@@ -1047,7 +1047,7 @@ final class AuthoringTest extends RepositoryTestCase
         self::assertSame(LoopMode::Once, ShortPlace::spec()->workflow?->loopMode);
     }
 
-    public function testASinklessShortFormDeclaresItsEntryIntoItsProcedureAndNothingElse(): void
+    public function testASinklessShortFormDeclaresItsEntryIntoItsTaskletAndNothingElse(): void
     {
         $spec = ShortCounter::spec();
 
@@ -1055,14 +1055,14 @@ final class AuthoringTest extends RepositoryTestCase
             [['ticks', 'entry']],
             array_map(static fn ($c): array => [$c->name, $c->kind], $spec->channels),
         );
-        self::assertSame(['sf_counter'], array_column($spec->procedures, 'name'));
+        self::assertSame(['sf_counter'], array_column($spec->tasklets, 'name'));
         // The codec reached the entry with no sink written: JSON would refuse this.
         self::assertSame('one', ($spec->channels[0]->decode)('one'));
-        // The core takes a channel ending at a procedure, as it does a full form's.
+        // The core takes a channel ending at a tasklet, as it does a full form's.
         self::assertCount(1, self::derived($spec)['channels']);
     }
 
-    public function testAShortFormsProcedureRunsItsBodyThroughItsOwnHooks(): void
+    public function testAShortFormsTaskletRunsItsBodyThroughItsOwnHooks(): void
     {
         $harness = new Harness(ShortCounter::class);
         $harness->feed('one');
@@ -1074,7 +1074,7 @@ final class AuthoringTest extends RepositoryTestCase
 
     public function testAChannelsBodyStillDeclaresAFullForm(): void
     {
-        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinOperative::spec()->procedures, 'class'));
+        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinOperative::spec()->tasklets, 'class'));
     }
 
     public function testTheRunnerRegistersAShortFormAsTheClassTheAuthorWrote(): void
@@ -1105,9 +1105,9 @@ final class AuthoringTest extends RepositoryTestCase
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(ShortUnattributed::class),
             'declares no #[Flezha\Attribute\Operative(factoryId: ...)]',
         ];
-        yield 'a short form naming its procedure' => [
+        yield 'a short form naming its tasklet' => [
             static fn (): mixed => ShortRenamed::spec(),
-            'a short form\'s procedure is named after its factory id',
+            'a short form\'s tasklet is named after its factory id',
         ];
         // A class-level setting is the full form's to write.
         yield 'a short form with persistence off' => [
@@ -1122,18 +1122,18 @@ final class AuthoringTest extends RepositoryTestCase
             static fn (): mixed => ShortCodecOnTopology::spec(),
             '`codec` names a channel a short form generates',
         ];
-        yield 'a procedure setting beside a topology body' => [
-            static fn (): mixed => ShortProcOnTopology::spec(),
-            '#[Proc] carries a procedure\'s settings, and this class wires its procedures in '
-            . '`channels()`; a full form\'s procedure settings go on its procedure classes',
+        yield 'a tasklet setting beside a topology body' => [
+            static fn (): mixed => ShortTaskOnTopology::spec(),
+            '#[Task] carries a tasklet\'s settings, and this class wires its tasklets in '
+            . '`channels()`; a full form\'s tasklet settings go on its tasklet classes',
         ];
-        yield 'an operative with no run wired as a procedure' => [
+        yield 'an operative with no run wired as a tasklet' => [
             static fn (): mixed => Definition::of(ShortUpcaseTwinOperative::class),
             'is an operative with no `run`',
         ];
-        yield 'a procedure registered as an operative' => [
+        yield 'a tasklet registered as an operative' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(Echoer::class),
-            'is a procedure, which declares no operative',
+            'is a tasklet, which declares no operative',
         ];
     }
 
@@ -1149,7 +1149,7 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /** @return iterable<string, array{class-string<OperativeBase>, string, string}> */
-    public static function shortFormsWithAHookAProcedureCouldNotDeclare(): iterable
+    public static function shortFormsWithAHookATaskletCouldNotDeclare(): iterable
     {
         yield 'a fold by value' => [
             ShortFoldByValue::class,
@@ -1159,9 +1159,9 @@ final class AuthoringTest extends RepositoryTestCase
         yield 'a narrowed parameter' => [
             ShortNarrowedKey::class,
             'state',
-            '`$entityKey` is typed `string`, which does not accept every `?string`',
+            '`$cellKey` is typed `string`, which does not accept every `?string`',
         ];
-        yield 'a wider return' => [ShortWiderKeys::class, 'entitiesFor', 'it returns `?array`, not `array`'];
+        yield 'a wider return' => [ShortWiderKeys::class, 'cellsFor', 'it returns `?array`, not `array`'];
         yield 'a void for a mixed' => [ShortVoidState::class, 'state', 'it returns `void`, not `mixed`'];
         yield 'no return type' => [ShortUntypedReturn::class, 'compensate', 'it declares no return type, not `void`'];
         yield 'an extra required argument' => [
@@ -1180,22 +1180,22 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /**
-     * PHP refuses to load a `Procedure` subclass declaring any of these, and
+     * PHP refuses to load a `Tasklet` subclass declaring any of these, and
      * a short form declares no hook to PHP, so the SDK holds it to the same
      * rule: a fold by value would otherwise fold nothing, silently.
      *
-     * @dataProvider shortFormsWithAHookAProcedureCouldNotDeclare
+     * @dataProvider shortFormsWithAHookATaskletCouldNotDeclare
      * @param class-string<OperativeBase> $class
      */
-    public function testAShortFormsHookKeepsAProceduresSignature(string $class, string $hook, string $defect): void
+    public function testAShortFormsHookKeepsATaskletsSignature(string $class, string $hook, string $defect): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage("`$hook` must be compatible with Procedure::$hook, as a procedure's is: $defect");
+        $this->expectExceptionMessage("`$hook` must be compatible with Tasklet::$hook, as a tasklet's is: $defect");
 
         $class::spec();
     }
 
-    public function testAShortFormsHookMayWidenWhatAProceduresMay(): void
+    public function testAShortFormsHookMayWidenWhatATaskletsMay(): void
     {
         $definition = Definition::of(ShortWidenedHooks::class);
 
@@ -1204,23 +1204,23 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
-    /** @return iterable<string, array{class-string<Procedure>, string}> */
-    public static function proceduresWithAnOperativeArgument(): iterable
+    /** @return iterable<string, array{class-string<Tasklet>, string}> */
+    public static function taskletsWithAnOperativeArgument(): iterable
     {
-        yield 'kind' => [ProcWithKind::class, 'kind'];
-        yield 'sink' => [ProcWithSink::class, 'sink'];
-        yield 'input' => [ProcWithInput::class, 'input'];
-        yield 'codec' => [ProcWithCodec::class, 'codec'];
+        yield 'kind' => [TaskWithKind::class, 'kind'];
+        yield 'sink' => [TaskWithSink::class, 'sink'];
+        yield 'input' => [TaskWithInput::class, 'input'];
+        yield 'codec' => [TaskWithCodec::class, 'codec'];
     }
 
     /**
-     * @dataProvider proceduresWithAnOperativeArgument
-     * @param class-string<Procedure> $class
+     * @dataProvider taskletsWithAnOperativeArgument
+     * @param class-string<Tasklet> $class
      */
-    public function testAProcedureCarryingAnOperativeArgumentIsRefusedNamingIt(string $class, string $argument): void
+    public function testATaskletCarryingAnOperativeArgumentIsRefusedNamingIt(string $class, string $argument): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessageMatches("/#\\[Proc\\] takes no `$argument`.*#\\[Operative\\]/");
+        $this->expectExceptionMessageMatches("/#\\[Task\\] takes no `$argument`.*#\\[Operative\\]/");
 
         Flezha::createRunner('test')->registerFactory($class);
     }
@@ -1243,7 +1243,7 @@ final class AuthoringTest extends RepositoryTestCase
      */
     public function testNoBodyCanDeclareNoOutput(): void
     {
-        foreach ([Procedure::class, OperativeBase::class] as $base) {
+        foreach ([Tasklet::class, OperativeBase::class] as $base) {
             $returns = (new \ReflectionMethod($base, 'run'))->getReturnType();
             self::assertInstanceOf(\ReflectionNamedType::class, $returns);
             self::assertSame('mixed', $returns->getName(), $base);
@@ -1393,10 +1393,10 @@ final class Diamond extends StreamOperative
     }
 }
 
-#[Proc(entityKeys: ['a', 'b'], mailboxCapacity: 8, schemaVersion: 3)]
-class DeclaringBase extends Procedure
+#[Task(cellKeys: ['a', 'b'], mailboxCapacity: 8, schemaVersion: 3)]
+class DeclaringBase extends Tasklet
 {
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return ['a'];
     }
@@ -1412,7 +1412,7 @@ final class SilentSubclass extends DeclaringBase
 {
 }
 
-#[Proc(name: 'renamed')]
+#[Task(name: 'renamed')]
 final class RenamingSubclass extends DeclaringBase
 {
 }

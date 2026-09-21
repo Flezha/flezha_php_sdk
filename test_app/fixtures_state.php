@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Fixtures whose subject is persisted Entity state: the keyed upsert the bench
+ * Fixtures whose subject is persisted Cell state: the keyed upsert the bench
  * shares, and the counter and resume twins — the same partition as
  * test/apps/python_runner/fixtures_state.py and the reference's state.rs.
  */
@@ -11,13 +11,13 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Overflow;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 
 // -- bench_keyed_nopersist / bench_keyed / the tier stores -------------------
@@ -26,10 +26,10 @@ use Flezha\StreamOperative;
 // `checkpoint_store` and `bench_checkpoint` are the same keyed upsert under
 // three acknowledgement postures; only `run` differs.
 
-#[Proc]
-abstract class KeyedUpsert extends Procedure
+#[Task]
+abstract class KeyedUpsert extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['values' => []];
     }
@@ -56,13 +56,13 @@ abstract class KeyedUpsert extends Procedure
     }
 }
 
-#[Proc(name: 'tier_store_procedure')]
+#[Task(name: 'tier_store_tasklet')]
 final class TierStore extends KeyedUpsert
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
         // Dead-letter e2e: a "poison" value fails every attempt, exhausting
-        // the retry budget so the tier-on atomic park advances the entity
+        // the retry budget so the tier-on atomic park advances the cell
         // past it.
         if (self::split($input)[1] === 'poison') {
             throw new \RuntimeException('poison value');
@@ -74,7 +74,7 @@ final class TierStore extends KeyedUpsert
 }
 
 /** `tier_store`'s twin, whose interval closes on a `commit:` input. */
-#[Proc(name: 'checkpoint_store_procedure')]
+#[Task(name: 'checkpoint_store_tasklet')]
 final class CheckpointStore extends KeyedUpsert
 {
     public function run(mixed $input, Ctx $ctx): mixed
@@ -91,7 +91,7 @@ final class CheckpointStore extends KeyedUpsert
 }
 
 /** `checkpoint_store` driven by a DECLARED cadence rather than an input. */
-#[Proc(name: 'bench_checkpoint_procedure')]
+#[Task(name: 'bench_checkpoint_tasklet')]
 final class BenchCheckpoint extends KeyedUpsert
 {
     public function run(mixed $input, Ctx $ctx): mixed
@@ -104,7 +104,7 @@ final class BenchCheckpoint extends KeyedUpsert
 
 /**
  * The same keyed upsert under both durability postures, so the round-trip
- * bench can isolate the cost of per-Entity persistence.
+ * bench can isolate the cost of per-Cell persistence.
  */
 abstract class KeyedUpsertOperative extends StreamOperative
 {
@@ -117,7 +117,7 @@ abstract class KeyedUpsertOperative extends StreamOperative
 }
 
 /**
- * Per-entity persistence off: the heap-only posture the bench isolates against
+ * Per-cell persistence off: the heap-only posture the bench isolates against
  * the durable one.
  */
 #[Operative(factoryId: 'bench_keyed_nopersist', persistent: false)]
@@ -162,11 +162,11 @@ final class CheckpointStoreOperative extends StreamOperative
 }
 
 /**
- * The same procedure declared `outputsAtCheckpoint`: the interval's outputs are
+ * The same tasklet declared `outputsAtCheckpoint`: the interval's outputs are
  * held with its changes and ship inside its checkpoint record.
  * `checkpointEvery` is deliberately absent so the test drives the close itself
  * — with `commit:` for the batch case, and with the delay alone for the
- * quiet-Entity case.
+ * quiet-Cell case.
  */
 #[Operative(factoryId: 'checkpoint_batched_store')]
 final class CheckpointBatchedOperative extends StreamOperative
@@ -183,7 +183,7 @@ final class CheckpointBatchedOperative extends StreamOperative
 /**
  * `checkpoint_store` driven by a DECLARED cadence instead of a `commit:` input:
  * acknowledging every `FLEZHA_BENCH_CHECKPOINT_EVERY` inputs (default 500) per
- * Entity. `FLEZHA_BENCH_CHECKPOINT_OUTPUTS=at_checkpoint` (with
+ * Cell. `FLEZHA_BENCH_CHECKPOINT_OUTPUTS=at_checkpoint` (with
  * `FLEZHA_BENCH_CHECKPOINT_DELAY_MS`) additionally holds the interval's outputs
  * until it closes.
  */
@@ -205,10 +205,10 @@ final class BenchCheckpointOperative extends StreamOperative
 // -- store_input -------------------------------------------------------------
 
 /** The durable-state reference: every input is appended through a change. */
-#[Proc(name: 'store_input_procedure')]
-final class StoreInput extends Procedure
+#[Task(name: 'store_input_tasklet')]
+final class StoreInput extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['binary_inputs' => [], 'text_inputs' => []];
     }
@@ -239,8 +239,8 @@ final class StoreInputOperative extends StreamOperative
 
 // -- stateful_counter / persistence_off_counter ------------------------------
 
-#[Proc(name: 'counter_entry_procedure')]
-final class CounterEntry extends Procedure
+#[Task(name: 'counter_entry_tasklet')]
+final class CounterEntry extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -250,10 +250,10 @@ final class CounterEntry extends Procedure
     }
 }
 
-#[Proc(name: 'counter_procedure')]
-final class Counter extends Procedure
+#[Task(name: 'counter_tasklet')]
+final class Counter extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['value' => 0];
     }
@@ -283,7 +283,7 @@ final class StatefulCounterOperative extends StreamOperative
 }
 
 /**
- * The same topology with per-Entity persistence off, under the reference's
+ * The same topology with per-Cell persistence off, under the reference's
  * node names: the toggle is a class property, not a different computation.
  */
 #[Operative(factoryId: 'persistence_off_counter', persistent: false)]
@@ -292,16 +292,16 @@ final class PersistenceOffCounterOperative extends StreamOperative
     public static function channels(Builder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
-            ->into(CounterEntry::class, 'persistence_off_entry_procedure')->named('ticks')
-            ->into(Counter::class, 'persistence_off_counter_procedure');
+            ->into(CounterEntry::class, 'persistence_off_entry_tasklet')->named('ticks')
+            ->into(Counter::class, 'persistence_off_counter_tasklet');
     }
 }
 
 // -- coalescing_counter ------------------------------------------------------
 
 /** Wire format: `<interval>:<ts>:<delta>`; a missing or unparsable part reads 0. */
-#[Proc(name: 'tick_entry_procedure')]
-final class TickEntry extends Procedure
+#[Task(name: 'tick_entry_tasklet')]
+final class TickEntry extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -318,10 +318,10 @@ final class TickEntry extends Procedure
  * idempotent per `(interval, ts)` either way, so replay produces the same
  * state.
  */
-#[Proc(name: 'tick_procedure')]
-final class Tick extends Procedure
+#[Task(name: 'tick_tasklet')]
+final class Tick extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['last' => 0];
     }
@@ -356,10 +356,10 @@ final class CoalescingCounterOperative extends StreamOperative
  * Emits the running total, so a resume is observable on the wire. Default +
  * change replay rebuilds the total on restore; no snapshot fast path needed.
  */
-#[Proc(name: 'resume_probe_procedure')]
-final class ResumeProbe extends Procedure
+#[Task(name: 'resume_probe_tasklet')]
+final class ResumeProbe extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['total' => 0];
     }
@@ -393,7 +393,7 @@ final class ResumeProbeOperative extends StreamOperative
 // -- schema_evolution_v1 / schema_evolution_v2 -------------------------------
 //
 // The same class either side of a deploy that edits its own state type. Both
-// halves declare the SAME procedure name, so an operative started under v1 and
+// halves declare the SAME tasklet name, so an operative started under v1 and
 // restarted under v2 restores from the very WAL v1 wrote — which is what a
 // deploy does, with the two binaries collapsed into one fixture file.
 //
@@ -401,10 +401,10 @@ final class ResumeProbeOperative extends StreamOperative
 // through a declared migration. Output is `total:currency` so the e2e can read
 // the migrated field off the wire.
 
-#[Proc(name: 'evolving_cart')]
-final class EvolvingCartV1 extends Procedure
+#[Task(name: 'evolving_cart')]
+final class EvolvingCartV1 extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['total' => 0];
     }
@@ -424,10 +424,10 @@ final class EvolvingCartV1 extends Procedure
     }
 }
 
-#[Proc(name: 'evolving_cart', schemaVersion: 2, minReadableSchemaVersion: 1)]
-final class EvolvingCartV2 extends Procedure
+#[Task(name: 'evolving_cart', schemaVersion: 2, minReadableSchemaVersion: 1)]
+final class EvolvingCartV2 extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['total' => 0, 'currency' => ''];
     }

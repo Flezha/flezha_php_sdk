@@ -11,7 +11,7 @@ use Flezha\Runner;
  *
  * Zero dependencies and no extension beyond `ext-ffi`, so it works on the
  * non-thread-safe build every distribution ships. It processes one activation
- * at a time, which is correct — not degraded — for a procedure body that is
+ * at a time, which is correct — not degraded — for a tasklet body that is
  * CPU-bound or performs blocking I/O: the body runs, the activation completes,
  * and the next one is polled.
  *

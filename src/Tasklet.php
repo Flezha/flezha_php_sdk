@@ -4,38 +4,38 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 
 /**
- * The base every authored procedure extends.
+ * The base every authored tasklet extends.
  *
- * A `#[Proc]` attribute carries the scalar declarations; the methods carry the
+ * A `#[Task]` attribute carries the scalar declarations; the methods carry the
  * behaviour. Only {@see run()} is required — the rest are hooks with a default
- * that says "this procedure does not do that", and overriding one IS the
+ * that says "this tasklet does not do that", and overriding one IS the
  * declaration that it does, so a declaration and its implementation cannot
  * disagree.
  *
- *     #[Proc(entityKeys: ['a', 'b'])]
- *     final class Totals extends Procedure
+ *     #[Task(cellKeys: ['a', 'b'])]
+ *     final class Totals extends Tasklet
  *     {
- *         public function entitiesFor(mixed $input): array { return ['a', 'b']; }
- *         public function state(?string $entityKey): mixed { return ['sum' => 0]; }
+ *         public function cellsFor(mixed $input): array { return ['a', 'b']; }
+ *         public function state(?string $cellKey): mixed { return ['sum' => 0]; }
  *         public function applyChange(mixed &$state, mixed $change): void { $state['sum'] += $change; }
  *         public function run(mixed $input, Ctx $ctx): mixed { $ctx->change((int) $input); return null; }
  *     }
  */
-abstract class Procedure
+abstract class Tasklet
 {
-    /** What one input does. The only method a procedure must write. */
+    /** What one input does. The only method a tasklet must write. */
     abstract public function run(mixed $input, Ctx $ctx): mixed;
 
     /**
-     * An entity's state before anything has happened to it.
+     * A cell's state before anything has happened to it.
      *
-     * Override to declare that this procedure is stateful. `$entityKey` is
-     * null for a single-entity procedure and at the representability check.
+     * Override to declare that this tasklet is stateful. `$cellKey` is
+     * null for a single-cell tasklet and at the representability check.
      */
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return null;
     }
@@ -51,18 +51,18 @@ abstract class Procedure
     {
     }
 
-    /** A fired timer. Override to declare that this procedure registers them. */
+    /** A fired timer. Override to declare that this tasklet registers them. */
     public function onTimer(Timer $timer, Ctx $ctx): void
     {
     }
 
     /**
-     * Which of a static key set's entities an input belongs to. Override on a
-     * procedure declaring `entityKeys`.
+     * Which of a static key set's cells an input belongs to. Override on a
+     * tasklet declaring `cellKeys`.
      *
      * @return list<string>
      */
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return [];
     }
@@ -76,7 +76,7 @@ abstract class Procedure
     /**
      * Rebuild a State written at an older schema version.
      *
-     * Override alongside `#[Proc(minReadableSchemaVersion: ...)]`: the core
+     * Override alongside `#[Task(minReadableSchemaVersion: ...)]`: the core
      * refuses everything below that floor and hands the rest across tagged
      * with the version it was written at, so this decides nothing about
      * whether the record is readable — only how.
@@ -93,7 +93,7 @@ abstract class Procedure
     }
 
     /**
-     * Undo this procedure's committed effects, in a workflow chain the driver
+     * Undo this tasklet's committed effects, in a workflow chain the driver
      * is rolling back.
      *
      * @param list<mixed> $outputs the forward outputs the core recorded

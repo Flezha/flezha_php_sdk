@@ -28,7 +28,7 @@ final class EchoOperative extends StreamOperative
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
-            ->into(EchoProcedure::class)
+            ->into(EchoTasklet::class)
             ->sink('out');
     }
 }

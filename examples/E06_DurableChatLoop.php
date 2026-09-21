@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * A chat session as a `PerInput` workflow: one iteration per message.
  *
- * The conversation lives in entity state, so a crash resumes at the last
+ * The conversation lives in cell state, so a crash resumes at the last
  * committed turn, and between messages the instance parks without holding a
  * runner thread. The message whose `kind` is `end` ends the instance through
  * `$ctx->complete()`, once its iteration commits.
@@ -16,19 +16,19 @@ namespace Flezha\Examples\E06;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\WorkflowOperative;
 
-#[Proc]
-final class ChatTurn extends Procedure
+#[Task]
+final class ChatTurn extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['history' => []];
     }

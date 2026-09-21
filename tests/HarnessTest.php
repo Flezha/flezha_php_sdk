@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\LatestDocumentRouter;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\SpawnHandle;
 use Flezha\Testing\Harness;
 use Flezha\Testing\ReplayMismatch;
 use PHPUnit\Framework\TestCase;
 
-#[Proc]
-final class MutatesWithoutRecording extends Procedure
+#[Task]
+final class MutatesWithoutRecording extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['count' => 0];
     }
@@ -37,10 +37,10 @@ final class MutatesWithoutRecording extends Procedure
     }
 }
 
-#[Proc]
-final class ImpureFold extends Procedure
+#[Task]
+final class ImpureFold extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['calls' => 0];
     }
@@ -100,13 +100,13 @@ final class HarnessTest extends TestCase
     }
 
     /** `ShortCounter` defines neither `onTimer` nor `compensate`, and neither does `Echoer`. */
-    public function testAHookAShortFormDoesNotDefineDoesWhatAProceduresDefaultDoes(): void
+    public function testAHookAShortFormDoesNotDefineDoesWhatATaskletsDefaultDoes(): void
     {
-        $procedure = new Harness(Echoer::class);
+        $tasklet = new Harness(Echoer::class);
         $shortForm = new Harness(ShortCounter::class);
 
-        self::assertEquals($procedure->fireTimer('processing_time', 1), $shortForm->fireTimer('processing_time', 1));
-        self::assertEquals($procedure->compensate(['placed']), $shortForm->compensate(['placed']));
+        self::assertEquals($tasklet->fireTimer('processing_time', 1), $shortForm->fireTimer('processing_time', 1));
+        self::assertEquals($tasklet->compensate(['placed']), $shortForm->compensate(['placed']));
     }
 
     public function testARestoreRebuildsTheStateAChangeLogDescribes(): void
@@ -117,7 +117,7 @@ final class HarnessTest extends TestCase
         self::assertSame(['count' => 2, 'seen' => ['x', 'y']], $harness->state());
     }
 
-    public function testTheReplayOfAWellBehavedProcedureAgrees(): void
+    public function testTheReplayOfAWellBehavedTaskletAgrees(): void
     {
         self::assertTrue(Harness::replayEquals(Counter::class, ['a', 'b', 'c']));
     }
@@ -144,7 +144,7 @@ final class HarnessTest extends TestCase
 
     /**
      * Both timer kinds, and cancellation by the timestamp a registration
-     * answered — the whole of the timer surface a procedure can reach.
+     * answered — the whole of the timer surface a tasklet can reach.
      */
     public function testTimersAreRegisteredAndCancelledByTheirScheduledTime(): void
     {
@@ -233,8 +233,8 @@ final class HarnessTest extends TestCase
     }
 }
 
-#[Proc]
-final class SpawnsTwice extends Procedure
+#[Task]
+final class SpawnsTwice extends Tasklet
 {
     /** @var list<SpawnHandle> the handles the latest run made */
     public static array $handles = [];
@@ -251,8 +251,8 @@ final class SpawnsTwice extends Procedure
     }
 }
 
-#[Proc]
-final class StableIdProbe extends Procedure
+#[Task]
+final class StableIdProbe extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {

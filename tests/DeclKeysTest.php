@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\BeyondWindow;
 use Flezha\Clock;
@@ -16,7 +16,7 @@ use Flezha\Graph\ClassSpec;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\LoopMode;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\RollbackMode;
 use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
@@ -115,7 +115,7 @@ final class DeclKeysTest extends RepositoryTestCase
             beyondWindowPolicy: $stream->beyondWindowPolicy,
             compactAfterBytes: $stream->compactAfterBytes,
             syncDurability: $stream->syncDurability,
-            procedures: $stream->procedures,
+            tasklets: $stream->tasklets,
             channels: $stream->channels,
             workflow: $kind === 'workflow' ? FullWorkflow::spec()->workflow : null,
         );
@@ -136,9 +136,9 @@ final class DeclKeysTest extends RepositoryTestCase
                 $keys[] = "channel.$key";
             }
         }
-        foreach ($stream['procedures'] as $procedure) {
-            foreach (array_keys($procedure) as $key) {
-                $keys[] = "procedure.$key";
+        foreach ($stream['tasklets'] as $tasklet) {
+            foreach (array_keys($tasklet) as $key) {
+                $keys[] = "tasklet.$key";
             }
         }
         foreach (array_keys($workflow['workflow']) as $key) {
@@ -174,7 +174,7 @@ final class DeclKeysTest extends RepositoryTestCase
         $merged = static fn (int $group): array => [
             ['link' => 'transform'],
             ['link' => 'key'],
-            ['link' => 'merge', 'procedure' => 0, 'group' => $group],
+            ['link' => 'merge', 'tasklet' => 0, 'group' => $group],
         ];
         self::assertSame(
             [[$merged(0)], [$merged(0)]],
@@ -190,7 +190,7 @@ final class DeclKeysTest extends RepositoryTestCase
         $c->seal();
 
         self::assertSame(
-            [['link' => 'transform'], ['link' => 'merge', 'procedure' => 1, 'group' => 1]],
+            [['link' => 'transform'], ['link' => 'merge', 'tasklet' => 1, 'group' => 1]],
             $c->channels[0]->chains[1],
         );
     }
@@ -253,7 +253,7 @@ final class DeclKeysTest extends RepositoryTestCase
         $lines = [];
         foreach ($derived['channels'] as $index => $channel) {
             $consumers = array_map(
-                static fn (array $edge): int => $edge['procedure'],
+                static fn (array $edge): int => $edge['tasklet'],
                 $channel['consumers'],
             );
             $lines[] = implode(' | ', [
@@ -272,10 +272,10 @@ final class DeclKeysTest extends RepositoryTestCase
 }
 
 /** A declaration populated far enough that every optional key is present. */
-#[Proc(name: 'entry', clock: Clock::EventTime, mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1)]
-final class FullEntry extends Procedure
+#[Task(name: 'entry', clock: Clock::EventTime, mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1)]
+final class FullEntry extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -303,8 +303,8 @@ final class FullEntry extends Procedure
     }
 }
 
-#[Proc(name: 'downstream', dynamicEntities: true, idleTtlMs: 1_000, maxEntities: 16)]
-final class FullDownstream extends Procedure
+#[Task(name: 'downstream', dynamicCells: true, idleTtlMs: 1_000, maxCells: 16)]
+final class FullDownstream extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -316,10 +316,10 @@ final class FullDownstream extends Procedure
     }
 }
 
-#[Proc(name: 'fanned', entityKeys: ['a', 'b'])]
-final class FullFanned extends Procedure
+#[Task(name: 'fanned', cellKeys: ['a', 'b'])]
+final class FullFanned extends Tasklet
 {
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return ['a'];
     }
@@ -371,8 +371,8 @@ final class FullWorkflow extends WorkflowOperative
     }
 }
 
-#[Proc(name: 'hybrid_producer_procedure')]
-final class HybridProducer extends Procedure
+#[Task(name: 'hybrid_producer_tasklet')]
+final class HybridProducer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -382,8 +382,8 @@ final class HybridProducer extends Procedure
     }
 }
 
-#[Proc(name: 'hybrid_consumer_procedure')]
-final class HybridConsumer extends Procedure
+#[Task(name: 'hybrid_consumer_tasklet')]
+final class HybridConsumer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -403,8 +403,8 @@ final class HybridChannelTopology extends StreamOperative
     }
 }
 
-#[Proc(name: 'tier_commit_a')]
-final class TierCommitA extends Procedure
+#[Task(name: 'tier_commit_a')]
+final class TierCommitA extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -414,8 +414,8 @@ final class TierCommitA extends Procedure
     }
 }
 
-#[Proc(name: 'block_b')]
-final class BlockB extends Procedure
+#[Task(name: 'block_b')]
+final class BlockB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {

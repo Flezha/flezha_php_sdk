@@ -211,7 +211,7 @@ final class Core implements SpawnBridge
         $this->check($this->ffi->flz_core_local_run_until_idle($this->live(), $timeoutMs));
     }
 
-    /** End the local run and release its Entities. */
+    /** End the local run and release its Cells. */
     public function localStop(): void
     {
         $this->check($this->ffi->flz_core_local_stop($this->live()));
@@ -260,13 +260,13 @@ final class Core implements SpawnBridge
         $this->check($this->ffi->flz_core_complete($this->live(), $encoded, strlen($encoded)));
     }
 
-    /** Re-hand a polled activation's untouched items and release its entity. */
+    /** Re-hand a polled activation's untouched items and release its cell. */
     public function abandon(int $token): void
     {
         $this->check($this->ffi->flz_core_abandon($this->live(), $token));
     }
 
-    /** Ship every Entity's state to the controller, then wake every blocked poller and stop the runner loop. */
+    /** Ship every Cell's state to the controller, then wake every blocked poller and stop the runner loop. */
     public function shutdown(): void
     {
         $this->ffi->flz_core_shutdown($this->live());

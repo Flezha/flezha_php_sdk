@@ -9,7 +9,7 @@ final class ConsumerEdge
 {
     /** @param list<callable(mixed):mixed> $transforms */
     public function __construct(
-        public readonly int $procedure,
+        public readonly int $tasklet,
         public array $transforms = [],
         /** @var (callable(mixed):string)|null */
         public $keyBy = null,

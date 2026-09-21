@@ -7,11 +7,11 @@ namespace Flezha;
 use Flezha\Exception\FlezhaException;
 
 /**
- * Entity identity bytes and the replay-stable identifier derived from them.
+ * Cell identity bytes and the replay-stable identifier derived from them.
  *
  * Both algorithms are fixed by the SDK contract rather than by a library, so
- * every SDK derives the same value from the same entity: the identity is
- * length-prefixed `instance | procedure | key`, and the identifier is FNV-1a
+ * every SDK derives the same value from the same cell: the identity is
+ * length-prefixed `instance | tasklet | key`, and the identifier is FNV-1a
  * 128 over `identity | change seq | per-invocation ordinal`.
  *
  * PHP has no 128-bit integer, so the hash is carried as four 32-bit limbs.
@@ -31,22 +31,22 @@ final class Identity
     }
 
     /**
-     * `[u8 len][instance][u8 len][procedure][u16 len][key]`, big-endian
+     * `[u8 len][instance][u8 len][tasklet][u16 len][key]`, big-endian
      * lengths. The layout every SDK writes, so an identifier derived here
-     * matches one derived there for the same entity.
+     * matches one derived there for the same cell.
      */
-    public static function entity(string $instanceId, string $procedureName, string $entityKey): string
+    public static function cell(string $instanceId, string $taskletName, string $cellKey): string
     {
-        if (strlen($instanceId) > 255 || strlen($procedureName) > 255) {
-            throw new FlezhaException('operative class / procedure id must be at most 255 bytes');
+        if (strlen($instanceId) > 255 || strlen($taskletName) > 255) {
+            throw new FlezhaException('operative class / tasklet id must be at most 255 bytes');
         }
-        if (strlen($entityKey) > 0xFFFF) {
-            throw new FlezhaException('entity key must be at most 65535 bytes');
+        if (strlen($cellKey) > 0xFFFF) {
+            throw new FlezhaException('cell key must be at most 65535 bytes');
         }
 
         return pack('C', strlen($instanceId)) . $instanceId
-            . pack('C', strlen($procedureName)) . $procedureName
-            . pack('n', strlen($entityKey)) . $entityKey;
+            . pack('C', strlen($taskletName)) . $taskletName
+            . pack('n', strlen($cellKey)) . $cellKey;
     }
 
     /**

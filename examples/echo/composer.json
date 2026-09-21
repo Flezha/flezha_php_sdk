@@ -1,6 +1,6 @@
 {
     "name": "flezha/echo-example",
-    "description": "One message in, one message out: a procedure, an operative and a runner.",
+    "description": "One message in, one message out: a tasklet, an operative and a runner.",
     "type": "project",
     "license": "Apache-2.0",
     "require": {

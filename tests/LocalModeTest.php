@@ -7,19 +7,19 @@ namespace Flezha\Tests;
 require_once __DIR__ . '/../examples/E07_LocalMode.php';
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Examples\E07\WordCountOperative;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\LocalOperative;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\SinkOutput;
 use Flezha\StreamOperative;
 
 /**
  * The PHP SDK's local mode: the shipped example's operative class, its
- * declared two-procedure graph, and no controller anywhere.
+ * declared two-tasklet graph, and no controller anywhere.
  *
  * The example is what is asserted rather than a copy of it, so the file a
  * reader is pointed at is the file this proves.
@@ -80,11 +80,11 @@ final class LocalModeTest extends RepositoryTestCase
         self::assertSame(
             $expected,
             $counted,
-            'both procedures ran, the runtime performed the hop, and one Entity per word counted',
+            'both tasklets ran, the runtime performed the hop, and one Cell per word counted',
         );
 
         self::assertSame('totals', $released[0]->channel);
-        foreach (['flz.entity', 'flz.seq', 'flz.key'] as $stamp) {
+        foreach (['flz.cell', 'flz.seq', 'flz.key'] as $stamp) {
             self::assertArrayHasKey($stamp, $released[0]->metadata, "a keyed sink carries $stamp");
         }
     }
@@ -122,8 +122,8 @@ final class LocalModeTest extends RepositoryTestCase
 }
 
 /** Reads the map an undeclared entry decodes, and emits a string and a map. */
-#[Proc(name: 'defaults')]
-final class DefaultCodecsProcedure extends Procedure
+#[Task(name: 'defaults')]
+final class DefaultCodecsTasklet extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -139,6 +139,6 @@ final class DefaultCodecs extends StreamOperative
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(DefaultCodecsProcedure::class)->sink('out');
+        $c->input('in')->into(DefaultCodecsTasklet::class)->sink('out');
     }
 }

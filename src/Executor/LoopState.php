@@ -29,7 +29,7 @@ interface LoopState
      */
     public function claim(): bool;
 
-    /** Record one activation's procedure-body time, in nanoseconds. */
+    /** Record one activation's tasklet-body time, in nanoseconds. */
     public function observe(int $bodyNanos): void;
 
     /**

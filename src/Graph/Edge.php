@@ -10,7 +10,7 @@ use Flezha\Fanned;
 use Flezha\Overflow;
 use Flezha\Exception\DeclarationException;
 use Flezha\Operative;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 
 /**
  * One edge under construction.
@@ -26,7 +26,7 @@ final class Edge
     private const KEY = ['link' => 'key'];
 
     /**
-     * @param array{string, ChannelSpec|ProcNode} $from
+     * @param array{string, ChannelSpec|TaskNode} $from
      * @param array<string, mixed>                $pending
      */
     public function __construct(
@@ -67,7 +67,7 @@ final class Edge
         );
     }
 
-    /** Route by a computed key: the consumer becomes a dynamic keyed procedure. */
+    /** Route by a computed key: the consumer becomes a dynamic keyed tasklet. */
     public function keyBy(callable $key): self
     {
         return $this->relink(self::KEY, ['keyBy' => $key]);
@@ -88,7 +88,7 @@ final class Edge
         return $this->with(['retryBackoffMs' => $milliseconds]);
     }
 
-    /** Stamp `flz.entity` / `flz.seq` / `flz.key` onto this channel's plugin frames. */
+    /** Stamp `flz.cell` / `flz.seq` / `flz.key` onto this channel's plugin frames. */
     public function keyed(): self
     {
         return $this->with(['keyed' => true]);
@@ -114,16 +114,16 @@ final class Edge
     }
 
     /**
-     * Wire this edge into a procedure: a `Procedure` subclass, or a short-form
+     * Wire this edge into a tasklet: a `Tasklet` subclass, or a short-form
      * operative class, which is its own.
      *
-     * @param class-string<Procedure>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operative> $class
      */
     public function into(string $class, ?string $nodeName = null): self
     {
         $node = $this->builder->nodeFor($class, $nodeName);
 
-        return $this->wire($node, ['link' => 'into', 'procedure' => $node->index]);
+        return $this->wire($node, ['link' => 'into', 'tasklet' => $node->index]);
     }
 
     /**
@@ -133,13 +133,13 @@ final class Edge
      * @internal
      * @param array<string, mixed> $link
      */
-    public function wire(ProcNode $node, array $link): self
+    public function wire(TaskNode $node, array $link): self
     {
         // Creates this edge's channel and applies its pending options, before
         // the link that closes on it is recorded.
         $this->channel();
         // The transforms and the key belong to this edge, not to the channel:
-        // one channel may feed several procedures, and a chain declared before
+        // one channel may feed several tasklets, and a chain declared before
         // one `into` must not reach another. They ride the chain that closes on
         // them, and the core names that chain back on the edge it derived — so
         // whether a re-declaration is the legal fan-in no-op or
@@ -151,7 +151,7 @@ final class Edge
             new ConsumerEdge($node->index, $this->transforms(), $this->pending['keyBy'] ?? null),
         );
 
-        return new self($this->builder, ['procedure', $node], []);
+        return new self($this->builder, ['tasklet', $node], []);
     }
 
     /**
@@ -186,11 +186,11 @@ final class Edge
         $name = is_string($nameOrEncode) ? $nameOrEncode : null;
         $encode = is_callable($nameOrEncode) ? $nameOrEncode : $encode;
 
-        if ($this->from[0] !== 'procedure') {
+        if ($this->from[0] !== 'tasklet') {
             throw new DeclarationException(
                 $this->builder->factoryId,
                 $name ?? '<derived>',
-                'a plugin sink is fed by a procedure; wire the entry channel into one first'
+                'a plugin sink is fed by a tasklet; wire the entry channel into one first'
             );
         }
 
@@ -216,7 +216,7 @@ final class Edge
 
     /**
      * The channel this edge's values leave on, with the pending options
-     * applied. An entry edge already has one; a procedure edge's is created on
+     * applied. An entry edge already has one; a tasklet edge's is created on
      * first use and reused after.
      */
     private function channel(): ChannelSpec

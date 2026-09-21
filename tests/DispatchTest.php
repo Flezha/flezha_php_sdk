@@ -54,7 +54,7 @@ final class DispatchTest extends TestCase
         $this->dispatcher = new Dispatcher($this->registry, self::core());
     }
 
-    public function testAnInputReachesTheProcedureAndItsReturnIsEmitted(): void
+    public function testAnInputReachesTheTaskletAndItsReturnIsEmitted(): void
     {
         $result = $this->work('echo_operative', 0, [self::input('"hello"')]);
 
@@ -144,9 +144,9 @@ final class DispatchTest extends TestCase
         $restored = $this->dispatcher->answer([
             'token' => 1,
             'factory' => 'counter_operative',
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'restore_fold',
             'snapshot' => null,
@@ -169,9 +169,9 @@ final class DispatchTest extends TestCase
         $fresh->answer([
             'token' => 2,
             'factory' => 'counter_operative',
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'restore_fold',
             'snapshot' => ['bytes' => $snapshot, 'from_version' => null],
@@ -197,9 +197,9 @@ final class DispatchTest extends TestCase
         $applied = $this->dispatcher->answer([
             'token' => 3,
             'factory' => 'counter_operative',
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'apply_state',
             'state_json' => '{"count":9,"seen":["z"]}',
@@ -216,7 +216,7 @@ final class DispatchTest extends TestCase
         self::assertSame([['keys' => ['a'], 'event_time' => null], ['keys' => ['b'], 'event_time' => null]], $prepared);
     }
 
-    /** A filtered payload answers no key: the core never mints an entity. */
+    /** A filtered payload answers no key: the core never mints a cell. */
     public function testAFilteredPayloadAnswersNoKey(): void
     {
         self::assertSame([['keys' => []]], $this->prepare(['"drop"']));
@@ -234,12 +234,12 @@ final class DispatchTest extends TestCase
 
     /**
      * The SDK's half of a workflow chain: a stage runs like any other
-     * procedure, and the driver's barrier is answered by the completion. The
-     * driver itself — loop modes, suspension, rewind, the proc journal that
+     * tasklet, and the driver's barrier is answered by the completion. The
+     * driver itself — loop modes, suspension, rewind, the task journal that
      * makes a resumed chain skip committed stages — is the core's, reached
      * through step activations, so this SDK implements none of it.
      */
-    public function testAWorkflowStageRunsAsAnOrdinaryProcedure(): void
+    public function testAWorkflowStageRunsAsAnOrdinaryTasklet(): void
     {
         $this->registry->add(SagaOperative::spec());
         $result = $this->work('saga_operative', 0, [self::input('"reserve"')]);
@@ -257,9 +257,9 @@ final class DispatchTest extends TestCase
         $result = $this->dispatcher->answer([
             'token' => 4,
             'factory' => 'saga_operative',
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'compensate_run',
             'outputs' => ['{"step":"reserve","receipt":"abc"}'],
@@ -278,9 +278,9 @@ final class DispatchTest extends TestCase
         $result = $this->dispatcher->answer([
             'token' => 5,
             'factory' => 'echo_operative',
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'compensate_run',
             'outputs' => [],
@@ -292,11 +292,11 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * A workflow procedure's `complete` rides its item's effect as JSON, the
+     * A workflow tasklet's `complete` rides its item's effect as JSON, the
      * latest call winning, and the rest of the item still runs: the driver
      * ends the instance only after the iteration commits.
      */
-    public function testAWorkflowProcedureCompletionRidesItsEffect(): void
+    public function testAWorkflowTaskletCompletionRidesItsEffect(): void
     {
         $effect = $this->work('completing_workflow', 0, [self::input('{"order":7}')])['effects'][0];
 
@@ -307,10 +307,10 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * A stream procedure's request is carried the same way, and the core
+     * A stream tasklet's request is carried the same way, and the core
      * refuses it; a string result rides as it stands, as a sink sends one.
      */
-    public function testAStreamProcedureCompletionIsCarriedTheSameWay(): void
+    public function testAStreamTaskletCompletionIsCarriedTheSameWay(): void
     {
         $effect = $this->work('completing_stream', 0, [self::input('"bye"')])['effects'][0];
 
@@ -337,7 +337,7 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * An activation that returns unanswered retires its entity for the life of
+     * An activation that returns unanswered retires its cell for the life of
      * the process, so every path out of `dispatch` ends in a completion or an
      * abandon — and when both refuse, it says so rather than throwing into the
      * loop.
@@ -384,18 +384,18 @@ final class DispatchTest extends TestCase
 
         self::assertCount(2, $outputs);
         self::assertSame(
-            ['flz.entity' => 'op/stamp_emitter/ek', 'flz.seq' => '5.0', 'flz.key' => 'ek'],
+            ['flz.cell' => 'op/stamp_emitter/ek', 'flz.seq' => '5.0', 'flz.key' => 'ek'],
             $outputs[0]['metadata'],
         );
         self::assertSame(
-            ['flz.entity' => 'op/stamp_emitter/ek', 'flz.seq' => '5.1', 'flz.key' => 'ek'],
+            ['flz.cell' => 'op/stamp_emitter/ek', 'flz.seq' => '5.1', 'flz.key' => 'ek'],
             $outputs[1]['metadata'],
         );
     }
 
     public function testANonKeyedPluginEmitCarriesNoStamps(): void
     {
-        [$plain] = $this->mixed('"mixed"', procedure: 0)['effects'][0]['outputs'];
+        [$plain] = $this->mixed('"mixed"', tasklet: 0)['effects'][0]['outputs'];
 
         self::assertSame('plain_out', $plain['plugin_channel']);
         self::assertSame([], $plain['metadata']);
@@ -403,7 +403,7 @@ final class DispatchTest extends TestCase
 
     public function testUserMetadataRidesAKeyedPluginFrameWithTheStampsAfterIt(): void
     {
-        $outputs = $this->mixed('"mixed"', procedure: 1)['effects'][0]['outputs'];
+        $outputs = $this->mixed('"mixed"', tasklet: 1)['effects'][0]['outputs'];
         $keyed = array_values(array_filter(
             $outputs,
             static fn (array $o): bool => $o['target'] === 'plugin',
@@ -413,7 +413,7 @@ final class DispatchTest extends TestCase
         self::assertSame(
             [
                 'user' => 'meta',
-                'flz.entity' => 'op/stamp_emitter/ek',
+                'flz.cell' => 'op/stamp_emitter/ek',
                 'flz.seq' => '5.0',
                 'flz.key' => 'ek',
             ],
@@ -423,7 +423,7 @@ final class DispatchTest extends TestCase
 
     public function testAFlatMapFansTheConsumerEdgeAndNotThePluginFrame(): void
     {
-        $outputs = $this->mixed('"fanned"', procedure: 1)['effects'][0]['outputs'];
+        $outputs = $this->mixed('"fanned"', tasklet: 1)['effects'][0]['outputs'];
 
         // Two edge frames from the `flatMap`, and ONE plugin frame: the
         // serializer runs once per emit, from the value as emitted.
@@ -522,7 +522,7 @@ final class DispatchTest extends TestCase
     // workflow stage released the value raw, so delivery is the one
     // application.
 
-    public function testAStreamInterProcEdgeAppliesItsMapExactlyOnce(): void
+    public function testAStreamInterTaskEdgeAppliesItsMapExactlyOnce(): void
     {
         $produced = $this->work('wf_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
 
@@ -540,20 +540,20 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * What `procedure` was handed when `payload` arrived on `channel`, the
+     * What `tasklet` was handed when `payload` arrived on `channel`, the
      * handoff channel unless named.
      *
      * @return list<mixed>
      */
     private function delivered(
         string $factory,
-        int $procedure,
+        int $tasklet,
         string $payload,
         int $channel = 1,
-        ?string $entityKey = null,
+        ?string $cellKey = null,
     ): array {
         Delivered::$values = [];
-        $effect = $this->work($factory, $procedure, [self::input($payload, channel: $channel)], $entityKey)['effects'][0];
+        $effect = $this->work($factory, $tasklet, [self::input($payload, channel: $channel)], $cellKey)['effects'][0];
         self::assertSame('ok', $effect['verdict']);
 
         return Delivered::$values;
@@ -562,7 +562,7 @@ final class DispatchTest extends TestCase
     // --- merges, the router and fanned keys ---------------------------------
 
     /** Two sources into one node: each channel's edge carries its own mapping, in arrival order. */
-    public function testMergedSourcesReachTheProcedureEachUnderItsOwnMapping(): void
+    public function testMergedSourcesReachTheTaskletEachUnderItsOwnMapping(): void
     {
         Delivered::$values = [];
         $result = $this->work('merge_operative', 0, [
@@ -613,7 +613,7 @@ final class DispatchTest extends TestCase
 
     public function testAFanOfNoneIsADrop(): void
     {
-        self::assertSame([], $this->delivered('fanned_operative', 0, '"none"', channel: 0, entityKey: 'a'));
+        self::assertSame([], $this->delivered('fanned_operative', 0, '"none"', channel: 0, cellKey: 'a'));
         self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_operative'));
     }
 
@@ -626,46 +626,46 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * The core admits a fanned entry payload whole to every entity its values
-     * keyed, so each entity keeps only its own: by the edge's key, or by a
-     * static procedure's `entitiesFor`.
+     * The core admits a fanned entry payload whole to every cell its values
+     * keyed, so each cell keeps only its own: by the edge's key, or by a
+     * static tasklet's `cellsFor`.
      *
      * @return iterable<string, array{int, int}>
      */
-    public static function fannedAcrossEntities(): iterable
+    public static function fannedAcrossCells(): iterable
     {
         yield 'a keyed edge' => [0, 0];
         yield 'a static key set' => [1, 1];
     }
 
-    /** @dataProvider fannedAcrossEntities */
-    public function testEachEntityAFanReachesRunsOnlyTheValuesRoutedToIt(int $procedure, int $channel): void
+    /** @dataProvider fannedAcrossCells */
+    public function testEachCellAFanReachesRunsOnlyTheValuesRoutedToIt(int $tasklet, int $channel): void
     {
-        foreach (['a' => [['a', 'a:1'], ['a', 'a:3']], 'b' => [['b', 'b:2']]] as $entity => $routed) {
-            self::assertSame($routed, $this->delivered('fanned_operative', $procedure, '"a:1,b:2,a:3"', $channel, $entity));
+        foreach (['a' => [['a', 'a:1'], ['a', 'a:3']], 'b' => [['b', 'b:2']]] as $cell => $routed) {
+            self::assertSame($routed, $this->delivered('fanned_operative', $tasklet, '"a:1,b:2,a:3"', $channel, $cell));
         }
     }
 
     /** @return array<string, mixed> */
-    private function mixed(string $payload, int $procedure = 0): array
+    private function mixed(string $payload, int $tasklet = 0): array
     {
-        return $this->work('mixed_stamp_operative', $procedure, [self::input($payload)], 'ek', 5);
+        return $this->work('mixed_stamp_operative', $tasklet, [self::input($payload)], 'ek', 5);
     }
 
     /** @param list<array<string, mixed>> $items @return array<string, mixed> */
     private function work(
         string $factory,
-        int $procedure,
+        int $tasklet,
         array $items,
-        ?string $entityKey = null,
+        ?string $cellKey = null,
         int $changeSeq = 0,
     ): array {
         return $this->dispatcher->answer([
             'token' => 1,
             'factory' => $factory,
-            'procedure' => $procedure,
+            'tasklet' => $tasklet,
             'operative' => 'op',
-            'entity_key' => $entityKey,
+            'cell_key' => $cellKey,
             'change_seq' => $changeSeq,
             'kind' => 'work',
             'items' => $items,
@@ -678,9 +678,9 @@ final class DispatchTest extends TestCase
         return $this->dispatcher->answer([
             'token' => 1,
             'factory' => $factory,
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => $kind,
         ]);
@@ -692,9 +692,9 @@ final class DispatchTest extends TestCase
         return $this->dispatcher->answer([
             'token' => 1,
             'factory' => $factory,
-            'procedure' => 0,
+            'tasklet' => 0,
             'operative' => 'op',
-            'entity_key' => null,
+            'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'key_request',
             'key_request' => [
@@ -711,7 +711,7 @@ final class DispatchTest extends TestCase
         $registered = $this->registry->get($factory);
         self::assertNotNull($registered);
 
-        return $registered->stateOf($registered->spec->procedures[0], null);
+        return $registered->stateOf($registered->spec->tasklets[0], null);
     }
 
     /** @return array<string, mixed> */

@@ -5,25 +5,25 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
 use Flezha\Overflow;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
 
 /**
- * The procedures and operatives the unit suite declares against.
+ * The tasklets and operatives the unit suite declares against.
  *
- * One file, so a test that needs "a stateful keyed procedure" names one rather
+ * One file, so a test that needs "a stateful keyed tasklet" names one rather
  * than declaring a fourth almost-identical class.
  */
 
-/** The echo body, for a procedure and a short-form operative alike. */
+/** The echo body, for a tasklet and a short-form operative alike. */
 trait Echoes
 {
     public function run(mixed $input, Ctx $ctx): mixed
@@ -32,16 +32,16 @@ trait Echoes
     }
 }
 
-#[Proc]
-final class Echoer extends Procedure
+#[Task]
+final class Echoer extends Tasklet
 {
     use Echoes;
 }
 
-#[Proc(name: 'counter')]
-final class Counter extends Procedure
+#[Task(name: 'counter')]
+final class Counter extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['count' => 0, 'seen' => []];
     }
@@ -65,12 +65,12 @@ final class Counter extends Procedure
     }
 }
 
-#[Proc(dynamicEntities: true)]
-final class Keyed extends Procedure
+#[Task(dynamicCells: true)]
+final class Keyed extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
-        return ['key' => $entityKey, 'values' => []];
+        return ['key' => $cellKey, 'values' => []];
     }
 
     public function applyChange(mixed &$state, mixed $change): void
@@ -81,7 +81,7 @@ final class Keyed extends Procedure
     public function run(mixed $input, Ctx $ctx): mixed
     {
         $ctx->change($input);
-        $ctx->emit($input, key: (string) $ctx->entityKey);
+        $ctx->emit($input, key: (string) $ctx->cellKey);
 
         return null;
     }
@@ -109,7 +109,7 @@ final class CounterOperative extends StreamOperative
 #[Operative(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
 final class ShortCounter extends StreamOperative
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -145,8 +145,8 @@ final class KeyedOperative extends StreamOperative
 /**
  * The keyed plugin emitter: one output channel, carrying the identity stamps.
  */
-#[Proc(name: 'stamp_emitter', dynamicEntities: true)]
-final class StampEmitter extends Procedure
+#[Task(name: 'stamp_emitter', dynamicCells: true)]
+final class StampEmitter extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -182,8 +182,8 @@ final class StampOperative extends StreamOperative
     }
 }
 
-#[Proc]
-final class PlainEmitter extends Procedure
+#[Task]
+final class PlainEmitter extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -193,8 +193,8 @@ final class PlainEmitter extends Procedure
     }
 }
 
-#[Proc]
-final class FanTarget extends Procedure
+#[Task]
+final class FanTarget extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -203,8 +203,8 @@ final class FanTarget extends Procedure
 }
 
 /**
- * A procedure owns ONE output channel, so a keyed and a non-keyed plugin
- * channel are two procedures. The `flatMap` arm fans onto a CONSUMER edge,
+ * A tasklet owns ONE output channel, so a keyed and a non-keyed plugin
+ * channel are two tasklets. The `flatMap` arm fans onto a CONSUMER edge,
  * which is where a transform chain lives: the plugin frame is serialized once
  * per emit from the value as emitted, in every SDK.
  *
@@ -232,8 +232,8 @@ final class MixedStampOperative extends StreamOperative
     }
 }
 
-#[Proc]
-final class Poison extends Procedure
+#[Task]
+final class Poison extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -254,8 +254,8 @@ final class PoisonOperative extends StreamOperative
     }
 }
 
-#[Proc(name: 'saga_step')]
-final class SagaStep extends Procedure
+#[Task(name: 'saga_step')]
+final class SagaStep extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -279,13 +279,13 @@ final class SagaOperative extends \Flezha\WorkflowOperative
     }
 }
 
-// -- a procedure's completion ------------------------------------------------
+// -- a tasklet's completion ------------------------------------------------
 //
-// One procedure under both kinds: the SDK carries the request either way, and
+// One tasklet under both kinds: the SDK carries the request either way, and
 // the core decides what it means, ending a workflow or failing a stream's item.
 
-#[Proc(name: 'completer')]
-final class Completer extends Procedure
+#[Task(name: 'completer')]
+final class Completer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -321,10 +321,10 @@ final class CompletingStream extends StreamOperative
     use CompletingGraph;
 }
 
-#[Proc(name: 'timing', clock: Clock::EventTime)]
-final class Timing extends Procedure
+#[Task(name: 'timing', clock: Clock::EventTime)]
+final class Timing extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['fired' => []];
     }
@@ -366,8 +366,8 @@ final class Timing extends Procedure
 // releases one output per consumer, transformed and keyed. The plugin output
 // rides alongside either way.
 
-#[Proc(name: 'wf_producer')]
-final class WfProducer extends Procedure
+#[Task(name: 'wf_producer')]
+final class WfProducer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -384,8 +384,8 @@ final class Delivered
     public static array $values = [];
 }
 
-#[Proc(name: 'wf_b')]
-final class WfB extends Procedure
+#[Task(name: 'wf_b')]
+final class WfB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -395,8 +395,8 @@ final class WfB extends Procedure
     }
 }
 
-#[Proc(name: 'wf_c')]
-final class WfC extends Procedure
+#[Task(name: 'wf_c')]
+final class WfC extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -441,35 +441,35 @@ final class WfEmitStreamOperative extends StreamOperative
 
 // -- merges, the router and fanned keys -------------------------------------
 
-/** What it was handed, under which entity. */
-#[Proc(name: 'recorder', dynamicEntities: true)]
-final class Recorder extends Procedure
+/** What it was handed, under which cell. */
+#[Task(name: 'recorder', dynamicCells: true)]
+final class Recorder extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        Delivered::$values[] = [$ctx->entityKey, $input];
+        Delivered::$values[] = [$ctx->cellKey, $input];
 
         return null;
     }
 }
 
-#[Proc(name: 'static_recorder', entityKeys: ['a', 'b'])]
-final class StaticRecorder extends Procedure
+#[Task(name: 'static_recorder', cellKeys: ['a', 'b'])]
+final class StaticRecorder extends Tasklet
 {
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return [explode(':', (string) $input)[0]];
     }
 
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        Delivered::$values[] = [$ctx->entityKey, $input];
+        Delivered::$values[] = [$ctx->cellKey, $input];
 
         return null;
     }
 }
 
-/** Two entries merged into one procedure, each tagged by its own mapping and keyed on the tag's symbol. */
+/** Two entries merged into one tasklet, each tagged by its own mapping and keyed on the tag's symbol. */
 #[Operative(factoryId: 'merge_operative')]
 final class MergeOperative extends StreamOperative
 {

@@ -253,7 +253,7 @@ final class Runner
     {
         // The core says when: every loop keeps polling until its poll reports
         // the core shutting down, which the core reports only once the
-        // shutdown sequence has shipped every Entity's state through these
+        // shutdown sequence has shipped every Cell's state through these
         // same loops. The executor's own stop is the bound `drain` applies.
         $this->core?->shutdown();
     }
@@ -412,7 +412,7 @@ final class Runner
         }
 
         Logger::current()->info(sprintf(
-            'served %d activation(s), mean procedure body %.3f ms; one loop sustains about %.0f/s '
+            'served %d activation(s), mean tasklet body %.3f ms; one loop sustains about %.0f/s '
             . 'at that latency, and in-flight concurrency is the loop count',
             $activations,
             $meanBodyNanos / 1e6,

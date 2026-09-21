@@ -9,7 +9,7 @@ use Flezha\Exception\EmitException;
 use Flezha\Graph\ChannelSpec;
 use Flezha\Graph\ConsumerEdge;
 use Flezha\Graph\ClassSpec;
-use Flezha\Graph\ProcNode;
+use Flezha\Graph\TaskNode;
 
 /**
  * The invocation context: every deterministic effect a handler is allowed.
@@ -40,10 +40,10 @@ final class Ctx
     /** @param list<ChannelSpec> $outgoing */
     public function __construct(
         private readonly ClassSpec $spec,
-        private readonly ProcNode $node,
+        private readonly TaskNode $node,
         private readonly array $outgoing,
         private readonly string $operative,
-        public readonly ?string $entityKey,
+        public readonly ?string $cellKey,
         private readonly int $changeSeq,
         private readonly int $now,
         public readonly bool $replay,
@@ -59,15 +59,15 @@ final class Ctx
         return $this->now;
     }
 
-    /** A replay-stable identifier, distinct per invocation within the entity. */
+    /** A replay-stable identifier, distinct per invocation within the cell. */
     public function stableId(): string
     {
         // Lazily, because most invocations never ask and the identity is the
         // one part of the derivation that costs an allocation.
-        $this->identity ??= Identity::entity(
+        $this->identity ??= Identity::cell(
             $this->operative,
             $this->node->name,
-            (string) $this->entityKey,
+            (string) $this->cellKey,
         );
 
         return Identity::stableId($this->identity, $this->changeSeq, $this->ordinal++);
@@ -95,7 +95,7 @@ final class Ctx
     }
 
     /**
-     * Emit one output value on the procedure's declared output.
+     * Emit one output value on the tasklet's declared output.
      *
      * @param array<string, string>|null $metadata
      */
@@ -184,7 +184,7 @@ final class Ctx
     }
 
     /**
-     * End this procedure's workflow instance with `$result` once the current
+     * End this tasklet's workflow instance with `$result` once the current
      * iteration commits, instead of waiting for its next input. The rest of
      * the iteration still runs, and a later call replaces an earlier one. The
      * result travels as a sink naming no codec sends a value: a string as it
@@ -269,7 +269,7 @@ final class Ctx
                 $this->outputs[] = [
                     'target' => 'edge',
                     'channel' => $channel->index,
-                    'consumer' => $first->procedure,
+                    'consumer' => $first->tasklet,
                     'plugin_channel' => null,
                     'key' => null,
                     'event_time' => null,
@@ -304,7 +304,7 @@ final class Ctx
         ?string $key,
         ?array $metadata,
     ): array {
-        $definition = $this->spec->procedures[$edge->procedure]->definition;
+        $definition = $this->spec->tasklets[$edge->tasklet]->definition;
         $outputs = [];
 
         // Producer-side, in declaration order: the core routes on `(edge, key)`
@@ -313,11 +313,11 @@ final class Ctx
             $outputs[] = [
                 'target' => 'edge',
                 'channel' => $channel->index,
-                'consumer' => $edge->procedure,
+                'consumer' => $edge->tasklet,
                 'plugin_channel' => null,
                 'key' => $key
                     ?? ($edge->keyBy !== null ? (string) ($edge->keyBy)($transformed) : null)
-                    ?? $this->entityKey,
+                    ?? $this->cellKey,
                 'event_time' => $definition->declares('eventTime')
                     ? $definition->eventTimeOf($transformed)
                     : null,
@@ -338,10 +338,10 @@ final class Ctx
      */
     private function pluginOutput(ChannelSpec $channel, mixed $value, ?string $key, ?array $metadata): array
     {
-        $resolved = $key ?? $this->entityKey;
+        $resolved = $key ?? $this->cellKey;
         if ($channel->keyed && $resolved === null) {
             throw new EmitException(sprintf(
-                '%s: emits on keyed channel `%s` with no key, and has no entity key of its '
+                '%s: emits on keyed channel `%s` with no key, and has no cell key of its '
                 . 'own to fall back on; pass a key on the emit',
                 $this->node->name,
                 $channel->name,
@@ -364,8 +364,8 @@ final class Ctx
     }
 
     /**
-     * The inter-procedure frame's bytes: the class codec, always. The
-     * consuming procedure decodes with it, so a sink's serializer here would
+     * The inter-tasklet frame's bytes: the class codec, always. The
+     * consuming tasklet decodes with it, so a sink's serializer here would
      * hand it bytes it cannot read.
      */
     private function edgePayload(ChannelSpec $channel, mixed $value): string
@@ -393,11 +393,11 @@ final class Ctx
     private function stampIdentity(array &$pairs, ChannelSpec $channel, ?string $key): void
     {
         if ($channel->keyed && !$this->spec->effectivelyOnce) {
-            $pairs['flz.entity'] = sprintf(
+            $pairs['flz.cell'] = sprintf(
                 '%s/%s/%s',
                 $this->operative,
                 $this->node->name,
-                (string) $this->entityKey,
+                (string) $this->cellKey,
             );
             $pairs['flz.seq'] = $this->changeSeq . '.' . $this->emitOrdinal;
             $pairs['flz.key'] = (string) $key;
@@ -420,7 +420,7 @@ final class Ctx
             if (str_starts_with((string) $key, self::RESERVED_PREFIX)) {
                 throw new EmitException(sprintf(
                     '%s: metadata key `%s` is inside the reserved `%s` namespace, which the '
-                    . 'runtime stamps itself (entity identity, sequence, key and offset); choose '
+                    . 'runtime stamps itself (cell identity, sequence, key and offset); choose '
                     . 'a key outside it',
                     $this->node->name,
                     $key,

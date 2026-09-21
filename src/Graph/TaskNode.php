@@ -6,8 +6,8 @@ namespace Flezha\Graph;
 
 use Flezha\Definition;
 
-/** A procedure as the graph holds it, with its position in the declaration. */
-final class ProcNode
+/** A tasklet as the graph holds it, with its position in the declaration. */
+final class TaskNode
 {
     /** @param class-string $class */
     public function __construct(

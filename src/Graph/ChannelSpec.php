@@ -17,7 +17,7 @@ final class ChannelSpec
         public readonly int $index,
         /** Rewritten by a `named(...)` override on an edge off this channel. */
         public string $name,
-        /** `entry` | `inter_proc` | `plugin` */
+        /** `entry` | `inter_task` | `plugin` */
         public readonly string $kind,
         public ?int $producer = null,
         /**
@@ -51,16 +51,16 @@ final class ChannelSpec
         public ?string $sink = null,
         /**
          * The entry payload's decoder, which `input` always sets. A channel
-         * between procedures has none: its payload is the class codec's.
+         * between tasklets has none: its payload is the class codec's.
          *
          * @var (callable(string):mixed)|null
          */
         public $decode = null,
         /**
          * The plugin sink's payload encoder, which `sink` always sets. It
-         * belongs to the sink frame alone: an inter-procedure frame is decoded
+         * belongs to the sink frame alone: an inter-tasklet frame is decoded
          * with the class codec, so encoding one with this hands the consuming
-         * procedure bytes it cannot read.
+         * tasklet bytes it cannot read.
          *
          * @var (callable(mixed):string)|null
          */

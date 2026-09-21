@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 use PHPUnit\Framework\TestCase;
 
@@ -166,7 +166,7 @@ final class BindingTest extends TestCase
         $verdict = null;
 
         try {
-            $core->checkClass('{"factory_id":"x","channels":[],"procedures":[]}', $verdict);
+            $core->checkClass('{"factory_id":"x","channels":[],"tasklets":[]}', $verdict);
             self::fail('the core refuses a record it cannot honour');
         } catch (FlezhaException $e) {
             self::assertStringContainsString('topology rejected [', $e->getMessage());
@@ -254,8 +254,8 @@ final class BindingTest extends TestCase
     }
 }
 
-#[Proc(name: 'checkpoint_procedure')]
-final class CheckpointProcedure extends Procedure
+#[Task(name: 'checkpoint_tasklet')]
+final class CheckpointTasklet extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -270,7 +270,7 @@ final class CheckpointOutputsOnly extends StreamOperative
     {
         $c->effectivelyOnce();
         $c->outputsAtCheckpoint(1500);
-        $c->input('input')->into(CheckpointProcedure::class)->keyed()->sink('sink');
+        $c->input('input')->into(CheckpointTasklet::class)->keyed()->sink('sink');
     }
 }
 
@@ -281,6 +281,6 @@ final class CheckpointAckOnly extends StreamOperative
     {
         $c->effectivelyOnce();
         $c->checkpointAck();
-        $c->input('input')->into(CheckpointProcedure::class)->keyed()->sink('sink');
+        $c->input('input')->into(CheckpointTasklet::class)->keyed()->sink('sink');
     }
 }

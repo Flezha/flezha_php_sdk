@@ -13,14 +13,14 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\SpawnException;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
 
@@ -28,7 +28,7 @@ use Flezha\WorkflowOperative;
 //
 // chat_loop_workflow is the durable-loop + suspension shape
 // (workflow_loop.rs:8). One iteration per inbox item: TURN commits the turn to
-// Entity state, so a resumed iteration is visible in the WAL, and REPLY emits
+// Cell state, so a resumed iteration is visible in the WAL, and REPLY emits
 // the answer to the sink. Between turns the loop finds an empty inbox at a
 // committed boundary and PARKS — the instance is evicted and rehydrated by the
 // next message. The turn whose payload is the crash turn parks while the
@@ -39,17 +39,17 @@ use Flezha\WorkflowOperative;
 // passes on like any turn, and completes the instance with the number of turns
 // recorded, as decimal text.
 //
-// stateless_loop_workflow is the same loop MINUS its stateful first procedure:
-// ChatReply alone holds no per-Entity state, so nothing writes an Entity WAL
-// and the instance's proc-journal reaches the driver only if it rides the bind
+// stateless_loop_workflow is the same loop MINUS its stateful first tasklet:
+// ChatReply alone holds no per-Cell state, so nothing writes a Cell WAL
+// and the instance's task-journal reaches the driver only if it rides the bind
 // itself.
 //
-// chat_rewind_workflow is the loop whose replying procedure can be undone. The
-// undo handle lives in Entity state, because a rewind's compensation is rebuilt
+// chat_rewind_workflow is the loop whose replying tasklet can be undone. The
+// undo handle lives in Cell state, because a rewind's compensation is rebuilt
 // from the journal and is handed NO retained outputs, so the hook reads the
 // last thing it said, retracts it and pops it.
 
-#[Proc(name: 'chat_turn')]
+#[Task(name: 'chat_turn')]
 final class ChatTurn extends DurableStep
 {
     public const CRASH_TURN = 'mid-crash';
@@ -81,8 +81,8 @@ final class ChatTurn extends DurableStep
     }
 }
 
-#[Proc(name: 'chat_reply')]
-final class ChatReply extends Procedure
+#[Task(name: 'chat_reply')]
+final class ChatReply extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -92,10 +92,10 @@ final class ChatReply extends Procedure
     }
 }
 
-#[Proc(name: 'chat_reply_undoable')]
-final class ChatReplyUndoable extends Procedure
+#[Task(name: 'chat_reply_undoable')]
+final class ChatReplyUndoable extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['said' => []];
     }
@@ -174,10 +174,10 @@ final class ChatRewindWorkflow extends WorkflowOperative
 //
 // On each input it spawns stateless_loop_workflow once with no id and once under
 // the input as its id, and prints both results, because a handle's answer is
-// observable nowhere but in the procedure that read it.
+// observable nowhere but in the tasklet that read it.
 
-#[Proc(name: 'spawn_requester')]
-final class SpawnRequester extends Procedure
+#[Task(name: 'spawn_requester')]
+final class SpawnRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -214,86 +214,86 @@ final class SpawnRequesterOperative extends StreamOperative
 // What `mix bench.workflow --scenario chain` drives (workflow_loop.rs:232): K
 // durable pass-through steps in a line, the payload unchanged, so the sink
 // receives the seed input and the bench reads its own seq and send timestamp
-// back. Each chain position needs its own procedure and a PHP procedure is a
+// back. Each chain position needs its own tasklet and a PHP tasklet is a
 // class, so the sixteen are written out; the edge names follow the reference,
-// which spells them from the step TYPE rather than from the procedure name.
+// which spells them from the step TYPE rather than from the tasklet name.
 
-#[Proc(name: 'bench_s0')]
+#[Task(name: 'bench_s0')]
 final class BenchS0 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s1')]
+#[Task(name: 'bench_s1')]
 final class BenchS1 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s2')]
+#[Task(name: 'bench_s2')]
 final class BenchS2 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s3')]
+#[Task(name: 'bench_s3')]
 final class BenchS3 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s4')]
+#[Task(name: 'bench_s4')]
 final class BenchS4 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s5')]
+#[Task(name: 'bench_s5')]
 final class BenchS5 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s6')]
+#[Task(name: 'bench_s6')]
 final class BenchS6 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s7')]
+#[Task(name: 'bench_s7')]
 final class BenchS7 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s8')]
+#[Task(name: 'bench_s8')]
 final class BenchS8 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s9')]
+#[Task(name: 'bench_s9')]
 final class BenchS9 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s10')]
+#[Task(name: 'bench_s10')]
 final class BenchS10 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s11')]
+#[Task(name: 'bench_s11')]
 final class BenchS11 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s12')]
+#[Task(name: 'bench_s12')]
 final class BenchS12 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s13')]
+#[Task(name: 'bench_s13')]
 final class BenchS13 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s14')]
+#[Task(name: 'bench_s14')]
 final class BenchS14 extends DurableStep
 {
 }
 
-#[Proc(name: 'bench_s15')]
+#[Task(name: 'bench_s15')]
 final class BenchS15 extends DurableStep
 {
 }
@@ -352,10 +352,10 @@ final class BenchChainOptout4 extends BenchChain
 // snapshots the same few bytes at every iteration, and a wake deadline for the
 // timer-wake measurements.
 
-#[Proc(name: 'bench_turn')]
-final class BenchTurn extends Procedure
+#[Task(name: 'bench_turn')]
+final class BenchTurn extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['turns' => 0, 'last' => ''];
     }

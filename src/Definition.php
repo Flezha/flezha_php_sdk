@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
 use Flezha\Codec\ValueCodec;
@@ -18,20 +18,20 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /**
- * What a declared procedure resolves to: the scalar declarations, and the one
+ * What a declared tasklet resolves to: the scalar declarations, and the one
  * instance whose methods the dispatcher calls.
  *
- * Procedures hold no state of their own — an entity's state lives in the
+ * Tasklets hold no state of their own — a cell's state lives in the
  * registry and is handed to each invocation — so one instance per class is
  * enough and the dispatcher never allocates per activation.
  *
- * Which optional hooks a procedure declares is read from the methods it
+ * Which optional hooks a tasklet declares is read from the methods it
  * overrides, not from a second list: `applyChange` overridden means it folds
  * changes, `onTimer` overridden means it may register timers. A declaration
  * and its implementation therefore cannot disagree.
  *
- * The class is a `Procedure` subclass, or a §5 short form: an operative class
- * whose own `run` and hooks are its one procedure, named its factory id.
+ * The class is a `Tasklet` subclass, or a §5 short form: an operative class
+ * whose own `run` and hooks are its one tasklet, named its factory id.
  */
 final class Definition
 {
@@ -39,15 +39,15 @@ final class Definition
     private static array $cache = [];
 
     public readonly string $name;
-    public readonly Proc $decl;
-    public readonly Procedure|Operative $instance;
+    public readonly Task $decl;
+    public readonly Tasklet|Operative $instance;
     public readonly ?ValueCodec $stateCodec;
     public readonly ?ValueCodec $changeCodec;
 
     /** @var array<string, bool> */
     private readonly array $overrides;
 
-    /** @param class-string<Procedure>|class-string<Operative> $class */
+    /** @param class-string<Tasklet>|class-string<Operative> $class */
     private function __construct(public readonly string $class)
     {
         $reflection = new ReflectionClass($class);
@@ -74,9 +74,9 @@ final class Definition
 
     /**
      * The resolved declaration, built once per class: it instantiates the
-     * procedure, and the dispatcher reads it on the hot path.
+     * tasklet, and the dispatcher reads it on the hot path.
      *
-     * @param class-string<Procedure>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operative> $class
      */
     public static function of(string $class): self
     {
@@ -84,28 +84,28 @@ final class Definition
     }
 
     /** `single` | `static` | `dynamic`, as the core's declaration spells it. */
-    public function entityMode(): string
+    public function cellMode(): string
     {
-        if ($this->decl->entityKeys !== null) {
+        if ($this->decl->cellKeys !== null) {
             return 'static';
         }
 
-        return $this->decl->dynamicEntities ? 'dynamic' : 'single';
+        return $this->decl->dynamicCells ? 'dynamic' : 'single';
     }
 
-    /** Whether the procedure overrides one of the base class's hooks. */
+    /** Whether the tasklet overrides one of the base class's hooks. */
     public function declares(string $method): bool
     {
         return $this->overrides[$method] ?? false;
     }
 
-    public function initialState(?string $entityKey): mixed
+    public function initialState(?string $cellKey): mixed
     {
-        return $this->declares('state') ? $this->instance->state($entityKey) : null;
+        return $this->declares('state') ? $this->instance->state($cellKey) : null;
     }
 
     /**
-     * Encode a durable State or Change: the type this procedure declared, or
+     * Encode a durable State or Change: the type this tasklet declared, or
      * the JSON default.
      *
      * The choice lives here, once, because it is asked at four places — a
@@ -142,9 +142,9 @@ final class Definition
     }
 
     /** @return list<string> */
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
-        return array_map(strval(...), $this->instance->entitiesFor($input));
+        return array_map(strval(...), $this->instance->cellsFor($input));
     }
 
     public function eventTimeOf(mixed $input): int
@@ -157,20 +157,20 @@ final class Definition
      * hierarchy.
      *
      * PHP does not inherit attributes, and taking that literally is a trap:
-     * `class Sub extends Base {}` would silently come out single-entity with
+     * `class Sub extends Base {}` would silently come out single-cell with
      * the default mailbox capacity and schema version 1, and nothing would
      * report the difference until the topology was wrong at runtime.
      *
      * Field by field rather than nearest-attribute-wins, because the common
      * case is a subclass that renames the node and changes nothing else —
-     * `#[Proc(name: 'stress_b')]` on a child of a static-keyed parent — and
+     * `#[Task(name: 'stress_b')]` on a child of a static-keyed parent — and
      * whole-attribute inheritance would silently drop the key set exactly
      * there. The one field never inherited is `name`: a node identity is per
-     * class, and an inherited one would make two procedures claim one node.
+     * class, and an inherited one would make two tasklets claim one node.
      *
-     * @param ReflectionClass<Procedure>|ReflectionClass<Operative> $reflection
+     * @param ReflectionClass<Tasklet>|ReflectionClass<Operative> $reflection
      */
-    private static function declarationOf(ReflectionClass $reflection): Proc
+    private static function declarationOf(ReflectionClass $reflection): Task
     {
         $chain = [];
         for ($class = $reflection; $class !== false; $class = $class->getParentClass()) {
@@ -180,7 +180,7 @@ final class Definition
         $arguments = [];
         // Ancestor first, so a derived class's own argument wins.
         foreach (array_reverse($chain) as $class) {
-            $attributes = $class->getAttributes(Proc::class);
+            $attributes = $class->getAttributes(Task::class);
             if ($attributes === []) {
                 continue;
             }
@@ -193,7 +193,7 @@ final class Definition
         foreach (['kind', 'sink', 'input', 'codec'] as $operativeArgument) {
             if (array_key_exists($operativeArgument, $arguments)) {
                 throw new DeclarationException($reflection->getName(), $arguments['name'] ?? null, sprintf(
-                    '#[Proc] takes no `%s`: a procedure is not an operative. A one-procedure operative '
+                    '#[Task] takes no `%s`: a tasklet is not an operative. A one-tasklet operative '
                     . 'is a class extending StreamOperative or WorkflowOperative that defines `run`, '
                     . 'with `sink`, `input` and `codec` on its #[Operative]',
                     $operativeArgument,
@@ -201,19 +201,19 @@ final class Definition
             }
         }
 
-        return new Proc(...$arguments);
+        return new Task(...$arguments);
     }
 
     /**
      * One attribute's written arguments, keyed by parameter name — positional
      * ones included, so an author who writes them that way is merged the same.
      *
-     * @param ReflectionAttribute<Proc> $attribute
+     * @param ReflectionAttribute<Task> $attribute
      * @return array<string, mixed>
      */
     private static function namedArguments(ReflectionAttribute $attribute): array
     {
-        $parameters = (new ReflectionClass(Proc::class))->getConstructor()?->getParameters() ?? [];
+        $parameters = (new ReflectionClass(Task::class))->getConstructor()?->getParameters() ?? [];
         $named = [];
         foreach ($attribute->getArguments() as $key => $value) {
             $name = is_int($key) ? ($parameters[$key]?->getName() ?? (string) $key) : $key;
@@ -224,23 +224,23 @@ final class Definition
     }
 
     /**
-     * Which of the procedure hooks this class actually defines: the methods
-     * `Procedure` gives a default. Reflection once, at registration, so the
+     * Which of the tasklet hooks this class actually defines: the methods
+     * `Tasklet` gives a default. Reflection once, at registration, so the
      * dispatcher asks an array.
      *
-     * PHP holds a `Procedure` subclass's hooks to `Procedure`'s signatures
+     * PHP holds a `Tasklet` subclass's hooks to `Tasklet`'s signatures
      * when it loads the class. A short form declares no hook to PHP, so each
      * one it defines is held to them here: an `applyChange` taking the state
      * by value would otherwise fold nothing.
      *
-     * @param class-string<Procedure>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operative> $class
      * @return array<string, bool>
      */
     private static function hooksOf(string $class, string $name): array
     {
-        $checkedByPhp = is_subclass_of($class, Procedure::class);
+        $checkedByPhp = is_subclass_of($class, Tasklet::class);
         $overrides = [];
-        foreach ((new ReflectionClass(Procedure::class))->getMethods() as $hook) {
+        foreach ((new ReflectionClass(Tasklet::class))->getMethods() as $hook) {
             if ($hook->isAbstract()) {
                 continue;
             }
@@ -250,7 +250,7 @@ final class Definition
                 : null;
             if ($defect !== null) {
                 throw new DeclarationException($class, $name, sprintf(
-                    '`%s` must be compatible with Procedure::%s, as a procedure\'s is: %s',
+                    '`%s` must be compatible with Tasklet::%s, as a tasklet\'s is: %s',
                     $hook->name,
                     $hook->name,
                     $defect,
@@ -360,7 +360,7 @@ final class Definition
 
     /**
      * Whether `$class` defines `$method` rather than taking the SDK base's
-     * default: how a procedure's hooks, a short form's `run` and an
+     * default: how a tasklet's hooks, a short form's `run` and an
      * operative's `channels()` are all read.
      *
      * @param class-string $class
@@ -373,18 +373,18 @@ final class Definition
         }
         $declaring = (new ReflectionMethod($class, $method))->getDeclaringClass()->getName();
 
-        return $declaring !== Procedure::class && $declaring !== Operative::class;
+        return $declaring !== Tasklet::class && $declaring !== Operative::class;
     }
 
     /**
      * The node identity: the written name or the class's own, and a short
-     * form's factory id verbatim, because a procedure's name is part of every
-     * entity's durable path and a short form grown into its full form must
+     * form's factory id verbatim, because a tasklet's name is part of every
+     * cell's durable path and a short form grown into its full form must
      * keep it.
      *
-     * @param ReflectionClass<Procedure>|ReflectionClass<Operative> $reflection
+     * @param ReflectionClass<Tasklet>|ReflectionClass<Operative> $reflection
      */
-    private static function nameOf(ReflectionClass $reflection, Proc $decl): string
+    private static function nameOf(ReflectionClass $reflection, Task $decl): string
     {
         $class = $reflection->getName();
         if (!$reflection->isSubclassOf(Operative::class)) {
@@ -394,7 +394,7 @@ final class Definition
             throw new DeclarationException(
                 $class,
                 null,
-                'is an operative with no `run`, so it is no procedure; wire the procedures its '
+                'is an operative with no `run`, so it is no tasklet; wire the tasklets its '
                 . '`channels()` declares',
             );
         }
@@ -402,7 +402,7 @@ final class Definition
             throw new DeclarationException(
                 $class,
                 $decl->name,
-                'a short form\'s procedure is named after its factory id; drop `name` from its #[Proc]',
+                'a short form\'s tasklet is named after its factory id; drop `name` from its #[Task]',
             );
         }
 
@@ -415,18 +415,18 @@ final class Definition
      */
     private function refuseContradictions(): void
     {
-        if ($this->decl->entityKeys !== null && $this->decl->dynamicEntities) {
+        if ($this->decl->cellKeys !== null && $this->decl->dynamicCells) {
             throw new DeclarationException(
                 $this->class,
                 $this->name,
-                'declares both a static key set and dynamic entities; the two modes are exclusive'
+                'declares both a static key set and dynamic cells; the two modes are exclusive'
             );
         }
-        if ($this->decl->entityKeys === []) {
+        if ($this->decl->cellKeys === []) {
             throw new DeclarationException(
                 $this->class,
                 $this->name,
-                'declares an empty static key set; a static procedure names its entities'
+                'declares an empty static key set; a static tasklet names its cells'
             );
         }
         // State without a fold is legitimate: a value seeded at start and read

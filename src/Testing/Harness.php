@@ -16,18 +16,18 @@ use Flezha\Dispatch\Restore;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
-use Flezha\Graph\ProcNode;
+use Flezha\Graph\TaskNode;
 use Flezha\Operative;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\SpawnBridge;
 use Flezha\Timer;
 
 /**
- * Driving one procedure without a controller, for the author's own tests.
+ * Driving one tasklet without a controller, for the author's own tests.
  *
  * Not a second implementation of the dispatcher: it drives
  * {@see Dispatcher::invoke()} — the function every activation kind that
- * reaches a handler goes through — over a one-procedure `RegisteredClass`, and
+ * reaches a handler goes through — over a one-tasklet `RegisteredClass`, and
  * {@see assertReplayEquals()} folds through {@see Restore::fold()}, the
  * function a real restore calls. So what it proves is what the runner does,
  * rather than something that agrees with it.
@@ -38,7 +38,7 @@ final class Harness implements SpawnBridge
     private const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
 
     private readonly Definition $definition;
-    private readonly ProcNode $node;
+    private readonly TaskNode $node;
     private readonly RegisteredClass $registered;
 
     /** @var list<string> the encoded change log, as the WAL would hold it */
@@ -51,22 +51,22 @@ final class Harness implements SpawnBridge
 
     private int $spawnCount = 0;
 
-    /** @param class-string<Procedure>|class-string<Operative> $procedureClass */
+    /** @param class-string<Tasklet>|class-string<Operative> $taskletClass */
     public function __construct(
-        string $procedureClass,
-        private readonly ?string $entityKey = null,
+        string $taskletClass,
+        private readonly ?string $cellKey = null,
         private readonly string $operative = 'harness',
     ) {
-        $this->definition = Definition::of($procedureClass);
+        $this->definition = Definition::of($taskletClass);
 
         // The real channel builder, not a hand-written spec: one entry channel
-        // into the procedure, and one plugin sink so `ctx->emit` has somewhere
-        // to go. A procedure under test emits to be observed, not to be routed,
+        // into the tasklet, and one plugin sink so `ctx->emit` has somewhere
+        // to go. A tasklet under test emits to be observed, not to be routed,
         // and the sink names JSON so `outputs` reports exactly the value a
         // handler emitted.
         $builder = new Builder('<harness>');
-        $builder->input('in')->into($procedureClass)->sink('out', codec: ChannelCodec::Json);
-        $this->node = $builder->procedures[0];
+        $builder->input('in')->into($taskletClass)->sink('out', codec: ChannelCodec::Json);
+        $this->node = $builder->tasklets[0];
 
         $spec = new ClassSpec(
             factoryId: '<harness>',
@@ -81,22 +81,22 @@ final class Harness implements SpawnBridge
             beyondWindowPolicy: BeyondWindow::ProcessAsArrival,
             compactAfterBytes: null,
             syncDurability: false,
-            procedures: $builder->procedures,
+            tasklets: $builder->tasklets,
             channels: $builder->channels,
         );
 
-        // The dispatcher's own entity store, so the state this harness reports
+        // The dispatcher's own cell store, so the state this harness reports
         // is the state a runner would hold.
         $this->registered = new RegisteredClass($spec);
     }
 
-    /** The entity's live state, as the dispatcher left it. */
+    /** The cell's live state, as the dispatcher left it. */
     public function state(): mixed
     {
-        return $this->registered->stateOf($this->node, $this->entityKey);
+        return $this->registered->stateOf($this->node, $this->cellKey);
     }
 
-    /** Run the procedure against one input. */
+    /** Run the tasklet against one input. */
     public function feed(mixed $input, int $now = 0, bool $replay = false): Outcome
     {
         return $this->drive(
@@ -106,7 +106,7 @@ final class Harness implements SpawnBridge
         );
     }
 
-    /** Fire a per-entity timer. `now` IS the scheduled time, as it is live. */
+    /** Fire a per-cell timer. `now` IS the scheduled time, as it is live. */
     public function fireTimer(string $kind, int $scheduledAt): Outcome
     {
         return $this->drive($scheduledAt, false, function (Ctx $ctx) use ($kind, $scheduledAt): mixed {
@@ -142,7 +142,7 @@ final class Harness implements SpawnBridge
      */
     public function restore(?string $snapshot = null, array $changes = []): void
     {
-        $this->registered->setState($this->node, $this->entityKey, Restore::fold(
+        $this->registered->setState($this->node, $this->cellKey, Restore::fold(
             $this->definition,
             [
                 'snapshot' => $snapshot === null ? null : ['bytes' => $snapshot, 'from_version' => null],
@@ -151,7 +151,7 @@ final class Harness implements SpawnBridge
                     $changes,
                 ),
             ],
-            $this->entityKey,
+            $this->cellKey,
             $this->definition->name,
         ));
     }
@@ -175,7 +175,7 @@ final class Harness implements SpawnBridge
                 static fn (string $bytes): array => ['bytes' => $bytes, 'from_version' => null],
                 $this->log,
             )],
-            $this->entityKey,
+            $this->cellKey,
             $this->definition->name,
         );
 
@@ -220,14 +220,14 @@ final class Harness implements SpawnBridge
     }
 
     /**
-     * Drive `procedure_class` over `$inputs` and assert the replay agrees.
+     * Drive `tasklet_class` over `$inputs` and assert the replay agrees.
      *
-     * @param class-string<Procedure>|class-string<Operative> $procedureClass
+     * @param class-string<Tasklet>|class-string<Operative> $taskletClass
      * @param list<mixed>                                     $inputs
      */
-    public static function replayEquals(string $procedureClass, array $inputs, ?string $entityKey = null): bool
+    public static function replayEquals(string $taskletClass, array $inputs, ?string $cellKey = null): bool
     {
-        $harness = new self($procedureClass, $entityKey);
+        $harness = new self($taskletClass, $cellKey);
         foreach ($inputs as $input) {
             $harness->feed($input);
         }
@@ -243,7 +243,7 @@ final class Harness implements SpawnBridge
                 [
                     'token' => 0,
                     'operative' => $this->operative,
-                    'entity_key' => $this->entityKey,
+                    'cell_key' => $this->cellKey,
                     'change_seq' => $this->changeSeq,
                 ],
                 $this->registered,

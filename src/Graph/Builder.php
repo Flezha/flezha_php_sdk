@@ -11,7 +11,7 @@ use Flezha\Definition;
 use Flezha\Exception\DeclarationException;
 use Flezha\Operative;
 use Flezha\Overflow;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 
 /**
  * The fluent channel builder an operative's `channels()` receives.
@@ -23,8 +23,8 @@ use Flezha\Procedure;
  */
 final class Builder
 {
-    /** @var list<ProcNode> */
-    public array $procedures = [];
+    /** @var list<TaskNode> */
+    public array $tasklets = [];
     /** @var list<ChannelSpec> */
     public array $channels = [];
     /**
@@ -36,7 +36,7 @@ final class Builder
      * without the arms colliding; `superseded` marks the prefix a later link
      * built on, so only a tip reaches the record.
      *
-     * @var list<array{source: array{string, ChannelSpec|ProcNode}, links: list<array<string, mixed>>, superseded: bool, edge: ?ConsumerEdge}>
+     * @var list<array{source: array{string, ChannelSpec|TaskNode}, links: list<array<string, mixed>>, superseded: bool, edge: ?ConsumerEdge}>
      */
     private array $chains = [];
 
@@ -147,7 +147,7 @@ final class Builder
         return new Edge($this, ['entry', $channel], []);
     }
 
-    /** Merge several channels into one procedure; see {@see Merge}. */
+    /** Merge several channels into one tasklet; see {@see Merge}. */
     public function merge(): Merge
     {
         return new Merge($this);
@@ -174,7 +174,7 @@ final class Builder
      * price is one tick of latency per key, and a key with no traffic receives
      * nothing. A document whose JSON is identical to the retained one is inert.
      *
-     * The node is `route_latest` like any procedure node, so a second router in
+     * The node is `route_latest` like any tasklet node, so a second router in
      * one operative needs {@see routeLatestNamed()}.
      *
      * @param callable(mixed):string $keyFn
@@ -193,7 +193,7 @@ final class Builder
     /**
      * The expansion both spellings share: the key function is a transform on
      * the traffic edge, so the router holds keys rather than traffic values,
-     * and the two edges are one merge into the packaged procedure.
+     * and the two edges are one merge into the packaged tasklet.
      */
     private function wireRouteLatest(Edge $documents, Edge $traffic, callable $keyFn, ?string $nodeName): Edge
     {
@@ -216,18 +216,18 @@ final class Builder
     }
 
     /**
-     * The node for a procedure. Two unnamed mentions of one procedure are one
+     * The node for a tasklet. Two unnamed mentions of one tasklet are one
      * node — the naming convention every SDK mirrors — so a diamond that fans
      * out and back in has one instance, not two.
      *
-     * @param class-string<Procedure>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operative> $class
      */
-    public function nodeFor(string $class, ?string $name = null): ProcNode
+    public function nodeFor(string $class, ?string $name = null): TaskNode
     {
         $definition = Definition::of($class);
         $identity = $name ?? $definition->name;
 
-        foreach ($this->procedures as $node) {
+        foreach ($this->tasklets as $node) {
             if ($node->name !== $identity) {
                 continue;
             }
@@ -240,14 +240,14 @@ final class Builder
             throw new DeclarationException(
                 $this->factoryId,
                 $identity,
-                'two different procedures claim this node identity; name one of them on the '
+                'two different tasklets claim this node identity; name one of them on the '
                 . '`into(...)` so each node has its own',
                 ['NodeIdentityCollision']
             );
         }
 
-        $node = new ProcNode(count($this->procedures), $identity, $class, $definition);
-        $this->procedures[] = $node;
+        $node = new TaskNode(count($this->tasklets), $identity, $class, $definition);
+        $this->tasklets[] = $node;
 
         return $node;
     }
@@ -261,7 +261,7 @@ final class Builder
      * one channel with two consumers rather than two channels claiming one
      * producer.
      */
-    public function outputChannelFor(ProcNode $node): ChannelSpec
+    public function outputChannelFor(TaskNode $node): ChannelSpec
     {
         if ($node->output !== null) {
             return $node->output;
@@ -270,7 +270,7 @@ final class Builder
         $channel = new ChannelSpec(
             index: count($this->channels),
             name: $node->name,
-            kind: 'inter_proc',
+            kind: 'inter_task',
             producer: $node->index,
         );
         $this->channels[] = $channel;
@@ -290,7 +290,7 @@ final class Builder
      * `$edge` is the consumer an `into` or a merge source closes on, held aside
      * for the core to name back on the edge it derives from this chain.
      *
-     * @param array{string, ChannelSpec|ProcNode} $source
+     * @param array{string, ChannelSpec|TaskNode} $source
      * @param array<string, mixed>                $link
      */
     public function linkChain(array $source, ?int $base, array $link, ?ConsumerEdge $edge = null): int
@@ -335,12 +335,12 @@ final class Builder
      * The channel an edge's values leave on: the entry's own, or the producing
      * node's, created on first use.
      *
-     * @param array{string, ChannelSpec|ProcNode} $source
+     * @param array{string, ChannelSpec|TaskNode} $source
      */
     private function channelOf(array $source): ChannelSpec
     {
         $from = $source[1];
 
-        return $from instanceof ProcNode ? $this->outputChannelFor($from) : $from;
+        return $from instanceof TaskNode ? $this->outputChannelFor($from) : $from;
     }
 }

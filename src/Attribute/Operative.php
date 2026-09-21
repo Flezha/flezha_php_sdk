@@ -9,12 +9,12 @@ use Flezha\ChannelCodec;
 
 /**
  * The factory id an operative class registers under, and whether its change
- * bytes reach the per-entity WAL.
+ * bytes reach the per-cell WAL.
  *
- * On a §5 short form, a class that defines its one procedure's `run` instead
- * of `channels()`, it also names the channels that procedure is wired between:
+ * On a §5 short form, a class that defines its one tasklet's `run` instead
+ * of `channels()`, it also names the channels that tasklet is wired between:
  * the entry channel (`input` when none is written) and its `codec`, and the
- * plugin `sink` the procedure's output reaches, if any.
+ * plugin `sink` the tasklet's output reaches, if any.
  *
  * Deliberately not inherited: two operatives cannot share a factory id, and a
  * subclass silently taking its parent's would be refused by the core at

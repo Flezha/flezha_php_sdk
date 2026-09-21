@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Twins of the reference's crash-resume workflow fixtures — the commit chain,
  * the saga, the transactional outbox, the branch, the diamond and the retry
- * ladder, plus the run-once echo — under the same factory ids, procedure
+ * ladder, plus the run-once echo — under the same factory ids, tasklet
  * names, channel names and output bytes as
  * test/apps/rust_runner/src/workflow.rs. Loaded after fixtures.php, whose
  * `Wire` codecs these share; fixtures_workflow_loop.php carries the loop and
@@ -14,7 +14,7 @@ declare(strict_types=1);
  * Entry payloads and plugin frames are UTF-8 text on the wire, as in the
  * reference: an entry names the text codec, and a bare `sink(name)` sends a
  * string as it stands, so only a sink that prefixes its value declares an
- * encoder. An inter-procedure hop between two PHP procedures carries JSON, and
+ * encoder. An inter-tasklet hop between two PHP tasklets carries JSON, and
  * the core derives that channel's journal codec from the channel's kind, so no
  * fixture declares one.
  *
@@ -25,13 +25,13 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Graph\Builder;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\WorkflowOperative;
 
 // -- the release gate --------------------------------------------------------
@@ -98,11 +98,11 @@ final class WorkflowGate
  *
  * `release()` and {@see UndoingStep}'s compensation are the two axes the macro
  * itself parameterises; `changeValue()` and `gated()` are the two the reference
- * varies by writing the procedure out by hand instead.
+ * varies by writing the tasklet out by hand instead.
  */
-abstract class DurableStep extends Procedure
+abstract class DurableStep extends Tasklet
 {
-    public function state(?string $entityKey): mixed
+    public function state(?string $cellKey): mixed
     {
         return ['items' => []];
     }
@@ -191,7 +191,7 @@ abstract class UndoingStep extends DurableStep
 }
 
 /** A terminal step that always fails, which is how a saga is made to unwind. */
-abstract class FailingStep extends Procedure
+abstract class FailingStep extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -201,11 +201,11 @@ abstract class FailingStep extends Procedure
 
 // -- echo_workflow -----------------------------------------------------------
 //
-// The run-once shape (workflow.rs:14): one procedure emits its start values back
+// The run-once shape (workflow.rs:14): one tasklet emits its start values back
 // once and the pass ends, so the controller deregisters the instance.
 
-#[Proc(name: 'echo_args')]
-final class EchoArgs extends Procedure
+#[Task(name: 'echo_args')]
+final class EchoArgs extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -226,19 +226,19 @@ final class EchoWorkflow extends WorkflowOperative
 
 // -- commit_block_workflow / sync_durable_workflow ---------------------------
 //
-// Proc A commits durable state, proc B parks until the resumed runner sets the
+// Task A commits durable state, task B parks until the resumed runner sets the
 // release variable — so a SIGKILL lands with A's state already on the WAL and B
 // never finished. `sync_durable_workflow` is the same chain declaring
 // SYNCHRONOUS remote durability, which is what lets the kill-the-disk drill
 // destroy the state directory and still resume with A committed.
 
-#[Proc(name: 'commit_a')]
+#[Task(name: 'commit_a')]
 final class CommitA extends DurableStep
 {
 }
 
-#[Proc(name: 'block_b')]
-final class BlockB extends Procedure
+#[Task(name: 'block_b')]
+final class BlockB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -271,7 +271,7 @@ final class SyncDurableWorkflow extends CommitBlockChain
 
 // -- optout_commit_block -----------------------------------------------------
 //
-// The opt-out twin with a live mid-chain signal: proc A's output also reaches a
+// The opt-out twin with a live mid-chain signal: task A's output also reaches a
 // plugin sink, so the crash-resume drill can observe the mid-run point without
 // durable state. A crash re-runs the chain from the top, so the sink sees A's
 // marker once per run and no journal file exists.
@@ -290,13 +290,13 @@ final class OptoutCommitBlock extends WorkflowOperative
 
 // -- tier_commit_block_workflow ----------------------------------------------
 //
-// The effectively-once fixture. Proc A commits durable state AND emits
+// The effectively-once fixture. Task A commits durable state AND emits
 // `committed:<input>` under a stable key on a keyed hybrid channel, captured
-// into the atomic effect record; proc B parks. A SIGKILL lands with A's effect
+// into the atomic effect record; task B parks. A SIGKILL lands with A's effect
 // record durable and B unfinished, and the resume re-runs A — the change is
 // idempotent and the re-emit deterministic.
 
-#[Proc(name: 'tier_commit_a')]
+#[Task(name: 'tier_commit_a')]
 final class TierCommitA extends DurableStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -325,7 +325,7 @@ final class TierCommitBlockWorkflow extends WorkflowOperative
 // lands mid-rollback with SB's done-marker already durable — the respawn
 // finishes SA and SKIPS the already-done SB.
 
-#[Proc(name: 'saga_a')]
+#[Task(name: 'saga_a')]
 final class SagaA extends UndoingStep
 {
     protected function compensationGated(): bool
@@ -334,12 +334,12 @@ final class SagaA extends UndoingStep
     }
 }
 
-#[Proc(name: 'saga_b')]
+#[Task(name: 'saga_b')]
 final class SagaB extends UndoingStep
 {
 }
 
-#[Proc(name: 'saga_c')]
+#[Task(name: 'saga_c')]
 final class SagaC extends FailingStep
 {
 }
@@ -358,10 +358,10 @@ final class SagaBlockWorkflow extends WorkflowOperative
 
 // -- outbox_block_workflow ---------------------------------------------------
 //
-// The transactional outbox. Proc A commits durable state AND emits
+// The transactional outbox. Task A commits durable state AND emits
 // plugin-bound output on a hybrid channel — STAGED, so it reaches the sink only
 // after the controller has journaled and fsynced A's committed entry with the
-// output inside it and flushed the outbox. Proc B parks, so a SIGKILL lands
+// output inside it and flushed the outbox. Task B parks, so a SIGKILL lands
 // with A committed and flushed and B unfinished.
 
 #[Operative(factoryId: 'outbox_block_workflow')]
@@ -378,16 +378,16 @@ final class OutboxBlockWorkflow extends WorkflowOperative
 
 // -- undo_outbox_workflow ----------------------------------------------------
 //
-// The compensation half of the transactional outbox. Proc UA commits, emits its
+// The compensation half of the transactional outbox. Task UA commits, emits its
 // forward output on a hybrid plugin channel, and compensates by EMITTING an
 // undo record — plugin-bound, so it is staged and rides a compensated journal
-// entry rather than the wire. Proc C fails immediately, so the chain always
+// entry rather than the wire. Task C fails immediately, so the chain always
 // rolls back; the hook PARKS, so on the first runner the undo is
 // emitted-but-never-journaled when the SIGKILL lands, proving staged undo
 // output cannot leak. The respawn re-runs the outstanding hook, whose done
 // marker never landed, and the undo is delivered exactly once.
 
-#[Proc(name: 'undo_outbox_a')]
+#[Task(name: 'undo_outbox_a')]
 final class UndoOutboxA extends UndoingStep
 {
     protected function compensationGated(): bool
@@ -401,7 +401,7 @@ final class UndoOutboxA extends UndoingStep
     }
 }
 
-#[Proc(name: 'undo_outbox_c')]
+#[Task(name: 'undo_outbox_c')]
 final class UndoOutboxC extends FailingStep
 {
 }
@@ -423,7 +423,7 @@ final class UndoOutboxWorkflow extends WorkflowOperative
 //     BranchA ─┬─▶ BranchB ─▶ BranchD
 //              └─▶ BranchC
 //
-// The procedure TREE (workflow.rs:352). Every procedure commits durable state
+// The tasklet TREE (workflow.rs:352). Every tasklet commits durable state
 // and compensates by emitting an undo record, so both tree behaviours are
 // observable at one sink:
 //
@@ -435,10 +435,10 @@ final class UndoOutboxWorkflow extends WorkflowOperative
 //     parking. A, B and C have all completed, so the rollback unwinds the two
 //     branches before the root they share: `undo-c`, `undo-b`, `undo-a`.
 //
-// The inter-proc channels are hybrid, which is what makes a non-leaf
-// procedure's forward and undo output visible at the sink.
+// The inter-task channels are hybrid, which is what makes a non-leaf
+// tasklet's forward and undo output visible at the sink.
 
-#[Proc(name: 'branch_a')]
+#[Task(name: 'branch_a')]
 final class BranchA extends UndoingStep
 {
     protected function undoRecord(): ?string
@@ -447,7 +447,7 @@ final class BranchA extends UndoingStep
     }
 }
 
-#[Proc(name: 'branch_b')]
+#[Task(name: 'branch_b')]
 final class BranchB extends UndoingStep
 {
     protected function undoRecord(): ?string
@@ -457,7 +457,7 @@ final class BranchB extends UndoingStep
 }
 
 /** The sibling leaf: emits straight to the sink, and its undo does too. */
-#[Proc(name: 'branch_c')]
+#[Task(name: 'branch_c')]
 final class BranchC extends UndoingStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -472,8 +472,8 @@ final class BranchC extends UndoingStep
 }
 
 /** The deep leaf under BranchB: parks (crash-resume), or fails (compensation). */
-#[Proc(name: 'branch_d')]
-final class BranchD extends Procedure
+#[Task(name: 'branch_d')]
+final class BranchD extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -520,17 +520,17 @@ final class BranchWorkflow extends WorkflowOperative
 // the join runs once with C's JOURNALED handoff banked and B2's fresh output
 // appended, so `c:` appears exactly once across both runs.
 
-#[Proc(name: 'diam_a')]
+#[Task(name: 'diam_a')]
 final class DiamA extends DurableStep
 {
 }
 
-#[Proc(name: 'diam_b1')]
+#[Task(name: 'diam_b1')]
 final class DiamB1 extends DurableStep
 {
 }
 
-#[Proc(name: 'diam_b2')]
+#[Task(name: 'diam_b2')]
 final class DiamB2 extends DurableStep
 {
     protected function gated(mixed $input): bool
@@ -549,7 +549,7 @@ final class DiamB2 extends DurableStep
     }
 }
 
-#[Proc(name: 'diam_c')]
+#[Task(name: 'diam_c')]
 final class DiamC extends DurableStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -559,8 +559,8 @@ final class DiamC extends DurableStep
 }
 
 /** The join: one `j:`-tagged record per accumulated contribution. */
-#[Proc(name: 'diam_join')]
-final class DiamJoin extends Procedure
+#[Task(name: 'diam_join')]
+final class DiamJoin extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -593,7 +593,7 @@ final class DiamondWorkflow extends WorkflowOperative
 
 // -- retry_workflow ----------------------------------------------------------
 //
-// The per-entity retry ladder (workflow.rs:607). Proc RA commits durable state,
+// The per-cell retry ladder (workflow.rs:607). Task RA commits durable state,
 // forwards on a hybrid channel, and compensates by emitting an undo record;
 // `retry_flaky` fails its first FLEZHA_WORKFLOW_RETRY_FAILS attempts (none by
 // default — each scenario arms it) and then emits `attempt:<n>:<input>`. One
@@ -601,7 +601,7 @@ final class DiamondWorkflow extends WorkflowOperative
 // sees attempt 2; arming more failures than the ladder has attempts exhausts
 // it, RA rolls back and the run reports an error.
 
-#[Proc(name: 'retry_a')]
+#[Task(name: 'retry_a')]
 final class RetryA extends UndoingStep
 {
     protected function undoRecord(): ?string
@@ -610,13 +610,13 @@ final class RetryA extends UndoingStep
     }
 }
 
-#[Proc(name: 'retry_flaky')]
-final class RetryFlaky extends Procedure
+#[Task(name: 'retry_flaky')]
+final class RetryFlaky extends Tasklet
 {
     private const FAILS_ENV = 'FLEZHA_WORKFLOW_RETRY_FAILS';
 
     /**
-     * Attempts made in this interpreter. A retry re-runs the procedure of the
+     * Attempts made in this interpreter. A retry re-runs the tasklet of the
      * same instance in place, so one counter is the whole ladder's view under
      * the single-loop executor this fixture runs on; a thread pool would give
      * each worker its own.

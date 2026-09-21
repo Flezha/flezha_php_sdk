@@ -22,14 +22,14 @@ declare(strict_types=1);
  *                                     process with the refusal's own name in
  *                                     its output
  *
- * The palette procedures live here rather than in `fixtures.php`: they exist
+ * The palette tasklets live here rather than in `fixtures.php`: they exist
  * only for this run, and nothing registers them but a row that names them.
  */
 
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative as OperativeAttribute;
-use Flezha\Attribute\Proc;
+use Flezha\Attribute\Task;
 use Flezha\Clock;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
@@ -44,17 +44,17 @@ use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
 use Flezha\Operative;
 use Flezha\Overflow;
-use Flezha\Procedure;
+use Flezha\Tasklet;
 use Flezha\Runner;
 use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
 
 /**
- * The palette. One fixture procedure per role the fixture header names; the
+ * The palette. One fixture tasklet per role the fixture header names; the
  * facts a role declares are the facts a rule reads.
  */
-#[Proc(name: 'plain')]
-class PalettePlain extends Procedure
+#[Task(name: 'plain')]
+class PalettePlain extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -62,42 +62,42 @@ class PalettePlain extends Procedure
     }
 }
 
-#[Proc(name: 'second')]
+#[Task(name: 'second')]
 final class PaletteSecond extends PalettePlain
 {
 }
 
 /** A distinct class declaring the SAME name as `plain`: that IS the collision. */
-#[Proc(name: 'plain')]
+#[Task(name: 'plain')]
 final class PaletteTwin extends PalettePlain
 {
 }
 
-#[Proc(name: 'static', entityKeys: ['a', 'b'])]
+#[Task(name: 'static', cellKeys: ['a', 'b'])]
 final class PaletteStatic extends PalettePlain
 {
 }
 
-#[Proc(name: 'routed', entityKeys: ['a', 'b'])]
+#[Task(name: 'routed', cellKeys: ['a', 'b'])]
 final class PaletteRouted extends PalettePlain
 {
-    public function entitiesFor(mixed $input): array
+    public function cellsFor(mixed $input): array
     {
         return ['a'];
     }
 }
 
-#[Proc(name: 'dynamic', dynamicEntities: true)]
+#[Task(name: 'dynamic', dynamicCells: true)]
 final class PaletteDynamic extends PalettePlain
 {
 }
 
-#[Proc(name: 'nochange', clock: Clock::Logical)]
+#[Task(name: 'nochange', clock: Clock::Logical)]
 final class PaletteNoChange extends PalettePlain
 {
 }
 
-#[Proc(name: 'eventtime', clock: Clock::EventTime)]
+#[Task(name: 'eventtime', clock: Clock::EventTime)]
 final class PaletteEventTime extends PalettePlain
 {
     public function eventTime(mixed $input): int
@@ -111,12 +111,12 @@ final class PaletteEventTime extends PalettePlain
  * argument is a constant expression — so a row that declares one is bound to
  * the palette class declaring that capacity rather than setting it.
  */
-#[Proc(name: 'plain', mailboxCapacity: 0)]
+#[Task(name: 'plain', mailboxCapacity: 0)]
 final class PalettePlainMailboxZero extends PalettePlain
 {
 }
 
-#[Proc(name: 'plain', mailboxCapacity: 2000000)]
+#[Task(name: 'plain', mailboxCapacity: 2000000)]
 final class PalettePlainMailboxHuge extends PalettePlain
 {
 }
@@ -150,8 +150,8 @@ final class RowInterpreter
     private readonly array $steps;
 
     /**
-     * A handle is a channel id from an `entry(...)` step, or a procedure role
-     * naming that procedure's output channel.
+     * A handle is a channel id from an `entry(...)` step, or a tasklet role
+     * naming that tasklet's output channel.
      *
      * @var array<string, Edge>
      */
@@ -201,7 +201,7 @@ final class RowInterpreter
 
     /**
      * `<handle>.<link>…` — a chain declared off a handle, a channel knob, a
-     * procedure knob, or a class flag.
+     * tasklet knob, or a class flag.
      */
     private function dotted(Builder $c, string $step): void
     {
@@ -233,7 +233,7 @@ final class RowInterpreter
             'on_full' => $edge->onFull(Overflow::from($arg)),
             'sink' => $arg === '' ? $edge->sink() : $edge->sink($arg),
             'into' => $this->wire($edge, $arg),
-            // Declared on the procedure in this SDK, and read as the palette
+            // Declared on the tasklet in this SDK, and read as the palette
             // class was bound — one step earlier than the step that names it.
             'mailbox' => $edge,
             default => throw new \RuntimeException(
@@ -244,12 +244,12 @@ final class RowInterpreter
 
     /**
      * `<x>.into(<role>)`, or a merge's close: the palette role bound to its
-     * fixture procedure. The result is that procedure's output channel,
+     * fixture tasklet. The result is that tasklet's output channel,
      * addressed by its role.
      */
     private function wire(Edge|Merge $closing, string $role): Edge
     {
-        return $this->handles[$role] = $closing->into($this->procedureClass($role));
+        return $this->handles[$role] = $closing->into($this->taskletClass($role));
     }
 
     /**
@@ -308,8 +308,8 @@ final class RowInterpreter
         );
     }
 
-    /** @return class-string<Procedure> */
-    private function procedureClass(string $role): string
+    /** @return class-string<Tasklet> */
+    private function taskletClass(string $role): string
     {
         $capacity = $this->mailbox[$role] ?? null;
         if ($capacity !== null) {
@@ -324,7 +324,7 @@ final class RowInterpreter
     }
 
     /**
-     * The capacities a row declares, read BEFORE the steps run: a procedure is
+     * The capacities a row declares, read BEFORE the steps run: a tasklet is
      * bound by the `into` that first names it, which is one step earlier than
      * the `mailbox` step that declares its capacity.
      *
@@ -631,8 +631,8 @@ final class Conformance
 
     /**
      * The derived declaration in the columns the fixture's seven-column table
-     * states. The core spells a consumer `{"procedure":N,"chain":M}`; the
-     * report carries the flat list of procedure indices, which is what that
+     * states. The core spells a consumer `{"tasklet":N,"chain":M}`; the
+     * report carries the flat list of tasklet indices, which is what that
      * table pins.
      *
      * @param array<string, mixed> $derived
@@ -649,7 +649,7 @@ final class Conformance
             'kind' => $channel['kind'],
             'producer' => $channel['producer'],
             'consumers' => array_map(
-                static fn (array $edge): int => $edge['procedure'],
+                static fn (array $edge): int => $edge['tasklet'],
                 $channel['consumers'],
             ),
             'sink' => $channel['sink'],
