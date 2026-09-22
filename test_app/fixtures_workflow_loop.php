@@ -472,3 +472,37 @@ final class BenchLoopWorkflow extends WorkflowOperative
             ->sink('out');
     }
 }
+
+// -- static_cell_workflow ----------------------------------------------------
+//
+// A per-input loop whose one tasklet declares three static cells and routes
+// every message to two of them; each cell that runs emits `<cell key>:<message>`,
+// so one message yields exactly two outputs (workflow.rs).
+
+#[Task(name: 'static_cell_step', cellKeys: ['a', 'b', 'c'])]
+final class StaticCellStep extends Tasklet
+{
+    public function cellsFor(mixed $input): array
+    {
+        return ['a', 'b'];
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $ctx->emit("{$ctx->cellKey}:$input");
+
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'static_cell_workflow')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class StaticCellWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(StaticCellStep::class)
+            ->sink('out');
+    }
+}

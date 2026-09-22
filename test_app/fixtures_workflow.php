@@ -733,6 +733,7 @@ final class WorkflowFixtures
             BenchChainOptout4::class,
             BenchLoopWorkflow::class,
             WorkflowTimerRefusedWorkflow::class,
+            StaticCellWorkflow::class,
         ];
     }
 }
