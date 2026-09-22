@@ -31,6 +31,7 @@ use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Graph\Builder;
+use Flezha\Graph\Edge;
 use Flezha\Tasklet;
 use Flezha\WorkflowOperative;
 
@@ -385,6 +386,66 @@ final class SagaBlockWorkflow extends WorkflowOperative
     }
 }
 
+// -- keyed_block_workflow / keyed_saga_workflow -----------------------------
+//
+// The entry's comma-separated key list is split into one value per key, and a
+// `keyBy` on that value mints one Cell per key of a durable compensable tasklet
+// that declares no keys; each Cell commits one idempotent change. The third
+// tasklet parks until the release variable, or fails, so the keyed stage is
+// rolled back once per key.
+
+#[Task(name: 'key_split')]
+final class KeySplit extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        foreach (explode(',', (string) $input) as $key) {
+            $ctx->emit($key);
+        }
+
+        return null;
+    }
+}
+
+#[Task(name: 'keyed_commit', dynamicCells: true)]
+final class KeyedCommit extends UndoingStep
+{
+}
+
+#[Task(name: 'keyed_fail')]
+final class KeyedFail extends FailingStep
+{
+}
+
+abstract class KeyedCommits extends WorkflowOperative
+{
+    protected static function keyedCommits(Builder $c): Edge
+    {
+        return $c->input('in', codec: ChannelCodec::Text)
+            ->into(KeySplit::class)->named('keys')
+            ->keyBy(static fn (mixed $key): string => (string) $key)
+            ->into(KeyedCommit::class)->named('committed');
+    }
+}
+
+#[Operative(factoryId: 'keyed_block_workflow')]
+final class KeyedBlockWorkflow extends KeyedCommits
+{
+    public static function channels(Builder $c): void
+    {
+        self::keyedCommits($c)->into(BlockB::class);
+    }
+}
+
+#[Operative(factoryId: 'keyed_saga_workflow')]
+final class KeyedSagaWorkflow extends KeyedCommits
+{
+    public static function channels(Builder $c): void
+    {
+        self::keyedCommits($c)->into(KeyedFail::class);
+    }
+}
+
 // -- outbox_block_workflow ---------------------------------------------------
 //
 // The transactional outbox. Task A commits durable state AND emits
@@ -718,6 +779,8 @@ final class WorkflowFixtures
             OptoutCommitBlock::class,
             TierCommitBlockWorkflow::class,
             SagaBlockWorkflow::class,
+            KeyedBlockWorkflow::class,
+            KeyedSagaWorkflow::class,
             OutboxBlockWorkflow::class,
             UndoOutboxWorkflow::class,
             ChatLoopWorkflow::class,
