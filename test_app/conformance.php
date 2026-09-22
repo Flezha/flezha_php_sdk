@@ -151,6 +151,9 @@ final class RowInterpreter
 
     public readonly bool $syncDurability;
 
+    /** Unwritten, the row keeps the kind's default rather than declaring it off. */
+    public readonly ?bool $sleepWhenIdle;
+
     /** @var list<string> */
     private readonly array $steps;
 
@@ -177,6 +180,7 @@ final class RowInterpreter
         $this->persistent = str_contains($steps, 'class.persistent');
         $this->workflow = str_contains($steps, 'class.workflow');
         $this->syncDurability = str_contains($steps, 'class.sync_durability');
+        $this->sleepWhenIdle = str_contains($steps, 'class.sleep_when_idle') ? true : null;
         $this->mailbox = $this->mailboxCapacities();
     }
 
@@ -295,15 +299,15 @@ final class RowInterpreter
 
     /**
      * `class.<flag>[(<value>)]` — the facts the class declares on the builder.
-     * The three the builder does not hold were read as the row's class was
-     * chosen: `persistent` is `#[Operative]`'s, `workflow` the class's kind,
-     * and `sync_durability` `#[Workflow]`'s.
+     * The four the builder does not hold were read as the row's class was
+     * chosen: `persistent` and `sleep_when_idle` are `#[Operative]`'s,
+     * `workflow` the class's kind, and `sync_durability` `#[Workflow]`'s.
      */
     private function classFlag(Builder $c, string $rest): void
     {
         [$flag, $value] = self::splitCall($rest);
         match ($flag) {
-            'persistent', 'workflow', 'sync_durability' => null,
+            'persistent', 'sleep_when_idle', 'workflow', 'sync_durability' => null,
             'effectively_once' => $c->effectivelyOnce(),
             'checkpoint_ack' => $c->checkpointAck(),
             'checkpoint_every' => $c->checkpointEvery((int) $value),
@@ -415,7 +419,11 @@ trait DeclaresTheLoadedRow
     {
         $row = RowInterpreter::loaded();
 
-        return new OperativeAttribute(factoryId: $row->factoryId, persistent: $row->persistent);
+        return new OperativeAttribute(
+            factoryId: $row->factoryId,
+            persistent: $row->persistent,
+            sleepWhenIdle: $row->sleepWhenIdle,
+        );
     }
 }
 

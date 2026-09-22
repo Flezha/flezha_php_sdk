@@ -882,6 +882,46 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
+    /** @return iterable<string, array{class-string<OperativeBase>, bool}> */
+    public static function sleepDefaults(): iterable
+    {
+        yield 'a persistent workflow' => [SleepDefaultWorkflow::class, true];
+        yield 'a workflow with persistence off' => [UnpersistedWorkflow::class, false];
+        yield 'a stream' => [SleepDefaultStream::class, false];
+    }
+
+    /**
+     * Unwritten, sleeping follows persistence on a workflow and is off on a stream.
+     *
+     * @dataProvider sleepDefaults
+     * @param class-string<OperativeBase> $class
+     */
+    public function testSleepingDefaultsToPersistenceOnAWorkflowOnly(string $class, bool $sleeps): void
+    {
+        self::assertSame($sleeps, HostClassDecl::of($class::spec())['sleep_when_idle']);
+    }
+
+    /** @return iterable<string, array{class-string<OperativeBase>}> */
+    public static function sleepersWithoutPersistence(): iterable
+    {
+        yield 'a stream' => [UnpersistedSleepingStream::class];
+        yield 'a workflow' => [UnpersistedSleepingWorkflow::class];
+    }
+
+    /**
+     * @dataProvider sleepersWithoutPersistence
+     * @param class-string<OperativeBase> $class
+     */
+    public function testSleepingWithoutPersistenceIsRefusedByName(string $class): void
+    {
+        try {
+            self::derived($class::spec());
+            self::fail("$class sleeps with persistence off and was accepted");
+        } catch (DeclarationException $e) {
+            self::assertStringContainsString('SleepWithoutPersistence', $e->getMessage());
+        }
+    }
+
     /** @return iterable<string, array{class-string<OperativeBase>, list<string>}> */
     public static function workflowAttributesOnAStream(): iterable
     {
@@ -1403,6 +1443,51 @@ final class SyncDurableStream extends StreamOperative
 
 final class Unattributed extends StreamOperative
 {
+}
+
+#[Operative(factoryId: 'sleep_default_workflow')]
+final class SleepDefaultWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'unpersisted_workflow', persistent: false)]
+final class UnpersistedWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'sleep_default_stream')]
+final class SleepDefaultStream extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'unpersisted_sleeping_stream', persistent: false, sleepWhenIdle: true)]
+final class UnpersistedSleepingStream extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'unpersisted_sleeping_workflow', persistent: false, sleepWhenIdle: true)]
+final class UnpersistedSleepingWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
 }
 
 #[Operative(factoryId: 'empty_workflow')]

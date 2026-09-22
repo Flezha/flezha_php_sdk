@@ -771,6 +771,7 @@ final class Fixtures
             StoreInputOperative::class,
             StatefulCounterOperative::class,
             PersistenceOffCounterOperative::class,
+            SleepingCounterOperative::class,
             CoalescingCounterOperative::class,
             ResumeProbeOperative::class,
             BenchKeyedOperative::class,

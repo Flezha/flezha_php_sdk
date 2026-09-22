@@ -32,6 +32,7 @@ final class ClassSpec
         public readonly array $tasklets,
         public readonly array $channels,
         public readonly ?Workflow $workflow = null,
+        public readonly bool $sleepWhenIdle = false,
     ) {
     }
 

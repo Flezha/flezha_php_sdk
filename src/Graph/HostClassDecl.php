@@ -45,6 +45,7 @@ final class HostClassDecl
         return self::compact([
             'factory_id' => $spec->factoryId,
             'persistent' => $spec->persistent,
+            'sleep_when_idle' => $spec->sleepWhenIdle,
             'sdk_lang' => self::SDK_LANG_PHP,
             'sdk_version' => self::SDK_VERSION,
             'change_format_id' => self::FORMAT_ID_JSON,

@@ -297,6 +297,47 @@ final class PersistenceOffCounterOperative extends StreamOperative
     }
 }
 
+// -- sleeping_counter --------------------------------------------------------
+//
+// A stream that sleeps when idle: `key:delta` inputs fold into one running
+// total per key, and every input emits `key=total` on the `totals` sink. The
+// sleep e2e reads the total after a wake to prove the Cell came back with the
+// state it slept with.
+
+#[Task(name: 'sleeping_counter_tasklet')]
+final class SleepingCounter extends Tasklet
+{
+    public function state(?string $cellKey): mixed
+    {
+        return ['value' => 0];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['value'] += $change['delta'];
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        [$key, $delta] = explode(':', (string) $input, 2) + [1 => ''];
+        $ctx->change(['delta' => Wire::int($delta)]);
+
+        return "{$key}={$ctx->state['value']}";
+    }
+}
+
+#[Operative(factoryId: 'sleeping_counter', sleepWhenIdle: true)]
+final class SleepingCounterOperative extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input', codec: ChannelCodec::Text)
+            ->keyBy(Wire::prefix(...))
+            ->into(SleepingCounter::class)
+            ->sink('totals');
+    }
+}
+
 // -- coalescing_counter ------------------------------------------------------
 
 /** Wire format: `<interval>:<ts>:<delta>`; a missing or unparsable part reads 0. */

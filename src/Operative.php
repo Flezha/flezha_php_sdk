@@ -120,6 +120,7 @@ abstract class Operative
             tasklets: $builder->tasklets,
             channels: $builder->channels,
             workflow: $workflow,
+            sleepWhenIdle: $declaration->sleepWhenIdle ?? ($kind === 'workflow' && $declaration->persistent),
         );
     }
 
@@ -202,6 +203,9 @@ abstract class Operative
             return false;
         }
         $written = $declaration->persistent ? [] : ['`persistent: false` on #[Operative]'];
+        if ($declaration->sleepWhenIdle !== null) {
+            $written[] = '`sleepWhenIdle` on #[Operative]';
+        }
         // By value, against the default carrying the written loop mode: the
         // one class-level setting a short form keeps, and restating a default
         // sets nothing.
