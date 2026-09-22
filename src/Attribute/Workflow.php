@@ -18,9 +18,6 @@ final class Workflow
     public function __construct(
         public readonly LoopMode $loopMode = LoopMode::Once,
         public readonly RollbackMode $rollbackMode = RollbackMode::AllOrNothing,
-        public readonly ?int $retryAttempts = null,
-        public readonly ?int $retryBackoffMs = null,
-        public readonly ?int $barrierRetryAttempts = null,
         public readonly ?int $maxDurationMs = null,
         public readonly ?int $wakeAfterMs = null,
         public readonly bool $syncDurability = false,

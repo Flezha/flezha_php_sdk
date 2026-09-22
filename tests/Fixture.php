@@ -391,6 +391,26 @@ final class Timing extends Tasklet
     }
 }
 
+trait TimingGraph
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Timing::class);
+    }
+}
+
+#[Operative(factoryId: 'timing_workflow')]
+final class TimingWorkflow extends WorkflowOperative
+{
+    use TimingGraph;
+}
+
+#[Operative(factoryId: 'timing_stream')]
+final class TimingStream extends StreamOperative
+{
+    use TimingGraph;
+}
+
 // -- the structured-workflow emit arm ----------------------------------------
 //
 // One released value is ONE edge output on a workflow class, untransformed and

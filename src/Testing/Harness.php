@@ -80,7 +80,6 @@ final class Harness implements SpawnBridge
             correctionWindowMs: null,
             beyondWindowPolicy: BeyondWindow::ProcessAsArrival,
             compactAfterBytes: null,
-            syncDurability: false,
             tasklets: $builder->tasklets,
             channels: $builder->channels,
         );

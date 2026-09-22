@@ -57,47 +57,24 @@ final class DeclKeysTest extends RepositoryTestCase
     }
 
     /**
-     * The keys a workflow class may not put on the wire.
-     *
-     * `flz_core::host::register::refuse_workflow_facts` refuses
-     * `effectively_once` and `correction_window_ms` on a workflow class
-     * outright, and `refuse_tier_facts` refuses the checkpoint family without
-     * the checkpoint acknowledgement the first refusal leaves unreachable
-     * there. One builder serves both kinds, so the gate lives in it.
+     * No kind gate: a workflow class puts every key its builder recorded on
+     * the wire, so the core judges what the author wrote and refuses a
+     * stream-only setting under its own name.
      */
-    private const REFUSED_ON_WORKFLOW = [
-        'effectively_once',
-        'checkpoint_ack',
-        'checkpoint_every',
-        'checkpoint_outputs',
-        'checkpoint_max_delay_ms',
-        'correction_window_ms',
-        'beyond_window_policy',
-    ];
-
-    public function testAWorkflowClassDeclaresNoneOfTheKeysTheCoreRefuses(): void
+    public function testAWorkflowClassDeclaresEveryClassKeyAStreamClassDoes(): void
     {
-        $decl = HostClassDecl::of(self::tierSpec('workflow'));
-        $emitted = array_values(array_intersect(self::REFUSED_ON_WORKFLOW, array_keys($decl)));
+        $dropped = array_diff(
+            array_keys(HostClassDecl::of(self::tierSpec('stream'))),
+            array_keys(HostClassDecl::of(self::tierSpec('workflow'))),
+        );
 
-        self::assertSame([], $emitted, sprintf(
-            'keys the core refuses on a workflow class: %s',
-            implode(', ', $emitted),
+        self::assertSame([], array_values($dropped), sprintf(
+            'keys a workflow class does not declare: %s',
+            implode(', ', $dropped),
         ));
     }
 
-    public function testAStreamClassStillDeclaresEveryOneOfThem(): void
-    {
-        $decl = HostClassDecl::of(self::tierSpec('stream'));
-        $missing = array_values(array_diff(self::REFUSED_ON_WORKFLOW, array_keys($decl)));
-
-        self::assertSame([], $missing, sprintf(
-            'stream keys the gate dropped: %s',
-            implode(', ', $missing),
-        ));
-    }
-
-    /** The stream fixture's spec re-kinded: every refused key populated at once. */
+    /** The stream fixture's spec re-kinded: every stream-only key populated at once. */
     private static function tierSpec(string $kind): ClassSpec
     {
         $stream = FullStream::spec();
@@ -114,7 +91,6 @@ final class DeclKeysTest extends RepositoryTestCase
             correctionWindowMs: $stream->correctionWindowMs,
             beyondWindowPolicy: $stream->beyondWindowPolicy,
             compactAfterBytes: $stream->compactAfterBytes,
-            syncDurability: $stream->syncDurability,
             tasklets: $stream->tasklets,
             channels: $stream->channels,
             workflow: $kind === 'workflow' ? FullWorkflow::spec()->workflow : null,
@@ -354,9 +330,6 @@ final class FullStream extends StreamOperative
 #[Workflow(
     loopMode: LoopMode::Chained,
     rollbackMode: RollbackMode::KeepProgress,
-    retryAttempts: 4,
-    retryBackoffMs: 100,
-    barrierRetryAttempts: 2,
     maxDurationMs: 60_000,
     wakeAfterMs: 5_000,
     syncDurability: true,
@@ -429,7 +402,6 @@ final class CommitBlockChainTopology extends WorkflowOperative
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
         $c->input('in')->into(TierCommitA::class)->keyed()
             ->sink('mid', static fn (mixed $v): string => (string) $v)
             ->into(BlockB::class);

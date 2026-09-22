@@ -121,6 +121,13 @@ final class ShortPerInput extends WorkflowOperative
     use Echoes;
 }
 
+#[Operative(factoryId: 'sf_per_input_time_limited')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 60_000)]
+final class ShortPerInputTimeLimited extends WorkflowOperative
+{
+    use Echoes;
+}
+
 #[Operative(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
 final class ShortCodecOnTopology extends StreamOperative
 {
@@ -585,7 +592,6 @@ final class AuthoringTest extends RepositoryTestCase
                 correctionWindowMs: $builder->correctionWindowMs,
                 beyondWindowPolicy: $builder->beyondWindowPolicy,
                 compactAfterBytes: $builder->compactAfterBytes,
-                syncDurability: $builder->syncDurability,
                 tasklets: $builder->tasklets,
                 channels: $builder->channels,
             ), $core);
@@ -851,21 +857,52 @@ final class AuthoringTest extends RepositoryTestCase
         );
     }
 
-    /**
-     * The reference declares exactly this — `tier_commit_block_workflow` opens
-     * with `c.effectively_once()` on a workflow class in Rust and Java — and
-     * `Operative::classSpec` already reads the builder flag for both kinds, so
-     * PHP needed no change for it. This pins that, and that the flag stays off
-     * the wire: the core refuses `effectively_once` on a workflow class, and
-     * Java's `HostClassDeclaration.forWorkflow` never writes it either.
-     */
-    public function testAWorkflowClassCarriesItsEffectivelyOnceDeclaration(): void
+    /** @return iterable<string, array{class-string<OperativeBase>, string}> */
+    public static function streamSettingsOnAWorkflow(): iterable
     {
-        $spec = TierWorkflow::spec();
-        self::derived($spec);
+        yield 'the effectively-once tier' => [TierWorkflow::class, 'EffectivelyOnceOnWorkflow'];
+        yield 'a checkpoint interval' => [CheckpointWorkflow::class, 'CheckpointOnWorkflow'];
+        yield 'a correction window' => [CorrectionWorkflow::class, 'CorrectionWindowOnWorkflow'];
+    }
 
-        self::assertTrue($spec->effectivelyOnce);
-        self::assertArrayNotHasKey('effectively_once', HostClassDecl::of($spec));
+    /**
+     * What a workflow's builder wrote reaches the core, which refuses a
+     * stream-only setting under its own name.
+     *
+     * @dataProvider streamSettingsOnAWorkflow
+     * @param class-string<OperativeBase> $class
+     */
+    public function testAStreamOnlySettingOnAWorkflowIsRefusedByTheCoresName(string $class, string $name): void
+    {
+        try {
+            self::derived($class::spec());
+            self::fail("a workflow writing what $name names was accepted");
+        } catch (DeclarationException $e) {
+            self::assertSame([$name], $e->refusals);
+        }
+    }
+
+    /** @return iterable<string, array{class-string<OperativeBase>, list<string>}> */
+    public static function workflowAttributesOnAStream(): iterable
+    {
+        yield 'a loop mode' => [PerInputStream::class, []];
+        yield 'synchronous durability' => [SyncDurableStream::class, ['SyncDurabilityOnStream']];
+    }
+
+    /**
+     * @dataProvider workflowAttributesOnAStream
+     * @param class-string<OperativeBase> $class
+     * @param list<string> $names
+     */
+    public function testAWorkflowAttributeOnAStreamIsRefusedAtRegistration(string $class, array $names): void
+    {
+        try {
+            Flezha::createRunner('test')->registerFactory($class);
+            self::fail('a stream carrying #[Workflow] was registered');
+        } catch (DeclarationException $e) {
+            self::assertSame($names, $e->refusals);
+            self::assertStringContainsString("$class extends StreamOperative and carries #[Workflow]", $e->getMessage());
+        }
     }
 
     // -- channel codecs --------------------------------------------------------
@@ -1047,6 +1084,15 @@ final class AuthoringTest extends RepositoryTestCase
         self::assertSame(LoopMode::Once, ShortPlace::spec()->workflow?->loopMode);
     }
 
+    public function testAWorkflowShortFormDeclaresTheLoopModeItWrites(): void
+    {
+        $spec = ShortPerInput::spec();
+
+        self::assertSame('per_input', HostClassDecl::of($spec)['workflow']['loop_mode']);
+        self::assertSame(['sf_per_input'], array_column($spec->tasklets, 'name'));
+        self::derived($spec);
+    }
+
     public function testASinklessShortFormDeclaresItsEntryIntoItsTaskletAndNothingElse(): void
     {
         $spec = ShortCounter::spec();
@@ -1109,14 +1155,14 @@ final class AuthoringTest extends RepositoryTestCase
             static fn (): mixed => ShortRenamed::spec(),
             'a short form\'s tasklet is named after its factory id',
         ];
-        // A class-level setting is the full form's to write.
+        // A class-level setting but the loop mode is the full form's to write.
         yield 'a short form with persistence off' => [
             static fn (): mixed => ShortUnpersisted::spec(),
-            'a short form keeps every class-level setting at its default',
+            'and this one writes `persistent: false` on #[Operative]; write the full form',
         ];
-        yield 'a short form with a workflow setting' => [
-            static fn (): mixed => ShortPerInput::spec(),
-            'a short form keeps every class-level setting at its default',
+        yield 'a short form with a workflow setting beside its loop mode' => [
+            static fn (): mixed => ShortPerInputTimeLimited::spec(),
+            'and this one writes `maxDurationMs` on #[Workflow]; write the full form',
         ];
         yield 'a short-form argument beside a topology body' => [
             static fn (): mixed => ShortCodecOnTopology::spec(),
@@ -1312,6 +1358,46 @@ final class TierWorkflow extends WorkflowOperative
     {
         $c->effectivelyOnce();
         $c->input('in')->into(Counter::class)->keyed()->sink('out');
+    }
+}
+
+#[Operative(factoryId: 'checkpoint_workflow')]
+final class CheckpointWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->checkpointEvery(500);
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'correction_workflow')]
+final class CorrectionWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->correctionWindow(60_000);
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'per_input_stream')]
+#[Workflow(loopMode: LoopMode::PerInput)]
+final class PerInputStream extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operative(factoryId: 'sync_durable_stream')]
+#[Workflow(syncDurability: true)]
+final class SyncDurableStream extends StreamOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
     }
 }
 

@@ -30,6 +30,7 @@ namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative as OperativeAttribute;
 use Flezha\Attribute\Task;
+use Flezha\Attribute\Workflow;
 use Flezha\Clock;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
@@ -146,6 +147,10 @@ final class RowInterpreter
 
     public readonly bool $persistent;
 
+    public readonly bool $workflow;
+
+    public readonly bool $syncDurability;
+
     /** @var list<string> */
     private readonly array $steps;
 
@@ -160,6 +165,9 @@ final class RowInterpreter
     /** @var array<string, int> */
     private readonly array $mailbox;
 
+    /** The row the conformance classes declare. */
+    public static ?self $row = null;
+
     public function __construct(public readonly string $factoryId, string $steps)
     {
         $this->steps = array_values(array_filter(
@@ -167,7 +175,14 @@ final class RowInterpreter
             static fn (string $step): bool => $step !== '',
         ));
         $this->persistent = str_contains($steps, 'class.persistent');
+        $this->workflow = str_contains($steps, 'class.workflow');
+        $this->syncDurability = str_contains($steps, 'class.sync_durability');
         $this->mailbox = $this->mailboxCapacities();
+    }
+
+    public static function loaded(): self
+    {
+        return self::$row ?? throw new \RuntimeException('no row of the refusal table is loaded');
     }
 
     public function declare(Builder $c): void
@@ -280,21 +295,20 @@ final class RowInterpreter
 
     /**
      * `class.<flag>[(<value>)]` — the facts the class declares on the builder.
-     * `persistent` is an operative-level declaration, read as the row's
-     * declaration was synthesised; `workflow` is a class KIND no stream row can
-     * carry, and every row needing one is skipped before it reaches here.
+     * The three the builder does not hold were read as the row's class was
+     * chosen: `persistent` is `#[Operative]`'s, `workflow` the class's kind,
+     * and `sync_durability` `#[Workflow]`'s.
      */
     private function classFlag(Builder $c, string $rest): void
     {
         [$flag, $value] = self::splitCall($rest);
         match ($flag) {
-            'persistent' => null,
+            'persistent', 'workflow', 'sync_durability' => null,
             'effectively_once' => $c->effectivelyOnce(),
             'checkpoint_ack' => $c->checkpointAck(),
             'checkpoint_every' => $c->checkpointEvery((int) $value),
             'correction_window' => $c->correctionWindow((int) $value),
             'outputs_at_checkpoint' => $c->outputsAtCheckpoint((int) $value),
-            'sync_durability' => $c->syncDurability(),
             default => throw new \RuntimeException(
                 "the fixture spells a class flag this interpreter does not map: $flag"
             ),
@@ -377,18 +391,16 @@ final class ShorthandWithTopology extends StreamOperative
 }
 
 /**
- * A row's operative class.
+ * A row's operative class: one per class-level spelling a row can need, each
+ * declaring whichever row is loaded.
  *
- * One class for the whole table rather than one per row: PHP reads a factory
- * id off a class attribute, which is a constant expression, so the row's own
- * id arrives by overriding the reader. `spec()` is overridden for the same
- * reason: the base memoises one spec per class, and a run declares every row
- * through this one.
+ * Not one class per row: PHP reads a factory id off a class attribute, which
+ * is a constant expression, so the row's own id arrives by overriding the
+ * reader. `spec()` is overridden for the same reason: the base memoises one
+ * spec per class, and a run declares every row through these.
  */
-final class ConformanceRow extends StreamOperative
+trait DeclaresTheLoadedRow
 {
-    public static ?RowInterpreter $row = null;
-
     public static function spec(): ClassSpec
     {
         return static::buildSpec(static::declaration());
@@ -396,20 +408,36 @@ final class ConformanceRow extends StreamOperative
 
     public static function channels(Builder $c): void
     {
-        self::row()->declare($c);
+        RowInterpreter::loaded()->declare($c);
     }
 
     public static function declaration(): OperativeAttribute
     {
-        $row = self::row();
+        $row = RowInterpreter::loaded();
 
         return new OperativeAttribute(factoryId: $row->factoryId, persistent: $row->persistent);
     }
+}
 
-    private static function row(): RowInterpreter
-    {
-        return self::$row ?? throw new \RuntimeException('no row of the refusal table is loaded');
-    }
+final class ConformanceRow extends StreamOperative
+{
+    use DeclaresTheLoadedRow;
+}
+
+/** A row writing `class.workflow`: the class is of the workflow kind. */
+final class ConformanceWorkflowRow extends WorkflowOperative
+{
+    use DeclaresTheLoadedRow;
+}
+
+/**
+ * A stream row writing `class.sync_durability`, in the one spelling it has:
+ * `#[Workflow]`, which a stream class is refused for carrying.
+ */
+#[Workflow(syncDurability: true)]
+final class ConformanceSyncDurableRow extends StreamOperative
+{
+    use DeclaresTheLoadedRow;
 }
 
 /** The refusal table, driven and reported. */
@@ -422,7 +450,8 @@ final class Conformance
      * The authoring surfaces this builder carries — the same list the app's
      * `conformance.json` declares. A row needing anything else is skipped BY
      * NAME, which is what makes the skip checkable. The class flag a typed
-     * builder cannot spell is a plain builder call here.
+     * builder cannot spell is `#[Workflow(syncDurability: true)]` here, on
+     * the stream class the row declares.
      */
     private const SURFACES = [
         'branch',
@@ -624,9 +653,13 @@ final class Conformance
             return $cited;
         }
 
-        ConformanceRow::$row = new RowInterpreter($row['topology'], $row['steps']);
+        $loaded = RowInterpreter::$row = new RowInterpreter($row['topology'], $row['steps']);
 
-        return ConformanceRow::class;
+        return match (true) {
+            $loaded->workflow => ConformanceWorkflowRow::class,
+            $loaded->syncDurability => ConformanceSyncDurableRow::class,
+            default => ConformanceRow::class,
+        };
     }
 
     /**

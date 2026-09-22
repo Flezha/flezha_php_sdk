@@ -58,7 +58,7 @@ final class ChargeCard extends Tasklet
 }
 
 #[Operative(factoryId: 'checkout')]
-#[Workflow(rollbackMode: RollbackMode::AllOrNothing, retryAttempts: 3, retryBackoffMs: 200)]
+#[Workflow(rollbackMode: RollbackMode::AllOrNothing)]
 final class CheckoutWorkflow extends WorkflowOperative
 {
     public static function channels(Builder $c): void

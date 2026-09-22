@@ -52,7 +52,6 @@ final class Builder
     public ?int $correctionWindowMs = null;
     public BeyondWindow $beyondWindowPolicy = BeyondWindow::ProcessAsArrival;
     public ?int $compactAfterBytes = null;
-    public bool $syncDurability = false;
 
     public function __construct(public readonly string $factoryId)
     {
@@ -118,14 +117,6 @@ final class Builder
     public function compactAfterBytes(int $bytes): self
     {
         $this->compactAfterBytes = $bytes;
-
-        return $this;
-    }
-
-    /** Acknowledge only once the change log is durable on the controller. */
-    public function syncDurability(): self
-    {
-        $this->syncDurability = true;
 
         return $this;
     }

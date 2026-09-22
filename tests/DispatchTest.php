@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
+use Flezha\Ctx;
 use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\Registry;
 use Flezha\Codec\Json;
+use Flezha\Exception\NonRetryableException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Validate;
 use Flezha\Logger;
@@ -45,7 +47,8 @@ final class DispatchTest extends TestCase
                 MixedStampOperative::class, WfEmitOperative::class,
                 WfEmitStreamOperative::class, JsonEntryOperative::class, MergeOperative::class,
                 RouteLatestOperative::class, FannedOperative::class, CompletingWorkflow::class,
-                CompletingStream::class, FlakyEntryOperative::class] as $class
+                CompletingStream::class, FlakyEntryOperative::class, TimingWorkflow::class,
+                TimingStream::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -334,6 +337,54 @@ final class DispatchTest extends TestCase
 
         self::assertSame('retryable', $effect['verdict']);
         self::assertArrayNotHasKey('complete', $effect);
+    }
+
+    /**
+     * A workflow fires no timers yet: its tasklet's timer call fails the item
+     * naming `TimersUnavailable`, with nothing to retry, where the same
+     * tasklet on a stream registers and cancels as before.
+     */
+    public function testATimerCallFailsAWorkflowItemByName(): void
+    {
+        $refused = $this->work('timing_workflow', 0, [self::input('7')])['effects'][0];
+        self::assertSame('non_retryable', $refused['verdict']);
+        self::assertStringContainsString('TimersUnavailable: timing runs in a workflow', $refused['message']);
+
+        $armed = $this->work('timing_stream', 0, [self::input('7')])['effects'][0];
+        self::assertSame('ok', $armed['verdict']);
+        self::assertCount(3, $armed['timers']);
+    }
+
+    public function testEveryTimerCallOfAWorkflowContextIsRefusedAndArmsNothing(): void
+    {
+        $registered = $this->registry->get('timing_workflow');
+        self::assertNotNull($registered);
+        $calls = [
+            'timerAfter' => static fn (Ctx $ctx): int => $ctx->timerAfter(60_000),
+            'timerAtEventTime' => static fn (Ctx $ctx): int => $ctx->timerAtEventTime(60_000),
+            'cancelTimer' => static fn (Ctx $ctx) => $ctx->cancelTimer('processing_time', 60_000),
+        ];
+        foreach ($calls as $name => $call) {
+            $refused = null;
+            $ctx = Dispatcher::invoke(
+                ['token' => 1, 'operative' => 'op', 'cell_key' => null, 'change_seq' => 0],
+                $registered,
+                $registered->spec->tasklets[0],
+                self::core(),
+                0,
+                false,
+                static function (Ctx $ctx) use ($call, &$refused): void {
+                    try {
+                        $call($ctx);
+                    } catch (NonRetryableException $e) {
+                        $refused = $e->getMessage();
+                    }
+                },
+            );
+
+            self::assertStringStartsWith('TimersUnavailable: ', (string) $refused, "$name was not refused");
+            self::assertSame([], $ctx->timers, "$name armed a timer");
+        }
     }
 
     public function testAnUnregisteredFactoryFailsNonRetryably(): void

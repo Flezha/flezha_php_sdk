@@ -17,11 +17,13 @@ namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operative;
 use Flezha\Attribute\Task;
+use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
 use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
+use Flezha\LoopMode;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 use Flezha\StreamOperative;
@@ -270,6 +272,14 @@ final class SugarNamedInput extends StreamOperative
 
 #[Operative(factoryId: 'sugar_workflow', sink: 'sugar_workflow_placed', input: 'order', codec: ChannelCodec::Text)]
 final class SugarWorkflow extends WorkflowOperative
+{
+    use PassesThrough;
+}
+
+/** The loop mode, the one class-level setting a short form keeps. */
+#[Operative(factoryId: 'sugar_workflow_per_input', sink: 'sugar_workflow_per_input_out', codec: ChannelCodec::Text)]
+#[Workflow(loopMode: LoopMode::PerInput)]
+final class SugarWorkflowPerInput extends WorkflowOperative
 {
     use PassesThrough;
 }
@@ -786,6 +796,7 @@ final class Fixtures
             SugarStoreInput::class,
             SugarNamedInput::class,
             SugarWorkflow::class,
+            SugarWorkflowPerInput::class,
             SugarStateOnly::class,
         ];
     }

@@ -29,7 +29,6 @@ final class ClassSpec
         public readonly ?int $correctionWindowMs,
         public readonly BeyondWindow $beyondWindowPolicy,
         public readonly ?int $compactAfterBytes,
-        public readonly bool $syncDurability,
         public readonly array $tasklets,
         public readonly array $channels,
         public readonly ?Workflow $workflow = null,

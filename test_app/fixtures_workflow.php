@@ -321,11 +321,10 @@ final class OptoutCommitBlock extends WorkflowOperative
 
 // -- tier_commit_block_workflow ----------------------------------------------
 //
-// The effectively-once fixture. Task A commits durable state AND emits
-// `committed:<input>` under a stable key on a keyed hybrid channel, captured
-// into the atomic effect record; task B parks. A SIGKILL lands with A's effect
-// record durable and B unfinished, and the resume re-runs A — the change is
-// idempotent and the re-emit deterministic.
+// Task A commits durable state AND emits `committed:<input>` under a stable
+// key on a keyed hybrid channel; task B parks, so a SIGKILL lands with A's
+// stage committed and B unfinished. A workflow commits stage by stage, so the
+// class declares no tier of its own.
 
 #[Task(name: 'tier_commit_a')]
 final class TierCommitA extends DurableStep
@@ -341,7 +340,6 @@ final class TierCommitBlockWorkflow extends WorkflowOperative
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
         $c->input('in', codec: ChannelCodec::Text)
             ->into(TierCommitA::class)->keyed()
             ->sink('mid')
@@ -519,9 +517,6 @@ final class BranchD extends Tasklet
 }
 
 #[Operative(factoryId: 'branch_workflow')]
-// Fail fast: the compensation scenario is about the rollback order, not the
-// ladder that precedes it.
-#[Workflow(retryAttempts: 0)]
 final class BranchWorkflow extends WorkflowOperative
 {
     public static function channels(Builder $c): void
@@ -533,6 +528,9 @@ final class BranchWorkflow extends WorkflowOperative
             ->sink('mid', static fn (mixed $v): string => "a:$v");
         $mid->into(BranchB::class)
             ->sink('bmid', static fn (mixed $v): string => "b:$v")
+            // Fail fast into the one tasklet that fails: the compensation
+            // scenario is about the rollback order, not the ladder before it.
+            ->retryMax(1)
             ->into(BranchD::class)
             ->sink('d_out');
         $mid->into(BranchC::class)->sink('c_out');
@@ -680,6 +678,30 @@ final class RetryWorkflow extends WorkflowOperative
     }
 }
 
+// -- workflow_timer_refused --------------------------------------------------
+//
+// A workflow fires no timers yet, so the one tasklet's timer call is refused
+// naming `TimersUnavailable`: the tasklet fails and the instance ends in error.
+
+#[Task(name: 'workflow_timer_refused')]
+final class WorkflowTimerRefused extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $ctx->timerAfter(60_000);
+
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'workflow_timer_refused')]
+final class WorkflowTimerRefusedWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input', codec: ChannelCodec::Text)->into(WorkflowTimerRefused::class);
+    }
+}
 
 // -- registration ------------------------------------------------------------
 
@@ -710,6 +732,7 @@ final class WorkflowFixtures
             BenchChain16::class,
             BenchChainOptout4::class,
             BenchLoopWorkflow::class,
+            WorkflowTimerRefusedWorkflow::class,
         ];
     }
 }

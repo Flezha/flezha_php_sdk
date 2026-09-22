@@ -42,12 +42,11 @@ final class Admin
     public function startOperative(
         string $factoryId,
         ?string $id = null,
-        ?string $kind = null,
         mixed $initValues = null,
         mixed $opts = null,
     ): StartResult {
         $answer = $this->call('Operative.start', array_filter(
-            ['factory_id' => $factoryId, 'id' => $id, 'kind' => $kind, 'init_values' => $initValues, 'opts' => $opts],
+            ['factory_id' => $factoryId, 'id' => $id, 'init_values' => $initValues, 'opts' => $opts],
             static fn (mixed $field): bool => $field !== null,
         ));
         $outcome = StartOutcome::tryFrom((string) ($answer['outcome'] ?? ''));

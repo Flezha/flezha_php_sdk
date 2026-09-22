@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Attribute\Operative as OperativeAttribute;
+use Flezha\Attribute\Workflow as WorkflowAttribute;
 use Flezha\Exception\DeclarationException;
 use Flezha\Graph\ClassSpec;
 
@@ -25,14 +26,8 @@ abstract class WorkflowOperative extends Operative
             );
         }
 
-        $workflow = static::workflowDeclaration();
+        $workflow = static::workflowDeclaration() ?? new WorkflowAttribute();
 
-        return static::assemble(
-            $declaration,
-            $builder,
-            'workflow',
-            $workflow->syncDurability || $builder->syncDurability,
-            $workflow,
-        );
+        return static::assemble($declaration, $builder, 'workflow', $workflow);
     }
 }

@@ -7,6 +7,7 @@ namespace Flezha;
 use Flezha\Codec\Json;
 use Flezha\Exception\SpawnAlreadyRunningException;
 use Flezha\Exception\SpawnException;
+use Flezha\Exception\SpawnFactoryNotWorkflowException;
 use Flezha\Exception\SpawnFactoryUnknownException;
 use Flezha\Exception\SpawnRefusedException;
 use Flezha\Exception\SpawnTimeoutException;
@@ -72,6 +73,7 @@ final class SpawnHandle
         throw new (match ($answer['error']) {
             'already_running' => SpawnAlreadyRunningException::class,
             'factory_unknown' => SpawnFactoryUnknownException::class,
+            'factory_not_workflow' => SpawnFactoryNotWorkflowException::class,
             'refused' => SpawnRefusedException::class,
             'timeout' => SpawnTimeoutException::class,
             'unavailable' => SpawnUnavailableException::class,

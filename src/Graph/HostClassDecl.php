@@ -48,43 +48,6 @@ final class HostClassDecl
             'sdk_lang' => self::SDK_LANG_PHP,
             'sdk_version' => self::SDK_VERSION,
             'change_format_id' => self::FORMAT_ID_JSON,
-            ...self::streamTier($spec),
-            'compact_after_bytes' => $spec->compactAfterBytes,
-            'sync_durability' => $spec->syncDurability,
-            'channels' => array_map(self::channel(...), $spec->channels),
-            'tasklets' => array_map(self::tasklet(...), $spec->tasklets),
-            'workflow' => $workflow === null ? null : self::compact([
-                'loop_mode' => $workflow->loopMode->value,
-                'rollback_mode' => $workflow->rollbackMode->value,
-                'retry_attempts' => $workflow->retryAttempts,
-                'retry_backoff_ms' => $workflow->retryBackoffMs,
-                'barrier_retry_attempts' => $workflow->barrierRetryAttempts,
-                'max_duration_ms' => $workflow->maxDurationMs,
-                'wake_after_ms' => $workflow->wakeAfterMs,
-            ]),
-        ]);
-    }
-
-    /**
-     * The tier, checkpoint and correction keys, which only a stream class puts
-     * on the wire. The core refuses `effectively_once` and
-     * `correction_window_ms` on a workflow class outright, and the checkpoint
-     * family rests on a checkpoint acknowledgement that refusal leaves
-     * unreachable there.
-     *
-     * The spec keeps the flag either way: `Ctx::stampIdentity` reads it to
-     * decide whether a keyed plugin frame carries its own identity, so gating
-     * the declaration must not gate the in-process tier.
-     *
-     * @return array<string, mixed>
-     */
-    private static function streamTier(ClassSpec $spec): array
-    {
-        if ($spec->kind !== 'stream') {
-            return [];
-        }
-
-        return [
             'effectively_once' => $spec->effectivelyOnce,
             'checkpoint_ack' => $spec->checkpointAck,
             'checkpoint_every' => $spec->checkpointEvery,
@@ -92,7 +55,17 @@ final class HostClassDecl
             'checkpoint_max_delay_ms' => $spec->checkpointMaxDelayMs,
             'correction_window_ms' => $spec->correctionWindowMs,
             'beyond_window_policy' => $spec->beyondWindowPolicy->value,
-        ];
+            'compact_after_bytes' => $spec->compactAfterBytes,
+            'sync_durability' => $workflow?->syncDurability ?? false,
+            'channels' => array_map(self::channel(...), $spec->channels),
+            'tasklets' => array_map(self::tasklet(...), $spec->tasklets),
+            'workflow' => $workflow === null ? null : self::compact([
+                'loop_mode' => $workflow->loopMode->value,
+                'rollback_mode' => $workflow->rollbackMode->value,
+                'max_duration_ms' => $workflow->maxDurationMs,
+                'wake_after_ms' => $workflow->wakeAfterMs,
+            ]),
+        ]);
     }
 
     /**

@@ -16,6 +16,7 @@ use Flezha\Dispatch\Registry;
 use Flezha\Exception\FlezhaException;
 use Flezha\Exception\SpawnAlreadyRunningException;
 use Flezha\Exception\SpawnException;
+use Flezha\Exception\SpawnFactoryNotWorkflowException;
 use Flezha\Exception\SpawnFactoryUnknownException;
 use Flezha\Exception\SpawnRefusedException;
 use Flezha\Exception\SpawnTimeoutException;
@@ -182,6 +183,7 @@ final class SpawnTest extends TestCase
     {
         yield 'the error policy' => ['already_running', SpawnAlreadyRunningException::class];
         yield 'an unknown factory' => ['factory_unknown', SpawnFactoryUnknownException::class];
+        yield 'a stream factory' => ['factory_not_workflow', SpawnFactoryNotWorkflowException::class];
         yield 'a refusal' => ['refused', SpawnRefusedException::class];
         yield 'a timeout' => ['timeout', SpawnTimeoutException::class];
         yield 'no control plane' => ['unavailable', SpawnUnavailableException::class];

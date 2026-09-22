@@ -28,10 +28,10 @@ final class AdminTest extends TestCase
     public function testAStartOfARunningIdAnswersAlreadyRunning(): void
     {
         $result = $this->answering('{"id":"my_echo","outcome":"already_running"}')
-            ->startOperative('echo', id: 'my_echo', kind: 'stream');
+            ->startOperative('echo', id: 'my_echo');
 
         self::assertSame(
-            [['Operative.start', '[{"factory_id":"echo","id":"my_echo","kind":"stream"}]']],
+            [['Operative.start', '[{"factory_id":"echo","id":"my_echo"}]']],
             $this->calls,
         );
         self::assertEquals(new StartResult('my_echo', StartOutcome::AlreadyRunning), $result);

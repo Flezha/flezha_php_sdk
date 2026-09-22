@@ -6,6 +6,7 @@ namespace Flezha;
 
 use Flezha\Codec\Json;
 use Flezha\Exception\EmitException;
+use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\ChannelSpec;
 use Flezha\Graph\ConsumerEdge;
 use Flezha\Graph\ClassSpec;
@@ -152,9 +153,15 @@ final class Ctx
         $this->emit($value, $key, $channel, $metadata);
     }
 
-    /** Register a processing-time timer `$milliseconds` from `now`. Answers its time. */
+    /**
+     * Register a processing-time timer `$milliseconds` from `now`. Answers its time.
+     *
+     * The three timer calls are a stream tasklet's: inside a workflow each
+     * throws naming `TimersUnavailable`.
+     */
     public function timerAfter(int $milliseconds): int
     {
+        $this->refuseTimersInAWorkflow();
         // Anchored on `now`, never an ambient read: that is what makes a
         // replayed invocation register the timestamp the live one did.
         $at = $this->now + $milliseconds;
@@ -166,6 +173,7 @@ final class Ctx
     /** Register an event-time timer at an absolute time. Answers it. */
     public function timerAtEventTime(int $at): int
     {
+        $this->refuseTimersInAWorkflow();
         $this->timers[] = ['kind' => 'event_time', 'scheduled_at' => $at, 'register' => true];
 
         return $at;
@@ -174,6 +182,7 @@ final class Ctx
     /** Cancel a registered timer by the value its registration answered. */
     public function cancelTimer(string $kind, int $at): void
     {
+        $this->refuseTimersInAWorkflow();
         $this->timers[] = ['kind' => $kind, 'scheduled_at' => $at, 'register' => false];
     }
 
@@ -259,6 +268,18 @@ final class Ctx
             'checkpoint' => $this->checkpointed,
             'complete' => $this->completion,
         ];
+    }
+
+    /** Non-retryable: a workflow fires no timers, so a retry would fail the same way. */
+    private function refuseTimersInAWorkflow(): void
+    {
+        if ($this->spec->structuredWorkflow()) {
+            throw new NonRetryableException(sprintf(
+                'TimersUnavailable: %s runs in a workflow, where a tasklet cannot register or cancel '
+                . 'a timer',
+                $this->node->name,
+            ));
+        }
     }
 
     /** @param array<string, string>|null $metadata */

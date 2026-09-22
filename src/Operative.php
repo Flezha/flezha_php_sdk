@@ -67,12 +67,12 @@ abstract class Operative
         return $attributes[0]->newInstance();
     }
 
-    /** The `#[Workflow]` attribute, or its defaults. */
-    protected static function workflowDeclaration(): WorkflowAttribute
+    /** The `#[Workflow]` attribute the class carries, if any. */
+    protected static function workflowDeclaration(): ?WorkflowAttribute
     {
         $attributes = (new ReflectionClass(static::class))->getAttributes(WorkflowAttribute::class);
 
-        return $attributes === [] ? new WorkflowAttribute() : $attributes[0]->newInstance();
+        return $attributes === [] ? null : $attributes[0]->newInstance();
     }
 
     protected static function builder(OperativeAttribute $declaration): Builder
@@ -103,7 +103,6 @@ abstract class Operative
         OperativeAttribute $declaration,
         Builder $builder,
         string $kind,
-        bool $syncDurability,
         ?WorkflowAttribute $workflow = null,
     ): ClassSpec {
         return new ClassSpec(
@@ -118,7 +117,6 @@ abstract class Operative
             correctionWindowMs: $builder->correctionWindowMs,
             beyondWindowPolicy: $builder->beyondWindowPolicy,
             compactAfterBytes: $builder->compactAfterBytes,
-            syncDurability: $syncDurability,
             tasklets: $builder->tasklets,
             channels: $builder->channels,
             workflow: $workflow,
@@ -203,14 +201,23 @@ abstract class Operative
 
             return false;
         }
-        // By value: a `#[Workflow]` restating every default sets nothing.
-        if (!$declaration->persistent || static::workflowDeclaration() != new WorkflowAttribute()) {
-            throw new DeclarationException(
-                $declaration->factoryId,
-                null,
-                'a short form keeps every class-level setting at its default; `persistent: false` '
-                . 'and #[Workflow] are the full form\'s, written beside `channels()`',
-            );
+        $written = $declaration->persistent ? [] : ['`persistent: false` on #[Operative]'];
+        // By value, against the default carrying the written loop mode: the
+        // one class-level setting a short form keeps, and restating a default
+        // sets nothing.
+        $workflow = static::workflowDeclaration() ?? new WorkflowAttribute();
+        $default = get_object_vars(new WorkflowAttribute(loopMode: $workflow->loopMode));
+        foreach (get_object_vars($workflow) as $setting => $value) {
+            if ($value !== $default[$setting]) {
+                $written[] = "`$setting` on #[Workflow]";
+            }
+        }
+        if ($written !== []) {
+            throw new DeclarationException($declaration->factoryId, null, sprintf(
+                'a short form keeps every class-level setting but a workflow\'s `loopMode` at its '
+                . 'default, and this one writes %s; write the full form, with `channels()`, to set it',
+                implode(', ', $written),
+            ));
         }
 
         return true;
