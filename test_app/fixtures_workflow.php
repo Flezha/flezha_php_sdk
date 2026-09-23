@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Twins of the reference's crash-resume workflow fixtures — the commit chain,
- * the saga, the transactional outbox, the branch, the diamond and the retry
+ * the saga, the output identity, the branch, the diamond and the retry
  * ladder, plus the run-once echo — under the same factory ids, tasklet
  * names, channel names and output bytes as
  * test/apps/rust_runner/src/workflow.rs. Loaded after fixtures.php, whose
@@ -459,11 +459,19 @@ final class KeyedSagaWorkflow extends KeyedCommits
 
 // -- outbox_block_workflow ---------------------------------------------------
 //
-// The transactional outbox. Task A commits durable state AND emits
-// plugin-bound output on a hybrid channel — STAGED, so it reaches the sink only
-// after the controller has journaled and fsynced A's committed entry with the
-// output inside it and flushed the outbox. Task B parks, so a SIGKILL lands
-// with A committed and flushed and B unfinished.
+// A workflow output's identity. Task A commits durable state AND emits once,
+// keyed `k` with one metadata pair, on a keyed hybrid channel; the output rides
+// A's Cell record and reaches the sink once A's stage commits. Task B parks, so
+// a SIGKILL lands with A committed and B unfinished.
+
+#[Task(name: 'commit_a')]
+final class OutboxA extends DurableStep
+{
+    protected function release(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emitKeyed('k', $input, metadata: ['trace' => 't1']);
+    }
+}
 
 #[Operative(factoryId: 'outbox_block_workflow')]
 final class OutboxBlockWorkflow extends WorkflowOperative
@@ -471,7 +479,7 @@ final class OutboxBlockWorkflow extends WorkflowOperative
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
-            ->into(CommitA::class)
+            ->into(OutboxA::class)->keyed()
             ->sink('mid', static fn (mixed $v): string => "a-out:$v")
             ->into(BlockB::class);
     }
@@ -479,13 +487,12 @@ final class OutboxBlockWorkflow extends WorkflowOperative
 
 // -- undo_outbox_workflow ----------------------------------------------------
 //
-// The compensation half of the transactional outbox. Task UA commits, emits its
-// forward output on a hybrid plugin channel, and compensates by EMITTING an
-// undo record — plugin-bound, so it is staged and rides a compensated journal
-// entry rather than the wire. Task C fails immediately, so the chain always
-// rolls back; the hook PARKS, so on the first runner the undo is
-// emitted-but-never-journaled when the SIGKILL lands, proving staged undo
-// output cannot leak. The respawn re-runs the outstanding hook, whose done
+// A compensation's undo output. Task UA commits, emits its forward output on a
+// hybrid plugin channel, and compensates by EMITTING an undo record, which
+// rides UA's Cell's own record and is released once the `compensated` entry
+// naming it is durable. Task C fails immediately, so the chain always rolls
+// back; the hook PARKS, so on the first runner the SIGKILL lands before the
+// undo was written. The respawn re-runs the outstanding hook, whose done
 // marker never landed, and the undo is delivered exactly once.
 
 #[Task(name: 'undo_outbox_a')]
@@ -516,6 +523,39 @@ final class UndoOutboxWorkflow extends WorkflowOperative
             ->into(UndoOutboxA::class)
             ->sink('mid', static fn (mixed $v): string => "out:$v")
             ->into(UndoOutboxC::class);
+    }
+}
+
+// -- failed_stage_workflow ---------------------------------------------------
+//
+// A failed stage delivers nothing. The entry's two values reach one
+// `failed_stage` Cell in order: the first emits on a plugin channel, so the
+// Cell's record carries an output; the second fails, so the stage never
+// commits and no marker ever names that record.
+
+#[Task(name: 'failed_stage')]
+final class FailedStage extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        if ($input === 'b') {
+            throw new \RuntimeException('failed_stage fails on b');
+        }
+        $ctx->emit($input);
+
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'failed_stage_workflow')]
+final class FailedStageWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(KeySplit::class)
+            ->into(FailedStage::class)
+            ->sink('mid', static fn (mixed $v): string => "lost:$v");
     }
 }
 
@@ -872,6 +912,7 @@ final class WorkflowFixtures
             KeyedSagaWorkflow::class,
             OutboxBlockWorkflow::class,
             UndoOutboxWorkflow::class,
+            FailedStageWorkflow::class,
             ChatLoopWorkflow::class,
             StatelessLoopWorkflow::class,
             KeyedLoopWorkflow::class,

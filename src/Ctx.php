@@ -408,17 +408,18 @@ final class Ctx
     /**
      * Output identity for one plugin frame, appended after the user's metadata.
      *
-     * Written only off the tier: under it the controller derives the identity
-     * from the durable effect record, and a second answer here would contradict
-     * it. The ordinal advances on every plugin output, stamped or not, so hosts
-     * of one topology agree on the sequence — and a `flatMap` fan-out produces
+     * Written only when the class records no effects: under the tier, and for
+     * a durable workflow, the controller derives the identity from the durable
+     * effect record, and a second answer here would contradict it. The
+     * ordinal advances on every plugin output, stamped or not, so hosts of one
+     * topology agree on the sequence, and a `flatMap` fan-out produces
      * several outputs from one emit, which is why this runs per output.
      *
      * @param array<string, string> $pairs
      */
     private function stampIdentity(array &$pairs, ChannelSpec $channel, ?string $key): void
     {
-        if ($channel->keyed && !$this->spec->effectivelyOnce) {
+        if ($channel->keyed && !$this->spec->recordsEffects()) {
             $pairs['flz.cell'] = sprintf(
                 '%s/%s/%s',
                 $this->operative,
