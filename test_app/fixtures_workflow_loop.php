@@ -159,6 +159,46 @@ final class StatelessLoopWorkflow extends WorkflowOperative
     }
 }
 
+// keyed_loop_workflow is a durable per-input loop keyed on its entry edge by
+// the text before the first `:`, so one Cell counts one symbol's messages and
+// emits `<symbol>:<count>`: the shape a partition group of workflow members
+// takes.
+
+#[Task(name: 'keyed_loop_count', dynamicCells: true)]
+final class KeyedLoopCount extends Tasklet
+{
+    public function state(?string $cellKey): mixed
+    {
+        return ['value' => 0];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['value'] += $change['delta'];
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $symbol = Wire::prefix($input);
+        $ctx->change(['delta' => 1]);
+        $ctx->emit($symbol . ':' . $ctx->state['value']);
+
+        return null;
+    }
+}
+
+#[Operative(factoryId: 'keyed_loop_workflow')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class KeyedLoopWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('trades', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
+            ->into(KeyedLoopCount::class)
+            ->sink('keyed_loop_workflow_out');
+    }
+}
+
 #[Operative(factoryId: 'chat_rewind_workflow')]
 #[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
 final class ChatRewindWorkflow extends WorkflowOperative

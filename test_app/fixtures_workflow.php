@@ -874,6 +874,7 @@ final class WorkflowFixtures
             UndoOutboxWorkflow::class,
             ChatLoopWorkflow::class,
             StatelessLoopWorkflow::class,
+            KeyedLoopWorkflow::class,
             ChatRewindWorkflow::class,
             ReplyBlockLoopWorkflow::class,
             RetryWorkflow::class,
