@@ -19,7 +19,6 @@ final class Workflow
         public readonly LoopMode $loopMode = LoopMode::Once,
         public readonly RollbackMode $rollbackMode = RollbackMode::AllOrNothing,
         public readonly ?int $maxDurationMs = null,
-        public readonly ?int $wakeAfterMs = null,
         public readonly bool $syncDurability = false,
     ) {
     }

@@ -56,6 +56,14 @@ final class DeclKeysTest extends RepositoryTestCase
         ));
     }
 
+    public function testTheRetiredWakeArgumentIsRefusedWhenTheAttributeIsBuilt(): void
+    {
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Unknown named parameter $wakeAfterMs');
+
+        new Workflow(...['wakeAfterMs' => 5_000]);
+    }
+
     /**
      * No kind gate: a workflow class puts every key its builder recorded on
      * the wire, so the core judges what the author wrote and refuses a
@@ -331,7 +339,6 @@ final class FullStream extends StreamOperative
     loopMode: LoopMode::Chained,
     rollbackMode: RollbackMode::KeepProgress,
     maxDurationMs: 60_000,
-    wakeAfterMs: 5_000,
     syncDurability: true,
 )]
 final class FullWorkflow extends WorkflowOperative

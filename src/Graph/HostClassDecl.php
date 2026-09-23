@@ -64,7 +64,6 @@ final class HostClassDecl
                 'loop_mode' => $workflow->loopMode->value,
                 'rollback_mode' => $workflow->rollbackMode->value,
                 'max_duration_ms' => $workflow->maxDurationMs,
-                'wake_after_ms' => $workflow->wakeAfterMs,
             ]),
         ]);
     }

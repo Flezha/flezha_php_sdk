@@ -152,6 +152,7 @@ final class Dispatcher
             state: $registered->stateOf($node, $activation['cell_key']),
             bridge: $bridge,
             token: (int) $activation['token'],
+            compensating: ($activation['kind'] ?? null) === 'compensate_run',
         );
 
         try {

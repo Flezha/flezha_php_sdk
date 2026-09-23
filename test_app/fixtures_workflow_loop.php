@@ -22,6 +22,7 @@ use Flezha\Graph\Builder;
 use Flezha\LoopMode;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
+use Flezha\Timer;
 use Flezha\StreamOperative;
 use Flezha\WorkflowOperative;
 
@@ -417,8 +418,9 @@ final class BenchChainOptout4 extends BenchChain
 //
 // The long-lived loop the `turns` scenario drives (workflow_loop.rs:359): the
 // chat loop's shape with a BOUNDED per-turn state, so a million-turn soak
-// snapshots the same few bytes at every iteration, and a wake deadline for the
-// timer-wake measurements.
+// snapshots the same few bytes at every iteration. With
+// `FLEZHA_BENCH_WAKE_AFTER_MS` set each turn arms a timer that far out, whose
+// firing sends the bench's wake marker, `wake:<fired_at>`, for the timer-wake measurements.
 
 #[Task(name: 'bench_turn')]
 final class BenchTurn extends Tasklet
@@ -437,33 +439,26 @@ final class BenchTurn extends Tasklet
     public function run(mixed $input, Ctx $ctx): mixed
     {
         $ctx->change(['turn' => $input]);
+        $after = getenv('FLEZHA_BENCH_WAKE_AFTER_MS');
+        if (is_string($after) && ctype_digit($after)) {
+            $ctx->timerAfter((int) $after);
+        }
         $ctx->emit($input);
 
         return null;
     }
+
+    public function onTimer(Timer $timer, Ctx $ctx): void
+    {
+        $ctx->emit("wake:{$timer->scheduledAt}");
+    }
 }
 
+// A day, not the chat loop's ten minutes: a soak outlives 600 s.
 #[Operative(factoryId: 'bench_loop_workflow')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 24 * 3_600_000)]
 final class BenchLoopWorkflow extends WorkflowOperative
 {
-    private const WAKE_AFTER_ENV = 'FLEZHA_BENCH_WAKE_AFTER_MS';
-
-    /**
-     * Built rather than written as an attribute: a PHP attribute argument is a
-     * constant expression, and the wake deadline is an axis of the bench run.
-     * A day, not the chat loop's ten minutes — a soak outlives 600 s.
-     */
-    protected static function workflowDeclaration(): Workflow
-    {
-        $wake = (int) (getenv(self::WAKE_AFTER_ENV) ?: '0');
-
-        return new Workflow(
-            loopMode: LoopMode::PerInput,
-            maxDurationMs: 24 * 3_600_000,
-            wakeAfterMs: $wake > 0 ? $wake : null,
-        );
-    }
-
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)

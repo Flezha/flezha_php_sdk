@@ -28,11 +28,14 @@ use Flezha\Attribute\Operative;
 use Flezha\Attribute\Task;
 use Flezha\Attribute\Workflow;
 use Flezha\ChannelCodec;
+use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
+use Flezha\LoopMode;
 use Flezha\Tasklet;
+use Flezha\Timer;
 use Flezha\WorkflowOperative;
 
 // -- the release gate --------------------------------------------------------
@@ -58,6 +61,14 @@ final class WorkflowGate
     public static function released(): bool
     {
         return getenv(self::RELEASE_ENV) !== false;
+    }
+
+    /** Park at `$point` when this runner was booted to hold there, until the release. */
+    public static function holdAt(string $point): void
+    {
+        if (getenv('FLEZHA_WORKFLOW_E2E_HOLD') === $point) {
+            self::blockUntilReleased();
+        }
     }
 
     public static function blockUntilReleased(): void
@@ -739,28 +750,106 @@ final class RetryWorkflow extends WorkflowOperative
     }
 }
 
-// -- workflow_timer_refused --------------------------------------------------
+// -- timer_loop_workflow -----------------------------------------------------
 //
-// A workflow fires no timers yet, so the one tasklet's timer call is refused
-// naming `TimersUnavailable`: the tasklet fails and the instance ends in error.
+// `in -> tick -> relay -> out`, a per-input loop whose `tick` arms a
+// processing-time timer of the delay `after:<ms>` names and emits `armed:<at>`;
+// its firing emits `fired:<at>` and opens a pass of its own. `slow:<ms>` holds
+// `tick` that long, for a firing due mid-pass (workflow.rs). On a runner booted
+// with `FLEZHA_WORKFLOW_E2E_HOLD` the firing parks at the gate: `timer` inside
+// `on_timer`, before `tick` commits; `relay` in `relay`, after.
 
-#[Task(name: 'workflow_timer_refused')]
-final class WorkflowTimerRefused extends Tasklet
+#[Task(name: 'tick')]
+final class TimerTick extends DurableStep
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        $ctx->timerAfter(60_000);
+        $input = (string) $input;
+        if (str_starts_with($input, 'after:')) {
+            $at = $ctx->timerAfter(Wire::int(substr($input, strlen('after:'))));
+            $ctx->change(['insert' => "armed:$at"]);
+            $ctx->emit("armed:$at");
+
+            return null;
+        }
+        if (str_starts_with($input, 'slow:')) {
+            usleep(Wire::int(substr($input, strlen('slow:'))) * 1000);
+        }
+        $ctx->emit($input);
+
+        return null;
+    }
+
+    public function onTimer(Timer $timer, Ctx $ctx): void
+    {
+        WorkflowGate::holdAt('timer');
+        $ctx->emit("fired:{$timer->scheduledAt}");
+    }
+}
+
+#[Task(name: 'relay')]
+final class TimerRelay extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        if (str_starts_with((string) $input, 'fired:')) {
+            WorkflowGate::holdAt('relay');
+        }
+        $ctx->emit("relay:$input");
 
         return null;
     }
 }
 
-#[Operative(factoryId: 'workflow_timer_refused')]
-final class WorkflowTimerRefusedWorkflow extends WorkflowOperative
+#[Operative(factoryId: 'timer_loop_workflow')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class TimerLoopWorkflow extends WorkflowOperative
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input', codec: ChannelCodec::Text)->into(WorkflowTimerRefused::class);
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(TimerTick::class)->named('ticked')
+            ->into(TimerRelay::class)
+            ->sink('out');
+    }
+}
+
+// -- event_timer_workflow ----------------------------------------------------
+//
+// An entry-fed tasklet whose clock is the message's leading event time; each
+// message arms an event-time timer 100 later and emits `seen:<t>`, and the
+// firing emits `fired:<at>` (workflow.rs).
+
+#[Task(name: 'event_tick', clock: Clock::EventTime)]
+final class EventTick extends DurableStep
+{
+    public function eventTime(mixed $input): int
+    {
+        return Wire::int(explode(':', (string) $input, 2)[0]);
+    }
+
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $at = $ctx->timerAtEventTime($ctx->now() + 100);
+        $ctx->change(['insert' => "armed:$at"]);
+        $ctx->emit("seen:{$ctx->now()}");
+
+        return null;
+    }
+
+    public function onTimer(Timer $timer, Ctx $ctx): void
+    {
+        $ctx->emit("fired:{$timer->scheduledAt}");
+    }
+}
+
+#[Operative(factoryId: 'event_timer_workflow')]
+#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class EventTimerWorkflow extends WorkflowOperative
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)->into(EventTick::class)->sink('out');
     }
 }
 
@@ -795,8 +884,9 @@ final class WorkflowFixtures
             BenchChain16::class,
             BenchChainOptout4::class,
             BenchLoopWorkflow::class,
-            WorkflowTimerRefusedWorkflow::class,
             StaticCellWorkflow::class,
+            TimerLoopWorkflow::class,
+            EventTimerWorkflow::class,
         ];
     }
 }

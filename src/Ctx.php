@@ -51,6 +51,7 @@ final class Ctx
         public mixed $state,
         private readonly SpawnBridge $bridge,
         private readonly int $token,
+        private readonly bool $compensating = false,
     ) {
     }
 
@@ -156,12 +157,12 @@ final class Ctx
     /**
      * Register a processing-time timer `$milliseconds` from `now`. Answers its time.
      *
-     * The three timer calls are a stream tasklet's: inside a workflow each
-     * throws naming `TimersUnavailable`.
+     * Inside a `compensate` hook each of the three timer calls throws naming
+     * `TimersUnavailable`.
      */
     public function timerAfter(int $milliseconds): int
     {
-        $this->refuseTimersInAWorkflow();
+        $this->refuseTimersInCompensate();
         // Anchored on `now`, never an ambient read: that is what makes a
         // replayed invocation register the timestamp the live one did.
         $at = $this->now + $milliseconds;
@@ -173,7 +174,7 @@ final class Ctx
     /** Register an event-time timer at an absolute time. Answers it. */
     public function timerAtEventTime(int $at): int
     {
-        $this->refuseTimersInAWorkflow();
+        $this->refuseTimersInCompensate();
         $this->timers[] = ['kind' => 'event_time', 'scheduled_at' => $at, 'register' => true];
 
         return $at;
@@ -182,7 +183,7 @@ final class Ctx
     /** Cancel a registered timer by the value its registration answered. */
     public function cancelTimer(string $kind, int $at): void
     {
-        $this->refuseTimersInAWorkflow();
+        $this->refuseTimersInCompensate();
         $this->timers[] = ['kind' => $kind, 'scheduled_at' => $at, 'register' => false];
     }
 
@@ -270,12 +271,12 @@ final class Ctx
         ];
     }
 
-    /** Non-retryable: a workflow fires no timers, so a retry would fail the same way. */
-    private function refuseTimersInAWorkflow(): void
+    /** Non-retryable: a rollback is no place to arm a deadline, and a retry would fail the same way. */
+    private function refuseTimersInCompensate(): void
     {
-        if ($this->spec->structuredWorkflow()) {
+        if ($this->compensating) {
             throw new NonRetryableException(sprintf(
-                'TimersUnavailable: %s runs in a workflow, where a tasklet cannot register or cancel '
+                'TimersUnavailable: %s runs compensate, where a tasklet cannot register or cancel '
                 . 'a timer',
                 $this->node->name,
             ));
