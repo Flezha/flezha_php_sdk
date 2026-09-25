@@ -9,7 +9,7 @@ declare(strict_types=1);
  * `flz_core/src/host/check_tests.rs` is the same table driven against the
  * record directly, because the core has no builder. This one maps the same
  * step vocabulary onto the PHP graph builder, so what is measured here is what
- * an author of a PHP operative actually writes.
+ * an author of a PHP operator actually writes.
  *
  * Two entry points, both off `runner.php`:
  *
@@ -28,9 +28,9 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operative as OperativeAttribute;
+use Flezha\Attribute\Operator as OperatorAttribute;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\Clock;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
@@ -43,12 +43,12 @@ use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
 use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
-use Flezha\Operative;
+use Flezha\Operator;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 use Flezha\Runner;
-use Flezha\StreamOperative;
-use Flezha\WorkflowOperative;
+use Flezha\UnboundedOperator;
+use Flezha\BoundedOperator;
 
 /**
  * The palette. One fixture tasklet per role the fixture header names; the
@@ -147,7 +147,7 @@ final class RowInterpreter
 
     public readonly bool $persistent;
 
-    public readonly bool $workflow;
+    public readonly bool $bounded;
 
     public readonly bool $syncDurability;
 
@@ -178,7 +178,7 @@ final class RowInterpreter
             static fn (string $step): bool => $step !== '',
         ));
         $this->persistent = str_contains($steps, 'class.persistent');
-        $this->workflow = str_contains($steps, 'class.workflow');
+        $this->bounded = str_contains($steps, 'class.bounded');
         $this->syncDurability = str_contains($steps, 'class.sync_durability');
         $this->sleepWhenIdle = str_contains($steps, 'class.sleep_when_idle') ? true : null;
         $this->mailbox = $this->mailboxCapacities();
@@ -300,14 +300,14 @@ final class RowInterpreter
     /**
      * `class.<flag>[(<value>)]` — the facts the class declares on the builder.
      * The four the builder does not hold were read as the row's class was
-     * chosen: `persistent` and `sleep_when_idle` are `#[Operative]`'s,
-     * `workflow` the class's kind, and `sync_durability` `#[Workflow]`'s.
+     * chosen: `persistent` and `sleep_when_idle` are `#[Operator]`'s,
+     * `bounded` the class's kind, and `sync_durability` `#[Bounded operator]`'s.
      */
     private function classFlag(Builder $c, string $rest): void
     {
         [$flag, $value] = self::splitCall($rest);
         match ($flag) {
-            'persistent', 'sleep_when_idle', 'workflow', 'sync_durability' => null,
+            'persistent', 'sleep_when_idle', 'bounded', 'sync_durability' => null,
             'effectively_once' => $c->effectivelyOnce(),
             'checkpoint_ack' => $c->checkpointAck(),
             'checkpoint_every' => $c->checkpointEvery((int) $value),
@@ -369,22 +369,22 @@ final class RowInterpreter
 // registers them but a row that names them.
 
 /** Half of the duplicate row's pair. */
-#[OperativeAttribute(factoryId: 'plain', sink: 'out')]
-final class ShorthandDupStream extends StreamOperative
+#[OperatorAttribute(factoryId: 'plain', sink: 'out')]
+final class ShorthandDupUnbounded extends UnboundedOperator
 {
     use PassesThrough;
 }
 
-/** The other half: a workflow claiming the id the stream holds. */
-#[OperativeAttribute(factoryId: 'plain', sink: 'twin_sink')]
-final class ShorthandDupWorkflow extends WorkflowOperative
+/** The other half: a bounded operator claiming the id the stream holds. */
+#[OperatorAttribute(factoryId: 'plain', sink: 'twin_sink')]
+final class ShorthandDupBounded extends BoundedOperator
 {
     use PassesThrough;
 }
 
 /** A short form that also carries a topology body. */
-#[OperativeAttribute(factoryId: 'plain', sink: 'out')]
-final class ShorthandWithTopology extends StreamOperative
+#[OperatorAttribute(factoryId: 'plain', sink: 'out')]
+final class ShorthandWithTopology extends UnboundedOperator
 {
     use PassesThrough;
 
@@ -395,7 +395,7 @@ final class ShorthandWithTopology extends StreamOperative
 }
 
 /**
- * A row's operative class: one per class-level spelling a row can need, each
+ * A row's operator class: one per class-level spelling a row can need, each
  * declaring whichever row is loaded.
  *
  * Not one class per row: PHP reads a factory id off a class attribute, which
@@ -415,11 +415,11 @@ trait DeclaresTheLoadedRow
         RowInterpreter::loaded()->declare($c);
     }
 
-    public static function declaration(): OperativeAttribute
+    public static function declaration(): OperatorAttribute
     {
         $row = RowInterpreter::loaded();
 
-        return new OperativeAttribute(
+        return new OperatorAttribute(
             factoryId: $row->factoryId,
             persistent: $row->persistent,
             sleepWhenIdle: $row->sleepWhenIdle,
@@ -427,23 +427,23 @@ trait DeclaresTheLoadedRow
     }
 }
 
-final class ConformanceRow extends StreamOperative
+final class ConformanceRow extends UnboundedOperator
 {
     use DeclaresTheLoadedRow;
 }
 
-/** A row writing `class.workflow`: the class is of the workflow kind. */
-final class ConformanceWorkflowRow extends WorkflowOperative
+/** A row writing `class.bounded`: the class is of the bounded kind. */
+final class ConformanceBoundedRow extends BoundedOperator
 {
     use DeclaresTheLoadedRow;
 }
 
 /**
  * A stream row writing `class.sync_durability`, in the one spelling it has:
- * `#[Workflow]`, which a stream class is refused for carrying.
+ * `#[Bounded operator]`, which an unbounded class is refused for carrying.
  */
-#[Workflow(syncDurability: true)]
-final class ConformanceSyncDurableRow extends StreamOperative
+#[Bounded(syncDurability: true)]
+final class ConformanceSyncDurableRow extends UnboundedOperator
 {
     use DeclaresTheLoadedRow;
 }
@@ -458,13 +458,13 @@ final class Conformance
      * The authoring surfaces this builder carries — the same list the app's
      * `conformance.json` declares. A row needing anything else is skipped BY
      * NAME, which is what makes the skip checkable. The class flag a typed
-     * builder cannot spell is `#[Workflow(syncDurability: true)]` here, on
-     * the stream class the row declares.
+     * builder cannot spell is `#[Bounded(syncDurability: true)]` here, on
+     * the unbounded class the row declares.
      */
     private const SURFACES = [
         'branch',
         'merge',
-        'workflow',
+        'bounded',
         'sync_durability',
         'shorthand',
     ];
@@ -477,13 +477,13 @@ final class Conformance
      *
      * Keyed by `<kind> <id>|<sink>|<input>` with `-` for an unwritten field,
      * then the step's modifier: `.topology` for a declaration that also
-     * carries a topology body. A row's first step is a stream and its second
-     * a workflow, so a collision crosses kinds.
+     * carries a topology body. A row's first step is an unbounded operator and its second
+     * a bounded operator, so a collision crosses kinds.
      */
     private const SHORTHAND_PALETTE = [
-        'stream plain|out|-' => ShorthandDupStream::class,
-        'workflow plain|twin_sink|-' => ShorthandDupWorkflow::class,
-        'stream plain|out|-.topology' => ShorthandWithTopology::class,
+        'unbounded plain|out|-' => ShorthandDupUnbounded::class,
+        'bounded plain|twin_sink|-' => ShorthandDupBounded::class,
+        'unbounded plain|out|-.topology' => ShorthandWithTopology::class,
     ];
 
     /**
@@ -491,8 +491,8 @@ final class Conformance
      * own fixtures, the twins of its seven-column table.
      */
     private const CITED = [
-        'hybrid_channel' => HybridChannelOperative::class,
-        'commit_block_chain' => TierCommitBlockWorkflow::class,
+        'hybrid_channel' => HybridChannelOperator::class,
+        'commit_block_chain' => TierCommitBlockBounded::class,
     ];
 
     private function __construct()
@@ -527,7 +527,7 @@ final class Conformance
      * resolved to the palette class whose attribute is that declaration.
      *
      * @param array{steps: string} $row
-     * @return list<class-string<Operative>>
+     * @return list<class-string<Operator>>
      */
     private static function shorthandSteps(array $row): array
     {
@@ -543,7 +543,7 @@ final class Conformance
             if (count($fields) !== 3) {
                 throw new \RuntimeException("a shorthand step declares three fields: read `$step`");
             }
-            $kind = $classes === [] ? 'stream' : 'workflow';
+            $kind = $classes === [] ? 'unbounded' : 'bounded';
             $key = "$kind " . implode('|', $fields) . substr($step, $close + 1);
             $classes[] = self::SHORTHAND_PALETTE[$key]
                 ?? throw new \RuntimeException("the palette has no class for `$step`");
@@ -558,7 +558,7 @@ final class Conformance
      * for real.
      *
      * @param array{topology: string} $row
-     * @param list<class-string<Operative>> $classes
+     * @param list<class-string<Operator>> $classes
      * @return array<string, mixed>
      */
     private static function judgeShorthand(array $row, array $classes): array
@@ -570,7 +570,7 @@ final class Conformance
             // reads.
             $registry = new Registry();
             foreach ($classes as $class) {
-                $registry->add(Operative::specFor($class));
+                $registry->add(Operator::specFor($class));
             }
         } catch (DeclarationException $e) {
             return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => $e->refusals];
@@ -652,7 +652,7 @@ final class Conformance
 
     /**
      * @param array{topology: string, steps: string} $row
-     * @return class-string<\Flezha\Operative>
+     * @return class-string<\Flezha\Operator>
      */
     private static function classFor(array $row): string
     {
@@ -664,7 +664,7 @@ final class Conformance
         $loaded = RowInterpreter::$row = new RowInterpreter($row['topology'], $row['steps']);
 
         return match (true) {
-            $loaded->workflow => ConformanceWorkflowRow::class,
+            $loaded->bounded => ConformanceBoundedRow::class,
             $loaded->syncDurability => ConformanceSyncDurableRow::class,
             default => ConformanceRow::class,
         };

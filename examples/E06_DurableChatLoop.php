@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * A chat session as a `PerInput` workflow: one iteration per message.
+ * A chat session as a `PerInput` bounded operator: one iteration per message.
  *
  * The conversation lives in cell state, so a crash resumes at the last
  * committed turn, and between messages the instance parks without holding a
@@ -15,15 +15,15 @@ namespace Flezha\Examples\E06;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
 use Flezha\Tasklet;
-use Flezha\WorkflowOperative;
+use Flezha\BoundedOperator;
 
 #[Task]
 final class ChatTurn extends Tasklet
@@ -52,9 +52,9 @@ final class ChatTurn extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'chat')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 3_600_000)]
-final class ChatWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'chat')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 3_600_000)]
+final class ChatBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -63,5 +63,5 @@ final class ChatWorkflow extends WorkflowOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(ChatWorkflow::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(ChatBounded::class)->run();
 }

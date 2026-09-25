@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Every activation kind, against a real core context.
  *
- * A real one rather than a double: the context is what `Ctx::spawnWorkflow`
+ * A real one rather than a double: the context is what `Ctx::spawnBounded`
  * and the completion path talk to, and a double would prove that the
  * dispatcher agrees with the double. Nothing here starts a runner, so no
  * controller connection is attempted.
@@ -43,12 +43,12 @@ final class DispatchTest extends TestCase
     {
         $this->registry = new Registry();
         foreach (
-            [EchoOperative::class, CounterOperative::class, KeyedOperative::class, StampOperative::class,
-                MixedStampOperative::class, WfEmitOperative::class,
-                WfEmitStreamOperative::class, JsonEntryOperative::class, MergeOperative::class,
-                RouteLatestOperative::class, FannedOperative::class, CompletingWorkflow::class,
-                CompletingStream::class, FlakyEntryOperative::class, TimingWorkflow::class,
-                TimingStream::class] as $class
+            [EchoOperator::class, CounterOperator::class, KeyedOperator::class, StampOperator::class,
+                MixedStampOperator::class, BoundedEmitOperator::class,
+                BoundedEmitUnboundedOperator::class, JsonEntryOperator::class, MergeOperator::class,
+                RouteLatestOperator::class, FannedOperator::class, CompletingBounded::class,
+                CompletingUnbounded::class, FlakyEntryOperator::class, TimingBounded::class,
+                TimingUnbounded::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -59,7 +59,7 @@ final class DispatchTest extends TestCase
 
     public function testAnInputReachesTheTaskletAndItsReturnIsEmitted(): void
     {
-        $result = $this->work('echo_operative', 0, [self::input('"hello"')]);
+        $result = $this->work('echo_operator', 0, [self::input('"hello"')]);
 
         self::assertSame('work', $result['outcome']);
         self::assertSame('ok', $result['effects'][0]['verdict']);
@@ -73,13 +73,13 @@ final class DispatchTest extends TestCase
 
     public function testARecordedChangeIsJournaledAndFoldedLive(): void
     {
-        $result = $this->work('counter_operative', 0, [self::input('"a"'), self::input('"b"')]);
+        $result = $this->work('counter_operator', 0, [self::input('"a"'), self::input('"b"')]);
 
         self::assertCount(2, $result['effects']);
         self::assertSame(['{"push":"a"}'], $result['effects'][0]['changes']);
         self::assertSame(
             ['count' => 2, 'seen' => ['a', 'b']],
-            $this->stateOf('counter_operative'),
+            $this->stateOf('counter_operator'),
         );
     }
 
@@ -91,7 +91,7 @@ final class DispatchTest extends TestCase
     public function testPlainTextIntoAnEntryNamingNoCodecNeverReachesTheHandler(): void
     {
         Delivered::$values = [];
-        $result = $this->work('json_entry_operative', 0, [self::input('{"a":1}'), self::input('hello')]);
+        $result = $this->work('json_entry_operator', 0, [self::input('{"a":1}'), self::input('hello')]);
 
         self::assertSame(
             ['ok', 'unreadable'],
@@ -108,19 +108,19 @@ final class DispatchTest extends TestCase
      */
     public function testAnEntryTransformFailureIsUnreadableWhileAHandlerFailureIsRetryable(): void
     {
-        $mapped = $this->work('flaky_entry_operative', 0, [self::input('poison')]);
+        $mapped = $this->work('flaky_entry_operator', 0, [self::input('poison')]);
         self::assertSame('unreadable', $mapped['effects'][0]['verdict']);
         self::assertStringContainsString('the mapping rejected it', $mapped['effects'][0]['message']);
 
-        $thrown = $this->work('flaky_entry_operative', 0, [self::input('boom')]);
+        $thrown = $this->work('flaky_entry_operator', 0, [self::input('boom')]);
         self::assertSame('retryable', $thrown['effects'][0]['verdict']);
         self::assertStringContainsString('the handler rejected it', $thrown['effects'][0]['message']);
     }
 
     public function testANonRetryableErrorParksImmediately(): void
     {
-        $this->registry->add(PoisonOperative::spec());
-        $result = $this->work('poison_operative', 0, [self::input('"poison"')]);
+        $this->registry->add(PoisonOperator::spec());
+        $result = $this->work('poison_operator', 0, [self::input('"poison"')]);
 
         self::assertSame('non_retryable', $result['effects'][0]['verdict']);
         self::assertStringContainsString('poisoned', $result['effects'][0]['message']);
@@ -129,8 +129,8 @@ final class DispatchTest extends TestCase
     /** Items after a failure are re-handed by the core, so the batch stops. */
     public function testTheBatchStopsAtTheFailedItem(): void
     {
-        $this->registry->add(PoisonOperative::spec());
-        $result = $this->work('poison_operative', 0, [
+        $this->registry->add(PoisonOperator::spec());
+        $result = $this->work('poison_operator', 0, [
             self::input('"ok"'),
             self::input('"poison"'),
             self::input('"never reached"'),
@@ -143,7 +143,7 @@ final class DispatchTest extends TestCase
 
     public function testATimerFiringReachesOnTimerWithNowEqualToItsSchedule(): void
     {
-        $result = $this->work('counter_operative', 0, [
+        $result = $this->work('counter_operator', 0, [
             ['kind' => 'timer', 'timer_kind' => 'processing_time', 'scheduled_at' => 5_000],
         ]);
 
@@ -155,9 +155,9 @@ final class DispatchTest extends TestCase
     {
         $restored = $this->dispatcher->answer([
             'token' => 1,
-            'factory' => 'counter_operative',
+            'factory' => 'counter_operator',
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'restore_fold',
@@ -169,20 +169,20 @@ final class DispatchTest extends TestCase
         ]);
 
         self::assertSame('restored', $restored['outcome']);
-        self::assertSame(['count' => 2, 'seen' => ['x', 'y']], $this->stateOf('counter_operative'));
+        self::assertSame(['count' => 2, 'seen' => ['x', 'y']], $this->stateOf('counter_operator'));
     }
 
     public function testASnapshotRoundTripsThroughALaterRestore(): void
     {
-        $this->work('counter_operative', 0, [self::input('"a"')]);
-        $snapshot = $this->command('counter_operative', 'snapshot_request')['state'];
+        $this->work('counter_operator', 0, [self::input('"a"')]);
+        $snapshot = $this->command('counter_operator', 'snapshot_request')['state'];
 
         $fresh = new Dispatcher($this->registry, self::core());
         $fresh->answer([
             'token' => 2,
-            'factory' => 'counter_operative',
+            'factory' => 'counter_operator',
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'restore_fold',
@@ -190,15 +190,15 @@ final class DispatchTest extends TestCase
             'changes' => [],
         ]);
 
-        self::assertSame(['count' => 1, 'seen' => ['a']], $this->stateOf('counter_operative'));
+        self::assertSame(['count' => 1, 'seen' => ['a']], $this->stateOf('counter_operator'));
     }
 
     public function testALiveStateReadAndAMigrationSerializeAnswerTheSameJson(): void
     {
-        $this->work('counter_operative', 0, [self::input('"a"')]);
+        $this->work('counter_operator', 0, [self::input('"a"')]);
 
-        $live = $this->command('counter_operative', 'live_state_read')['json'];
-        $migration = $this->command('counter_operative', 'migration_serialize')['json'];
+        $live = $this->command('counter_operator', 'live_state_read')['json'];
+        $migration = $this->command('counter_operator', 'migration_serialize')['json'];
 
         self::assertSame('{"count":1,"seen":["a"]}', $live);
         self::assertSame($live, $migration);
@@ -208,9 +208,9 @@ final class DispatchTest extends TestCase
     {
         $applied = $this->dispatcher->answer([
             'token' => 3,
-            'factory' => 'counter_operative',
+            'factory' => 'counter_operator',
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'apply_state',
@@ -218,7 +218,7 @@ final class DispatchTest extends TestCase
         ]);
 
         self::assertSame('state_applied', $applied['outcome']);
-        self::assertSame(['count' => 9, 'seen' => ['z']], $this->stateOf('counter_operative'));
+        self::assertSame(['count' => 9, 'seen' => ['z']], $this->stateOf('counter_operator'));
     }
 
     public function testThePrepareCrossingAnswersOneKeyPerPayload(): void
@@ -245,16 +245,16 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * The SDK's half of a workflow chain: a stage runs like any other
+     * The SDK's half of a bounded chain: a stage runs like any other
      * tasklet, and the driver's barrier is answered by the completion. The
      * driver itself — loop modes, suspension, rewind, the task journal that
      * makes a resumed chain skip committed stages — is the core's, reached
      * through step activations, so this SDK implements none of it.
      */
-    public function testAWorkflowStageRunsAsAnOrdinaryTasklet(): void
+    public function testABoundedStageRunsAsAnOrdinaryTasklet(): void
     {
-        $this->registry->add(SagaOperative::spec());
-        $result = $this->work('saga_operative', 0, [self::input('"reserve"')]);
+        $this->registry->add(SagaOperator::spec());
+        $result = $this->work('saga_operator', 0, [self::input('"reserve"')]);
 
         self::assertSame('ok', $result['effects'][0]['verdict']);
         $emitted = json_decode($result['effects'][0]['outputs'][0]['payload'], true);
@@ -265,12 +265,12 @@ final class DispatchTest extends TestCase
     /** An aborted chain compensates the stages that committed, in reverse. */
     public function testCompensationRunsOverTheRecordedForwardOutputs(): void
     {
-        $this->registry->add(SagaOperative::spec());
+        $this->registry->add(SagaOperator::spec());
         $result = $this->dispatcher->answer([
             'token' => 4,
-            'factory' => 'saga_operative',
+            'factory' => 'saga_operator',
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'compensate_run',
@@ -289,9 +289,9 @@ final class DispatchTest extends TestCase
     {
         $result = $this->dispatcher->answer([
             'token' => 5,
-            'factory' => 'echo_operative',
+            'factory' => 'echo_operator',
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'compensate_run',
@@ -304,27 +304,27 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * A workflow tasklet's `complete` rides its item's effect as JSON, the
+     * A bounded tasklet's `complete` rides its item's effect as JSON, the
      * latest call winning, and the rest of the item still runs: the driver
      * ends the instance only after the iteration commits.
      */
-    public function testAWorkflowTaskletCompletionRidesItsEffect(): void
+    public function testABoundedTaskletCompletionRidesItsEffect(): void
     {
-        $effect = $this->work('completing_workflow', 0, [self::input('{"order":7}')])['effects'][0];
+        $effect = $this->work('completing_bounded', 0, [self::input('{"order":7}')])['effects'][0];
 
         self::assertSame('ok', $effect['verdict']);
         self::assertSame('{"seeded":{"order":7}}', $effect['complete']);
         self::assertSame('{"order":7}', $effect['outputs'][0]['payload']);
-        self::assertNull($this->work('echo_operative', 0, [self::input('"x"')])['effects'][0]['complete']);
+        self::assertNull($this->work('echo_operator', 0, [self::input('"x"')])['effects'][0]['complete']);
     }
 
     /**
-     * A stream tasklet's request is carried the same way, and the core
+     * An unbounded tasklet's request is carried the same way, and the core
      * refuses it; a string result rides as it stands, as a sink sends one.
      */
-    public function testAStreamTaskletCompletionIsCarriedTheSameWay(): void
+    public function testAnUnboundedTaskletCompletionIsCarriedTheSameWay(): void
     {
-        $effect = $this->work('completing_stream', 0, [self::input('"bye"')])['effects'][0];
+        $effect = $this->work('completing_unbounded', 0, [self::input('"bye"')])['effects'][0];
 
         self::assertSame('ok', $effect['verdict']);
         self::assertSame('bye', $effect['complete']);
@@ -333,30 +333,30 @@ final class DispatchTest extends TestCase
     /** A failed item carries no completion, so a failed iteration cannot end the instance. */
     public function testAnItemThatFailsAfterCompletingCarriesNoCompletion(): void
     {
-        $effect = $this->work('completing_workflow', 0, [self::input('"fail"')])['effects'][0];
+        $effect = $this->work('completing_bounded', 0, [self::input('"fail"')])['effects'][0];
 
         self::assertSame('retryable', $effect['verdict']);
         self::assertArrayNotHasKey('complete', $effect);
     }
 
-    /** A workflow tasklet's timer calls ride its item's effect exactly as a stream tasklet's do. */
-    public function testAWorkflowItemCarriesItsTimerOpsAsAStreamItemDoes(): void
+    /** A bounded tasklet's timer calls ride its item's effect exactly as an unbounded tasklet's do. */
+    public function testABoundedItemCarriesItsTimerOpsAsAnUnboundedItemDoes(): void
     {
-        $workflow = $this->work('timing_workflow', 0, [self::input('7')])['effects'][0];
-        $stream = $this->work('timing_stream', 0, [self::input('7')])['effects'][0];
+        $bounded = $this->work('timing_bounded', 0, [self::input('7')])['effects'][0];
+        $stream = $this->work('timing_unbounded', 0, [self::input('7')])['effects'][0];
 
-        self::assertSame('ok', $workflow['verdict']);
+        self::assertSame('ok', $bounded['verdict']);
         self::assertSame([
             ['kind' => 'processing_time', 'scheduled_at' => 2_000, 'register' => true],
             ['kind' => 'event_time', 'scheduled_at' => 6_000, 'register' => true],
             ['kind' => 'processing_time', 'scheduled_at' => 2_000, 'register' => false],
-        ], $workflow['timers']);
-        self::assertSame($stream['timers'], $workflow['timers']);
+        ], $bounded['timers']);
+        self::assertSame($stream['timers'], $bounded['timers']);
     }
 
     public function testEveryTimerCallOfACompensateContextIsRefusedAndArmsNothing(): void
     {
-        $registered = $this->registry->get('timing_workflow');
+        $registered = $this->registry->get('timing_bounded');
         self::assertNotNull($registered);
         $calls = [
             'timerAfter' => static fn (Ctx $ctx): int => $ctx->timerAfter(60_000),
@@ -366,7 +366,7 @@ final class DispatchTest extends TestCase
         foreach ($calls as $name => $call) {
             $refused = null;
             $ctx = Dispatcher::invoke(
-                ['token' => 1, 'operative' => 'op', 'cell_key' => null, 'change_seq' => 0, 'kind' => 'compensate_run'],
+                ['token' => 1, 'operator' => 'op', 'cell_key' => null, 'change_seq' => 0, 'kind' => 'compensate_run'],
                 $registered,
                 $registered->spec->tasklets[0],
                 self::core(),
@@ -496,7 +496,7 @@ final class DispatchTest extends TestCase
     public function testAFreshWorkItemRestartsTheEmitOrdinal(): void
     {
         $result = $this->work(
-            'stamp_operative',
+            'stamp_operator',
             0,
             [self::input('"twice"'), self::input('"twice"')],
             'ek',
@@ -524,12 +524,12 @@ final class DispatchTest extends TestCase
     /** @return array<string, mixed> */
     private function stamped(string $payload): array
     {
-        return $this->work('stamp_operative', 0, [self::input($payload)], 'ek', 5);
+        return $this->work('stamp_operator', 0, [self::input($payload)], 'ek', 5);
     }
 
-    public function testAStructuredWorkflowReleasesOneUntransformedEdgeOutput(): void
+    public function testAStructuredBoundedReleasesOneUntransformedEdgeOutput(): void
     {
-        $outputs = $this->work('wf_emit', 0, [self::input('10')])['effects'][0]['outputs'];
+        $outputs = $this->work('bounded_emit', 0, [self::input('10')])['effects'][0]['outputs'];
 
         self::assertSame(
             [['edge', 1, null, '10'], ['plugin', null, 'handoff', '10']],
@@ -554,7 +554,7 @@ final class DispatchTest extends TestCase
      */
     public function testAnEdgePayloadIsTheEncodersOwnString(): void
     {
-        $outputs = $this->work('wf_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
+        $outputs = $this->work('bounded_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
 
         self::assertCount(3, $outputs);
         foreach ($outputs as $index => $output) {
@@ -563,9 +563,9 @@ final class DispatchTest extends TestCase
         }
     }
 
-    public function testTheSameGraphOnAStreamClassReleasesOneOutputPerConsumer(): void
+    public function testTheSameGraphOnAnUnboundedClassReleasesOneOutputPerConsumer(): void
     {
-        $outputs = $this->work('wf_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
+        $outputs = $this->work('bounded_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
 
         self::assertSame(
             [['edge', 1, '11'], ['edge', 2, '10'], ['plugin', null, '10']],
@@ -578,24 +578,24 @@ final class DispatchTest extends TestCase
 
     // The other end of the same two arms: what the CONSUMER is handed. A stream
     // producer already applied the edge, so delivery applies nothing; a
-    // workflow stage released the value raw, so delivery is the one
+    // bounded stage released the value raw, so delivery is the one
     // application.
 
-    public function testAStreamInterTaskEdgeAppliesItsMapExactlyOnce(): void
+    public function testAnUnboundedInterTaskEdgeAppliesItsMapExactlyOnce(): void
     {
-        $produced = $this->work('wf_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
+        $produced = $this->work('bounded_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
 
-        self::assertSame([11], $this->delivered('wf_emit_stream', 1, $produced[0]['payload']));
+        self::assertSame([11], $this->delivered('bounded_emit_stream', 1, $produced[0]['payload']));
     }
 
-    public function testAWorkflowConsumerAppliesItsOwnEdgeExactlyOnceAtDelivery(): void
+    public function testABoundedConsumerAppliesItsOwnEdgeExactlyOnceAtDelivery(): void
     {
-        $released = $this->work('wf_emit', 0, [self::input('10')])['effects'][0]['outputs'][0]['payload'];
+        $released = $this->work('bounded_emit', 0, [self::input('10')])['effects'][0]['outputs'][0]['payload'];
 
         // One released value reaches BOTH children — the driver's fan-out —
         // and each evaluates its own edge here.
-        self::assertSame([11], $this->delivered('wf_emit', 1, $released));
-        self::assertSame([10], $this->delivered('wf_emit', 2, $released));
+        self::assertSame([11], $this->delivered('bounded_emit', 1, $released));
+        self::assertSame([10], $this->delivered('bounded_emit', 2, $released));
     }
 
     /**
@@ -624,7 +624,7 @@ final class DispatchTest extends TestCase
     public function testMergedSourcesReachTheTaskletEachUnderItsOwnMapping(): void
     {
         Delivered::$values = [];
-        $result = $this->work('merge_operative', 0, [
+        $result = $this->work('merge_operator', 0, [
             self::input('"A:1"'),
             self::input('"A:2"'),
             self::input('"A:3"', channel: 1),
@@ -643,13 +643,13 @@ final class DispatchTest extends TestCase
     {
         self::assertSame(
             [['keys' => ['B'], 'event_time' => null]],
-            $this->prepare(['"B:1"'], 'merge_operative', channel: 1),
+            $this->prepare(['"B:1"'], 'merge_operator', channel: 1),
         );
     }
 
     public function testRouteLatestHandsAKeyTheDocumentOnItsOwnTraffic(): void
     {
-        $result = $this->work('route_latest_operative', 0, [
+        $result = $this->work('route_latest_operator', 0, [
             self::input('{"limit":5}'),
             self::input('{"symbol":"A"}', channel: 1),
         ]);
@@ -663,7 +663,7 @@ final class DispatchTest extends TestCase
     public function testAFanOfThreeRunsTheHandlerOncePerValueUnderOneInput(): void
     {
         Delivered::$values = [];
-        $result = $this->work('fanned_operative', 0, [self::input('"a:1,a:2,a:3"', offset: 7)], 'a');
+        $result = $this->work('fanned_operator', 0, [self::input('"a:1,a:2,a:3"', offset: 7)], 'a');
 
         self::assertCount(1, $result['effects']);
         self::assertSame(7, $result['effects'][0]['consumed_offset']);
@@ -672,15 +672,15 @@ final class DispatchTest extends TestCase
 
     public function testAFanOfNoneIsADrop(): void
     {
-        self::assertSame([], $this->delivered('fanned_operative', 0, '"none"', channel: 0, cellKey: 'a'));
-        self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_operative'));
+        self::assertSame([], $this->delivered('fanned_operator', 0, '"none"', channel: 0, cellKey: 'a'));
+        self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_operator'));
     }
 
     public function testAFanFollowedByAKeyAnswersEveryKeyAtTheCrossing(): void
     {
         self::assertSame(
             [['keys' => ['a', 'b', 'c'], 'event_time' => null]],
-            $this->prepare(['"a:1,b:2,c:3"'], 'fanned_operative'),
+            $this->prepare(['"a:1,b:2,c:3"'], 'fanned_operator'),
         );
     }
 
@@ -701,14 +701,14 @@ final class DispatchTest extends TestCase
     public function testEachCellAFanReachesRunsOnlyTheValuesRoutedToIt(int $tasklet, int $channel): void
     {
         foreach (['a' => [['a', 'a:1'], ['a', 'a:3']], 'b' => [['b', 'b:2']]] as $cell => $routed) {
-            self::assertSame($routed, $this->delivered('fanned_operative', $tasklet, '"a:1,b:2,a:3"', $channel, $cell));
+            self::assertSame($routed, $this->delivered('fanned_operator', $tasklet, '"a:1,b:2,a:3"', $channel, $cell));
         }
     }
 
     /** @return array<string, mixed> */
     private function mixed(string $payload, int $tasklet = 0): array
     {
-        return $this->work('mixed_stamp_operative', $tasklet, [self::input($payload)], 'ek', 5);
+        return $this->work('mixed_stamp_operator', $tasklet, [self::input($payload)], 'ek', 5);
     }
 
     /** @param list<array<string, mixed>> $items @return array<string, mixed> */
@@ -723,7 +723,7 @@ final class DispatchTest extends TestCase
             'token' => 1,
             'factory' => $factory,
             'tasklet' => $tasklet,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => $cellKey,
             'change_seq' => $changeSeq,
             'kind' => 'work',
@@ -738,7 +738,7 @@ final class DispatchTest extends TestCase
             'token' => 1,
             'factory' => $factory,
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => $kind,
@@ -746,13 +746,13 @@ final class DispatchTest extends TestCase
     }
 
     /** @param list<string> $payloads @return list<array<string, mixed>> */
-    private function prepare(array $payloads, string $factory = 'keyed_operative', int $channel = 0): array
+    private function prepare(array $payloads, string $factory = 'keyed_operator', int $channel = 0): array
     {
         return $this->dispatcher->answer([
             'token' => 1,
             'factory' => $factory,
             'tasklet' => 0,
-            'operative' => 'op',
+            'operator' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'key_request',

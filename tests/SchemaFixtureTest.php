@@ -45,7 +45,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
 
         self::assertSame([
             'token' => 42,
-            'operative' => 'op-1',
+            'operator' => 'op-1',
             'tasklet' => 3,
             'cell_key' => 'k',
             'kind' => 'work',
@@ -119,7 +119,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
 
             self::assertSame([
                 'token' => 1,
-                'operative' => 'o',
+                'operator' => 'o',
                 'tasklet' => 0,
                 'cell_key' => null,
                 'kind' => $kind,

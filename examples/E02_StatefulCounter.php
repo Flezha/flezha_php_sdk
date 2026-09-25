@@ -16,14 +16,14 @@ namespace Flezha\Examples\E02;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Codable;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 
 /** The durable bytes carry this array, never the class name — so a rename is safe. */
 final class Totals implements Codable
@@ -65,8 +65,8 @@ final class Counter extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'order_totals')]
-final class OrderTotalsOperative extends StreamOperative
+#[Operator(factoryId: 'order_totals')]
+final class OrderTotalsOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -78,5 +78,5 @@ final class OrderTotalsOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(OrderTotalsOperative::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(OrderTotalsOperator::class)->run();
 }

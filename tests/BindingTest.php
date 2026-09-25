@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
@@ -13,7 +13,7 @@ use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 /** The FFI binding, against a live core. */
@@ -263,8 +263,8 @@ final class CheckpointTasklet extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'checkpoint_outputs_only')]
-final class CheckpointOutputsOnly extends StreamOperative
+#[Operator(factoryId: 'checkpoint_outputs_only')]
+final class CheckpointOutputsOnly extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -274,8 +274,8 @@ final class CheckpointOutputsOnly extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'checkpoint_ack_only')]
-final class CheckpointAckOnly extends StreamOperative
+#[Operator(factoryId: 'checkpoint_ack_only')]
+final class CheckpointAckOnly extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {

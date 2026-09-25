@@ -18,7 +18,7 @@ use Flezha\Clock;
  *     #[Task(cellKeys: ['a', 'b'], clock: Clock::EventTime)]
  *     final class Totals extends Tasklet { ... }
  *
- * A §5 short form, an operative class defining `run`, carries its tasklet's
+ * A §5 short form, an operator class defining `run`, carries its tasklet's
  * settings here too, all but `name`: that tasklet is named its factory id.
  */
 #[Attribute(Attribute::TARGET_CLASS)]

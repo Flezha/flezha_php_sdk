@@ -77,7 +77,7 @@ final class Binding
         int32_t flz_core_declare_class(uintptr_t ctx, const char *json, size_t json_len);
         int32_t flz_core_check_class(uintptr_t ctx, const char *json, size_t json_len, char **buf_out, size_t *len_out);
         int32_t flz_core_start(uintptr_t ctx, const char *ns);
-        int32_t flz_core_local_start(uintptr_t ctx, const char *factory_id, const char *operative_id);
+        int32_t flz_core_local_start(uintptr_t ctx, const char *factory_id, const char *operator_id);
         int32_t flz_core_local_on_sink(uintptr_t ctx, const char *channel);
         int32_t flz_core_local_feed(uintptr_t ctx, const char *channel, const char *payload, size_t len);
         int32_t flz_core_local_next_output(uintptr_t ctx, uint64_t timeout_ms, char **buf_out, size_t *len_out);
@@ -166,7 +166,7 @@ final class Binding
     /**
      * The shared library to load.
      *
-     * The override wins over the package's own directory so an operator can
+     * The override wins over the package's own directory so a user can
      * point a runner at a locally built core without repackaging, which is
      * what this repository's own build script and test app do.
      */

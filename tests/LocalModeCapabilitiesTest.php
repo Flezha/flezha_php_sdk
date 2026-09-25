@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Exception\FlezhaException;
-use Flezha\LocalOperative;
+use Flezha\LocalOperator;
 use Flezha\SinkOutput;
-use Flezha\TestApp\BoundedMailboxDropNothingOperative;
-use Flezha\TestApp\DynamicCellOperative;
-use Flezha\TestApp\PartitionRelayOperative;
-use Flezha\TestApp\SessionTimeoutOperative;
+use Flezha\TestApp\BoundedMailboxDropNothingOperator;
+use Flezha\TestApp\DynamicCellOperator;
+use Flezha\TestApp\PartitionRelayOperator;
+use Flezha\TestApp\SessionTimeoutOperator;
 use Flezha\TestApp\SugarDoNothing;
-use Flezha\TestApp\TierStoreOperative;
+use Flezha\TestApp\TierStoreOperator;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -22,13 +22,13 @@ use PHPUnit\Framework\TestCase;
  * what passes there cannot be two different graphs.
  *
  * The other ten capabilities in the vocabulary are the controller's:
- * persistence, effectively-once, correction, partitioning, workflows,
+ * persistence, effectively-once, correction, partitioning, bounded operators,
  * liveness, restarts. Local mode refuses them by name rather than
  * approximating them.
  *
  * What each test can assert is what a run with no controller can see. A
  * durable write reaches a null sink, a parked payload has nowhere to park, and
- * a partition member's key range arrives with `AddOperative`, so the
+ * a partition member's key range arrives with `AddOperator`, so the
  * assertions here are the output side of each capability, which is the half
  * the language layer produces.
  */
@@ -70,12 +70,12 @@ final class LocalModeCapabilitiesTest extends TestCase
     {
         // `partition_relay` is the manifest's only keyed-channel class.
         // Partitioning itself is the controller's (a member's key-group range
-        // arrives with `AddOperative`), so what is asserted here is the half
+        // arrives with `AddOperator`), so what is asserted here is the half
         // the language layer owns: the key it resolves and the stamps it puts
         // on the released value.
         $this->declares('keyed_channels', 'partition_relay');
 
-        $released = $this->release(PartitionRelayOperative::class, 'in', 'input', ['a:1', 'b:1', 'a:2']);
+        $released = $this->release(PartitionRelayOperator::class, 'in', 'input', ['a:1', 'b:1', 'a:2']);
 
         self::assertSame(
             ['a' => ['a:1', 'a:2'], 'b' => ['b:1']],
@@ -105,7 +105,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         $this->declares('dynamic_cell', 'dynamic_cell');
 
         $released = $this->release(
-            DynamicCellOperative::class,
+            DynamicCellOperator::class,
             'input',
             'kafka',
             ['a:1', 'b:1', 'drop', 'a:2'],
@@ -136,7 +136,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
         $inputs = array_map(static fn (int $at): string => "n$at", range(0, 23));
         $released = $this->release(
-            BoundedMailboxDropNothingOperative::class,
+            BoundedMailboxDropNothingOperator::class,
             'drop_nothing_input',
             'drop_nothing_echo',
             $inputs,
@@ -162,7 +162,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
         try {
             $released = $this->release(
-                SessionTimeoutOperative::class,
+                SessionTimeoutOperator::class,
                 'input',
                 'kafka',
                 ['open'],
@@ -188,7 +188,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         // release from, so a local run says so instead of running the graph.
         $this->expectException(FlezhaException::class);
         $this->expectExceptionMessageMatches('/effectively_once.*requires a controller/s');
-        LocalOperative::start(TierStoreOperative::class);
+        LocalOperator::start(TierStoreOperator::class);
     }
 
     /**
@@ -212,7 +212,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         int $perDrive = 0,
     ): array {
         $released = [];
-        $run = LocalOperative::start($class);
+        $run = LocalOperator::start($class);
 
         try {
             $run->onSink($sink, static function (SinkOutput $out) use (&$released): void {

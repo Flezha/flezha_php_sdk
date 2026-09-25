@@ -7,7 +7,7 @@ namespace Flezha\Tests;
 use Flezha\Ffi\Core;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
-use Flezha\Operative;
+use Flezha\Operator;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -50,20 +50,20 @@ final class ExamplesTest extends TestCase
         // example another test loaded first adds none, and a diff would then
         // report the example as declaring nothing.
         $real = realpath($path);
-        $operatives = array_values(array_filter(
+        $operators = array_values(array_filter(
             get_declared_classes(),
             static function (string $class) use ($real): bool {
                 $reflected = new ReflectionClass($class);
 
-                return is_subclass_of($class, Operative::class)
+                return is_subclass_of($class, Operator::class)
                     && !$reflected->isAbstract()
                     && $reflected->getFileName() === $real;
             },
         ));
 
-        self::assertNotEmpty($operatives, "$path declares no operative");
+        self::assertNotEmpty($operators, "$path declares no operator");
 
-        foreach ($operatives as $class) {
+        foreach ($operators as $class) {
             $spec = $class::spec();
             Validate::spec($spec, self::$core ?? Core::create());
 

@@ -14,7 +14,7 @@ use Flezha\Ffi\Core;
  * No tasklet has to be running and the application holds no credential of
  * its own: the controller judges every call as the identity the connection
  * already established, so nothing an unattended process holds expires. An
- * operator grants a namespace's applications the authority once and revokes it
+ * user grants a namespace's applications the authority once and revokes it
  * the same way, and a revocation takes effect on the next call:
  *
  *     flz role bind runner@team-orders app team-orders
@@ -30,22 +30,22 @@ final class Admin
     }
 
     /**
-     * Start an operative of `$factoryId`, on the specification `flz operative
+     * Start an operator of `$factoryId`, on the specification `flz operator
      * start` takes.
      *
      * Without an `$id` the controller generates one, so a start retried after a
-     * lost answer starts a second operative. With one, a start of an id already
-     * running leaves that operative untouched and answers `already_running`.
+     * lost answer starts a second operator. With one, a start of an id already
+     * running leaves that operator untouched and answers `already_running`.
      *
      * @throws FlezhaException the controller's refusal, as for every call here
      */
-    public function startOperative(
+    public function startOperator(
         string $factoryId,
         ?string $id = null,
         mixed $initValues = null,
         mixed $opts = null,
     ): StartResult {
-        $answer = $this->call('Operative.start', array_filter(
+        $answer = $this->call('Operator.start', array_filter(
             ['factory_id' => $factoryId, 'id' => $id, 'init_values' => $initValues, 'opts' => $opts],
             static fn (mixed $field): bool => $field !== null,
         ));
@@ -60,16 +60,16 @@ final class Admin
         return new StartResult($answer['id'], $outcome);
     }
 
-    /** Stop an operative, or the whole partition group it names. */
-    public function stopOperative(string $operativeId): mixed
+    /** Stop an operator, or the whole partition group it names. */
+    public function stopOperator(string $operatorId): mixed
     {
-        return $this->call('Operative.stop', $operativeId);
+        return $this->call('Operator.stop', $operatorId);
     }
 
-    /** Inject a message into an operative's input stream, blocking for the verdict. */
-    public function send(string $operativeId, string $message, string $channel = ''): mixed
+    /** Inject a message into an operator's input stream, blocking for the verdict. */
+    public function send(string $operatorId, string $message, string $channel = ''): mixed
     {
-        return $this->call('Operative.send', $operativeId, $message, $channel);
+        return $this->call('Operator.send', $operatorId, $message, $channel);
     }
 
     /** Enable a plugin, built from the fields `flz plugin enable` takes. */
@@ -84,10 +84,10 @@ final class Admin
         return $this->call('PluginManager.disable', $pluginId);
     }
 
-    /** The operative ids running in this namespace. */
-    public function listOperatives(): mixed
+    /** The operator ids running in this namespace. */
+    public function listOperators(): mixed
     {
-        return $this->call('Operative.list_operatives');
+        return $this->call('Operator.list_operators');
     }
 
     /** The plugins enabled on the controller node answering this call. */
@@ -97,9 +97,9 @@ final class Admin
     }
 
     /** One cell's live state, and the change sequence it was read at. */
-    public function cellState(string $operativeId, string $cellKey): mixed
+    public function cellState(string $operatorId, string $cellKey): mixed
     {
-        return $this->call('Operative.cell_state', $operativeId, $cellKey);
+        return $this->call('Operator.cell_state', $operatorId, $cellKey);
     }
 
     /**

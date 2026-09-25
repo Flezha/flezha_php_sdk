@@ -8,6 +8,6 @@ namespace Flezha;
 enum StartOutcome: string
 {
     case Started = 'started';
-    /** The named operative was already running and was left untouched. */
+    /** The named operator was already running and was left untouched. */
     case AlreadyRunning = 'already_running';
 }

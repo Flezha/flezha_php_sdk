@@ -28,7 +28,7 @@ use Flezha\Graph\Validate;
  * ## One runner per process
  *
  * The SDK never forks, spawns or supervises. N processes are N runners, which
- * is what the controller's placement already spreads operatives across, and it
+ * is what the controller's placement already spreads operators across, and it
  * keeps this layer agnostic between Kubernetes, systemd and a supervisor's own
  * process management. Threads inside one process are the executor's business,
  * not this class's.
@@ -58,7 +58,7 @@ final class Runner
      */
     private static ?array $attachment = null;
 
-    /** @var list<class-string<Operative>> */
+    /** @var list<class-string<Operator>> */
     private array $classes = [];
     private readonly Registry $registry;
     private ?Core $core = null;
@@ -87,16 +87,16 @@ final class Runner
     }
 
     /**
-     * Register an operative class of either kind, a full form or a §5 short
+     * Register an operator class of either kind, a full form or a §5 short
      * form alike. The kind is read from the class, never named by the call.
      *
-     * @param class-string<Operative> $class
+     * @param class-string<Operator> $class
      */
     public function registerFactory(string $class): self
     {
         // Resolved here so a malformed declaration is refused at the call the
         // author wrote, not at the first connection.
-        Operative::specFor($class);
+        Operator::specFor($class);
         $this->classes[] = $class;
 
         return $this;
@@ -110,7 +110,7 @@ final class Runner
      * from a registry the executor already holds, and it cannot stop serving
      * one. Saying so is what makes the call honest rather than ignored.
      *
-     * @param class-string<Operative> $class
+     * @param class-string<Operator> $class
      */
     public function unregisterFactory(string $class): self
     {
@@ -149,10 +149,10 @@ final class Runner
 
     /**
      * Administer this namespace from ordinary application code: start, stop
-     * and feed operatives, enable and disable plugins, read what is running.
+     * and feed operators, enable and disable plugins, read what is running.
      *
      * The controller judges every call as the identity this connection proved,
-     * so no credential is held here and nothing expires. An operator grants a
+     * so no credential is held here and nothing expires. A user grants a
      * namespace's applications the authority once, with
      * `flz role bind runner@<namespace> app <namespace>`; until then every
      * call is refused.
@@ -217,7 +217,7 @@ final class Runner
         $this->executor ??= Executors::fromEnvironment($this->maxActivations);
 
         $this->core->start($this->namespace);
-        // Shutdown is observed three ways, because the harness, an operator and
+        // Shutdown is observed three ways, because the harness, a user and
         // the controller each have their own: end of file on standard input, a
         // signal, and the core's own stop. The first two are the core's, on a
         // thread of its own — which is why they are observed even from inside
@@ -228,7 +228,7 @@ final class Runner
         }
 
         Logger::current()->info(sprintf(
-            'runner up on namespace %s: %s executor, %d operative class(es)',
+            'runner up on namespace %s: %s executor, %d operator class(es)',
             $this->namespace,
             $this->executor->name(),
             count($this->classes),
@@ -383,11 +383,11 @@ final class Runner
         $this->core = null;
     }
 
-    /** @param class-string<Operative> $class */
+    /** @param class-string<Operator> $class */
     private function buildRegistry(): void
     {
         foreach ($this->classes as $class) {
-            $spec = Operative::specFor($class);
+            $spec = Operator::specFor($class);
             // The verdict before the registration: the core judges the record
             // and this package renders it, so an author meets a declaration
             // refusal rather than a native failure at the first connection.

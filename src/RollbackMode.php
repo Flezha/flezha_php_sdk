@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-/** What an aborted workflow chain does with the stages that committed. */
+/** What an aborted bounded chain does with the stages that committed. */
 enum RollbackMode: string
 {
     case AllOrNothing = 'all_or_nothing';

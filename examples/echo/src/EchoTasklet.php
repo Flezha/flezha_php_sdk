@@ -9,7 +9,7 @@ use Flezha\Ctx;
 use Flezha\Tasklet;
 
 /**
- * A processing stage of the operative's graph, run once per message. This one
+ * A processing stage of the operator's graph, run once per message. This one
  * prefixes the input, and what `run` returns is emitted.
  *
  * `name` is the tasklet's stable identity. State is filed under it, so
@@ -17,7 +17,7 @@ use Flezha\Tasklet;
  * one. With no `state` and no `applyChange` overridden, nothing is kept between
  * messages and nothing is journaled.
  *
- * Where the result goes is not decided here. The operative decides that, so the
+ * Where the result goes is not decided here. The operator decides that, so the
  * graph can be rewired without touching this class.
  */
 #[Task(name: 'echo')]

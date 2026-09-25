@@ -70,7 +70,7 @@ final class ActivationCodec
 
         $activation = [
             'token' => $c->varint('activation token'),
-            'operative' => $c->bytes('target operative'),
+            'operator' => $c->bytes('target operator'),
             'tasklet' => $c->varint('target tasklet'),
             'cell_key' => $c->some('target cell key') ? $c->bytes('target cell key') : null,
         ];

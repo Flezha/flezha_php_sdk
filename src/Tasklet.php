@@ -93,7 +93,7 @@ abstract class Tasklet
     }
 
     /**
-     * Undo this tasklet's committed effects, in a workflow chain the driver
+     * Undo this tasklet's committed effects, in a bounded chain the driver
      * is rolling back.
      *
      * @param list<mixed> $outputs the forward outputs the core recorded

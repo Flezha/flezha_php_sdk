@@ -9,7 +9,7 @@ namespace Flezha;
  *
  * The SDK contains no kernel code. Transport, framing, ordering, per-cell
  * exclusivity, durability, retries, the retry-to-park ladder, timers, credit,
- * routing, the workflow driver and reconnect all live in the core; this
+ * routing, the bounded driver and reconnect all live in the core; this
  * package brings the authoring surface, the codec for user types, the
  * concurrency host and idiomatic errors.
  *
@@ -19,8 +19,8 @@ namespace Flezha;
  *         public function run(mixed $input, Ctx $ctx): mixed { return $input; }
  *     }
  *
- *     #[Operative(factoryId: 'echo')]
- *     final class EchoOperative extends StreamOperative
+ *     #[Operator(factoryId: 'echo')]
+ *     final class EchoOperator extends UnboundedOperator
  *     {
  *         public static function channels(Builder $c): void
  *         {
@@ -28,7 +28,7 @@ namespace Flezha;
  *         }
  *     }
  *
- *     Flezha::createRunner('default')->registerFactory(EchoOperative::class)->run();
+ *     Flezha::createRunner('default')->registerFactory(EchoOperator::class)->run();
  */
 final class Flezha
 {

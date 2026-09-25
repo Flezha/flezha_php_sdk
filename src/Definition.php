@@ -30,7 +30,7 @@ use ReflectionUnionType;
  * changes, `onTimer` overridden means it may register timers. A declaration
  * and its implementation therefore cannot disagree.
  *
- * The class is a `Tasklet` subclass, or a §5 short form: an operative class
+ * The class is a `Tasklet` subclass, or a §5 short form: an operator class
  * whose own `run` and hooks are its one tasklet, named its factory id.
  */
 final class Definition
@@ -40,14 +40,14 @@ final class Definition
 
     public readonly string $name;
     public readonly Task $decl;
-    public readonly Tasklet|Operative $instance;
+    public readonly Tasklet|Operator $instance;
     public readonly ?ValueCodec $stateCodec;
     public readonly ?ValueCodec $changeCodec;
 
     /** @var array<string, bool> */
     private readonly array $overrides;
 
-    /** @param class-string<Tasklet>|class-string<Operative> $class */
+    /** @param class-string<Tasklet>|class-string<Operator> $class */
     private function __construct(public readonly string $class)
     {
         $reflection = new ReflectionClass($class);
@@ -76,7 +76,7 @@ final class Definition
      * The resolved declaration, built once per class: it instantiates the
      * tasklet, and the dispatcher reads it on the hot path.
      *
-     * @param class-string<Tasklet>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operator> $class
      */
     public static function of(string $class): self
     {
@@ -168,7 +168,7 @@ final class Definition
      * there. The one field never inherited is `name`: a node identity is per
      * class, and an inherited one would make two tasklets claim one node.
      *
-     * @param ReflectionClass<Tasklet>|ReflectionClass<Operative> $reflection
+     * @param ReflectionClass<Tasklet>|ReflectionClass<Operator> $reflection
      */
     private static function declarationOf(ReflectionClass $reflection): Task
     {
@@ -190,13 +190,13 @@ final class Definition
             }
             $arguments = [...$arguments, ...$own];
         }
-        foreach (['kind', 'sink', 'input', 'codec'] as $operativeArgument) {
-            if (array_key_exists($operativeArgument, $arguments)) {
+        foreach (['kind', 'sink', 'input', 'codec'] as $operatorArgument) {
+            if (array_key_exists($operatorArgument, $arguments)) {
                 throw new DeclarationException($reflection->getName(), $arguments['name'] ?? null, sprintf(
-                    '#[Task] takes no `%s`: a tasklet is not an operative. A one-tasklet operative '
-                    . 'is a class extending StreamOperative or WorkflowOperative that defines `run`, '
-                    . 'with `sink`, `input` and `codec` on its #[Operative]',
-                    $operativeArgument,
+                    '#[Task] takes no `%s`: a tasklet is not an operator. A one-tasklet operator '
+                    . 'is a class extending UnboundedOperator or BoundedOperator that defines `run`, '
+                    . 'with `sink`, `input` and `codec` on its #[Operator]',
+                    $operatorArgument,
                 ));
             }
         }
@@ -233,7 +233,7 @@ final class Definition
      * one it defines is held to them here: an `applyChange` taking the state
      * by value would otherwise fold nothing.
      *
-     * @param class-string<Tasklet>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operator> $class
      * @return array<string, bool>
      */
     private static function hooksOf(string $class, string $name): array
@@ -361,10 +361,10 @@ final class Definition
     /**
      * Whether `$class` defines `$method` rather than taking the SDK base's
      * default: how a tasklet's hooks, a short form's `run` and an
-     * operative's `channels()` are all read.
+     * operator's `channels()` are all read.
      *
      * @param class-string $class
-     * @internal Read by {@see Operative} too.
+     * @internal Read by {@see Operator} too.
      */
     public static function overrides(string $class, string $method): bool
     {
@@ -373,7 +373,7 @@ final class Definition
         }
         $declaring = (new ReflectionMethod($class, $method))->getDeclaringClass()->getName();
 
-        return $declaring !== Tasklet::class && $declaring !== Operative::class;
+        return $declaring !== Tasklet::class && $declaring !== Operator::class;
     }
 
     /**
@@ -382,19 +382,19 @@ final class Definition
      * cell's durable path and a short form grown into its full form must
      * keep it.
      *
-     * @param ReflectionClass<Tasklet>|ReflectionClass<Operative> $reflection
+     * @param ReflectionClass<Tasklet>|ReflectionClass<Operator> $reflection
      */
     private static function nameOf(ReflectionClass $reflection, Task $decl): string
     {
         $class = $reflection->getName();
-        if (!$reflection->isSubclassOf(Operative::class)) {
+        if (!$reflection->isSubclassOf(Operator::class)) {
             return $decl->name ?? self::defaultName($reflection->getShortName());
         }
         if (!self::overrides($class, 'run')) {
             throw new DeclarationException(
                 $class,
                 null,
-                'is an operative with no `run`, so it is no tasklet; wire the tasklets its '
+                'is an operator with no `run`, so it is no tasklet; wire the tasklets its '
                 . '`channels()` declares',
             );
         }

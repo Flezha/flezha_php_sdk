@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\Json;
@@ -18,7 +18,7 @@ use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 
 // -- bench_keyed_nopersist / bench_keyed / the tier stores -------------------
 //
@@ -106,7 +106,7 @@ final class BenchCheckpoint extends KeyedUpsert
  * The same keyed upsert under both durability postures, so the round-trip
  * bench can isolate the cost of per-Cell persistence.
  */
-abstract class KeyedUpsertOperative extends StreamOperative
+abstract class KeyedUpsertOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -120,25 +120,25 @@ abstract class KeyedUpsertOperative extends StreamOperative
  * Per-cell persistence off: the heap-only posture the bench isolates against
  * the durable one.
  */
-#[Operative(factoryId: 'bench_keyed_nopersist', persistent: false)]
-final class BenchKeyedNoPersistOperative extends KeyedUpsertOperative
+#[Operator(factoryId: 'bench_keyed_nopersist', persistent: false)]
+final class BenchKeyedNoPersistOperator extends KeyedUpsertOperator
 {
 }
 
-#[Operative(factoryId: 'bench_keyed')]
-final class BenchKeyedOperative extends KeyedUpsertOperative
+#[Operator(factoryId: 'bench_keyed')]
+final class BenchKeyedOperator extends KeyedUpsertOperator
 {
 }
 
 /**
  * The effectively-once reference: a keyed upsert under the tier. A 300 ms
  * backoff base keeps the min-watermark freeze observable in the DLQ e2e.
- * Declared DropNothing: a durable-input-log operative that shed at its mailbox
+ * Declared DropNothing: a durable-input-log operator that shed at its mailbox
  * would hold the min-watermark on the shed offset forever while the log behind
  * it kept growing.
  */
-#[Operative(factoryId: 'tier_store')]
-final class TierStoreOperative extends StreamOperative
+#[Operator(factoryId: 'tier_store')]
+final class TierStoreOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -149,8 +149,8 @@ final class TierStoreOperative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'checkpoint_store')]
-final class CheckpointStoreOperative extends StreamOperative
+#[Operator(factoryId: 'checkpoint_store')]
+final class CheckpointStoreOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -168,8 +168,8 @@ final class CheckpointStoreOperative extends StreamOperative
  * — with `commit:` for the batch case, and with the delay alone for the
  * quiet-Cell case.
  */
-#[Operative(factoryId: 'checkpoint_batched_store')]
-final class CheckpointBatchedOperative extends StreamOperative
+#[Operator(factoryId: 'checkpoint_batched_store')]
+final class CheckpointBatchedOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -187,8 +187,8 @@ final class CheckpointBatchedOperative extends StreamOperative
  * `FLEZHA_BENCH_CHECKPOINT_DELAY_MS`) additionally holds the interval's outputs
  * until it closes.
  */
-#[Operative(factoryId: 'bench_checkpoint')]
-final class BenchCheckpointOperative extends StreamOperative
+#[Operator(factoryId: 'bench_checkpoint')]
+final class BenchCheckpointOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -226,8 +226,8 @@ final class StoreInput extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'store_input')]
-final class StoreInputOperative extends StreamOperative
+#[Operator(factoryId: 'store_input')]
+final class StoreInputOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -271,8 +271,8 @@ final class Counter extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'stateful_counter')]
-final class StatefulCounterOperative extends StreamOperative
+#[Operator(factoryId: 'stateful_counter')]
+final class StatefulCounterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -286,8 +286,8 @@ final class StatefulCounterOperative extends StreamOperative
  * The same topology with per-Cell persistence off, under the reference's
  * node names: the toggle is a class property, not a different computation.
  */
-#[Operative(factoryId: 'persistence_off_counter', persistent: false)]
-final class PersistenceOffCounterOperative extends StreamOperative
+#[Operator(factoryId: 'persistence_off_counter', persistent: false)]
+final class PersistenceOffCounterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -299,7 +299,7 @@ final class PersistenceOffCounterOperative extends StreamOperative
 
 // -- sleeping_counter --------------------------------------------------------
 //
-// A stream that sleeps when idle: `key:delta` inputs fold into one running
+// An unbounded operator that sleeps when idle: `key:delta` inputs fold into one running
 // total per key, and every input emits `key=total` on the `totals` sink. The
 // sleep e2e reads the total after a wake to prove the Cell came back with the
 // state it slept with.
@@ -326,8 +326,8 @@ final class SleepingCounter extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'sleeping_counter', sleepWhenIdle: true)]
-final class SleepingCounterOperative extends StreamOperative
+#[Operator(factoryId: 'sleeping_counter', sleepWhenIdle: true)]
+final class SleepingCounterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -380,8 +380,8 @@ final class Tick extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'coalescing_counter')]
-final class CoalescingCounterOperative extends StreamOperative
+#[Operator(factoryId: 'coalescing_counter')]
+final class CoalescingCounterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -420,8 +420,8 @@ final class ResumeProbe extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'resume_probe')]
-final class ResumeProbeOperative extends StreamOperative
+#[Operator(factoryId: 'resume_probe')]
+final class ResumeProbeOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -434,7 +434,7 @@ final class ResumeProbeOperative extends StreamOperative
 // -- schema_evolution_v1 / schema_evolution_v2 -------------------------------
 //
 // The same class either side of a deploy that edits its own state type. Both
-// halves declare the SAME tasklet name, so an operative started under v1 and
+// halves declare the SAME tasklet name, so an operator started under v1 and
 // restarted under v2 restores from the very WAL v1 wrote — which is what a
 // deploy does, with the two binaries collapsed into one fixture file.
 //
@@ -509,8 +509,8 @@ final class EvolvingCartV2 extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'schema_evolution_v1')]
-final class SchemaEvolutionV1Operative extends StreamOperative
+#[Operator(factoryId: 'schema_evolution_v1')]
+final class SchemaEvolutionV1Operator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -520,8 +520,8 @@ final class SchemaEvolutionV1Operative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'schema_evolution_v2')]
-final class SchemaEvolutionV2Operative extends StreamOperative
+#[Operator(factoryId: 'schema_evolution_v2')]
+final class SchemaEvolutionV2Operator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {

@@ -9,11 +9,11 @@ use Flezha\LoopMode;
 use Flezha\RollbackMode;
 
 /**
- * The workflow driver's settings for one class. Read only from a
- * {@see \Flezha\WorkflowOperative}; a stream class that carries it is refused.
+ * The bounded driver's settings for one class. Read only from a
+ * {@see \Flezha\BoundedOperator}; an unbounded class that carries it is refused.
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-final class Workflow
+final class Bounded
 {
     public function __construct(
         public readonly LoopMode $loopMode = LoopMode::Once,

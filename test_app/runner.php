@@ -27,15 +27,15 @@ require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/fixtures.php';
 require __DIR__ . '/fixtures_state.php';
 require __DIR__ . '/fixtures_probe.php';
-require __DIR__ . '/fixtures_workflow.php';
-require __DIR__ . '/fixtures_workflow_loop.php';
+require __DIR__ . '/fixtures_bounded.php';
+require __DIR__ . '/fixtures_bounded_loop.php';
 require __DIR__ . '/conformance.php';
 
 use Flezha\Flezha;
 use Flezha\Logger;
 use Flezha\TestApp\Conformance;
 use Flezha\TestApp\Fixtures;
-use Flezha\TestApp\WorkflowFixtures;
+use Flezha\TestApp\BoundedFixtures;
 
 // The conformance run answers a file and exits: no namespace, no controller.
 $report = getenv('FLEZHA_CONFORMANCE_REPORT');
@@ -55,11 +55,11 @@ if ($topology !== false && $topology !== '') {
     // topology dies at declaration, before the core is started.
     Conformance::registerOnly($runner, $topology);
 } else {
-    foreach (Fixtures::all() as $operative) {
-        $runner->registerFactory($operative);
+    foreach (Fixtures::all() as $operator) {
+        $runner->registerFactory($operator);
     }
-    foreach (WorkflowFixtures::all() as $operative) {
-        $runner->registerFactory($operative);
+    foreach (BoundedFixtures::all() as $operator) {
+        $runner->registerFactory($operator);
     }
 }
 

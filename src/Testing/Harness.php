@@ -17,7 +17,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\TaskNode;
-use Flezha\Operative;
+use Flezha\Operator;
 use Flezha\Tasklet;
 use Flezha\SpawnBridge;
 use Flezha\Timer;
@@ -51,11 +51,11 @@ final class Harness implements SpawnBridge
 
     private int $spawnCount = 0;
 
-    /** @param class-string<Tasklet>|class-string<Operative> $taskletClass */
+    /** @param class-string<Tasklet>|class-string<Operator> $taskletClass */
     public function __construct(
         string $taskletClass,
         private readonly ?string $cellKey = null,
-        private readonly string $operative = 'harness',
+        private readonly string $operator = 'harness',
     ) {
         $this->definition = Definition::of($taskletClass);
 
@@ -70,7 +70,7 @@ final class Harness implements SpawnBridge
 
         $spec = new ClassSpec(
             factoryId: '<harness>',
-            kind: 'stream',
+            kind: 'unbounded',
             persistent: true,
             effectivelyOnce: false,
             checkpointAck: false,
@@ -221,7 +221,7 @@ final class Harness implements SpawnBridge
     /**
      * Drive `tasklet_class` over `$inputs` and assert the replay agrees.
      *
-     * @param class-string<Tasklet>|class-string<Operative> $taskletClass
+     * @param class-string<Tasklet>|class-string<Operator> $taskletClass
      * @param list<mixed>                                     $inputs
      */
     public static function replayEquals(string $taskletClass, array $inputs, ?string $cellKey = null): bool
@@ -241,7 +241,7 @@ final class Harness implements SpawnBridge
             $ctx = Dispatcher::invoke(
                 [
                     'token' => 0,
-                    'operative' => $this->operative,
+                    'operator' => $this->operator,
                     'cell_key' => $this->cellKey,
                     'change_seq' => $this->changeSeq,
                 ],

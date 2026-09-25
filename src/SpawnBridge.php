@@ -6,7 +6,7 @@ namespace Flezha;
 
 /**
  * The one effect a `Ctx` cannot compute: asking the controller to spawn or
- * deliver to a workflow instance.
+ * deliver to a bounded instance.
  *
  * An interface rather than the core itself, so the invocation context depends
  * on what it needs rather than on the FFI layer — which is also what lets the

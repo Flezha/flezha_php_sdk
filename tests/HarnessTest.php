@@ -241,7 +241,7 @@ final class SpawnsTwice extends Tasklet
 
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        self::$handles = [$ctx->spawnWorkflow('worker', (string) $input), $ctx->spawnWorkflow('worker', (string) $input, id: 'w1')];
+        self::$handles = [$ctx->spawnBounded('worker', (string) $input), $ctx->spawnBounded('worker', (string) $input, id: 'w1')];
         foreach (self::$handles as $handle) {
             $result = $handle->tryResult();
             $ctx->emit([$result?->id, $result?->outcome->value]);

@@ -96,14 +96,14 @@ final class ExecutorTest extends TestCase
     public function testARemovedTypeIsNotDeclared(): void
     {
         $runner = \Flezha\Flezha::createRunner('test')
-            ->registerFactory(EchoOperative::class)
-            ->registerFactory(CounterOperative::class);
+            ->registerFactory(EchoOperator::class)
+            ->registerFactory(CounterOperator::class);
 
         self::assertSame(
-            ['echo_operative'],
-            self::declaredFactories($runner->unregisterFactory(CounterOperative::class)),
+            ['echo_operator'],
+            self::declaredFactories($runner->unregisterFactory(CounterOperator::class)),
         );
-        self::assertSame([], self::declaredFactories($runner->unregisterFactory(EchoOperative::class)));
+        self::assertSame([], self::declaredFactories($runner->unregisterFactory(EchoOperator::class)));
     }
 
     /** @return list<string> */

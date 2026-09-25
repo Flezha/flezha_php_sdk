@@ -4,33 +4,33 @@ declare(strict_types=1);
 
 /**
  * Starts a runner: a process that connects to the controller and serves your
- * operatives.
+ * operators.
  *
- * Declare every operative you want served before `start()`. One runner can
- * serve several, and the same call takes a workflow operative.
+ * Declare every operator you want served before `start()`. One runner can
+ * serve several, and the same call takes a bounded operator.
  */
 
 require __DIR__ . '/vendor/autoload.php';
 
-use Flezha\Examples\Echo\EchoOperative;
+use Flezha\Examples\Echo\EchoOperator;
 use Flezha\Flezha;
 
 // `run()` is `start()` followed by `awaitTermination()`. Splitting them leaves
 // room for the admin calls below, and still blocks until shutdown.
 $runner = Flezha::createRunner($argv[1] ?? 'default')
-    ->registerFactory(EchoOperative::class)
+    ->registerFactory(EchoOperator::class)
     ->start();
 
-// Everything `flz operative` and `flz plugin` do is also a method here.
+// Everything `flz operator` and `flz plugin` do is also a method here.
 // Uncomment to drive this namespace from the application instead of from a
 // terminal:
 //
 // $admin = $runner->admin();
-// $admin->startOperative('echo', id: 'my_echo');
+// $admin->startOperator('echo', id: 'my_echo');
 // $admin->enablePlugin('writer', [
 //     'id' => 'writer',
-//     'provider' => 'operative_file_sink',
-//     'operative_id' => 'my_echo',
+//     'provider' => 'operator_file_sink',
+//     'operator_id' => 'my_echo',
 //     'opts' => ['path' => 'echo-out.txt'],
 //     'hooks' => [['on_output', new stdClass()]],
 // ]);

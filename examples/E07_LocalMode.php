@@ -20,15 +20,15 @@ namespace Flezha\Examples\E07;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
-use Flezha\LocalOperative;
+use Flezha\LocalOperator;
 use Flezha\Tasklet;
 use Flezha\SinkOutput;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 
 /** One line into its words: the hop to `Tally` is the runtime's job. */
 #[Task]
@@ -67,8 +67,8 @@ final class Tally extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'local_word_count_example')]
-final class WordCountOperative extends StreamOperative
+#[Operator(factoryId: 'local_word_count_example')]
+final class WordCountOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -83,7 +83,7 @@ final class WordCountOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    $run = LocalOperative::start(WordCountOperative::class);
+    $run = LocalOperator::start(WordCountOperator::class);
 
     try {
         $run->onSink('totals', static fn (SinkOutput $out) => print($out->payload . PHP_EOL));

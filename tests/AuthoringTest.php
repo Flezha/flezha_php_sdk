@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
 use Flezha\Clock;
@@ -26,27 +26,27 @@ use Flezha\Graph\Edge;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\LoopMode;
-use Flezha\Operative as OperativeBase;
+use Flezha\Operator as OperatorBase;
 use Flezha\Tasklet;
 use Flezha\Runner;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 use Flezha\Testing\Harness;
 use Flezha\Timer;
 use Flezha\Transforms;
-use Flezha\WorkflowOperative;
+use Flezha\BoundedOperator;
 
 // ---------------------------------------------------------------------------
 // The §5 short form
 
-#[Operative(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
-final class ShortUpcase extends StreamOperative
+#[Operator(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
+final class ShortUpcase extends UnboundedOperator
 {
     use Echoes;
 }
 
 /** `ShortUpcase` as its full form, the tasklet named after the factory id. */
-#[Operative(factoryId: 'sf_upcase')]
-final class ShortUpcaseTwinOperative extends StreamOperative
+#[Operator(factoryId: 'sf_upcase')]
+final class ShortUpcaseTwinOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -56,14 +56,14 @@ final class ShortUpcaseTwinOperative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_place', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
-final class ShortPlace extends WorkflowOperative
+#[Operator(factoryId: 'sf_place', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+final class ShortPlace extends BoundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_place')]
-final class ShortPlaceTwinOperative extends WorkflowOperative
+#[Operator(factoryId: 'sf_place')]
+final class ShortPlaceTwinOperator extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -73,15 +73,15 @@ final class ShortPlaceTwinOperative extends WorkflowOperative
     }
 }
 
-/** A workflow short form under the id `ShortUpcase` already holds. */
-#[Operative(factoryId: 'sf_upcase', sink: 'placed')]
-final class ShortUpcaseWorkflow extends WorkflowOperative
+/** A bounded short form under the id `ShortUpcase` already holds. */
+#[Operator(factoryId: 'sf_upcase', sink: 'placed')]
+final class ShortUpcaseBounded extends BoundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_both', sink: 'out')]
-final class ShortWithTopology extends StreamOperative
+#[Operator(factoryId: 'sf_both', sink: 'out')]
+final class ShortWithTopology extends UnboundedOperator
 {
     use Echoes;
 
@@ -91,45 +91,45 @@ final class ShortWithTopology extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_no_body')]
-final class ShortNoBody extends StreamOperative
+#[Operator(factoryId: 'sf_no_body')]
+final class ShortNoBody extends UnboundedOperator
 {
 }
 
-final class ShortUnattributed extends StreamOperative
+final class ShortUnattributed extends UnboundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_renamed')]
+#[Operator(factoryId: 'sf_renamed')]
 #[Task(name: 'elsewhere')]
-final class ShortRenamed extends StreamOperative
+final class ShortRenamed extends UnboundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_unpersisted', persistent: false)]
-final class ShortUnpersisted extends StreamOperative
+#[Operator(factoryId: 'sf_unpersisted', persistent: false)]
+final class ShortUnpersisted extends UnboundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_per_input')]
-#[Workflow(loopMode: LoopMode::PerInput)]
-final class ShortPerInput extends WorkflowOperative
+#[Operator(factoryId: 'sf_per_input')]
+#[Bounded(loopMode: LoopMode::PerInput)]
+final class ShortPerInput extends BoundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_per_input_time_limited')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 60_000)]
-final class ShortPerInputTimeLimited extends WorkflowOperative
+#[Operator(factoryId: 'sf_per_input_time_limited')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 60_000)]
+final class ShortPerInputTimeLimited extends BoundedOperator
 {
     use Echoes;
 }
 
-#[Operative(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
-final class ShortCodecOnTopology extends StreamOperative
+#[Operator(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
+final class ShortCodecOnTopology extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -137,9 +137,9 @@ final class ShortCodecOnTopology extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_task_on_topology')]
+#[Operator(factoryId: 'sf_task_on_topology')]
 #[Task(mailboxCapacity: 8)]
-final class ShortTaskOnTopology extends StreamOperative
+final class ShortTaskOnTopology extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -148,8 +148,8 @@ final class ShortTaskOnTopology extends StreamOperative
 }
 
 /** A fold taking the state by value, which would fold into a copy. */
-#[Operative(factoryId: 'sf_fold_by_value')]
-final class ShortFoldByValue extends StreamOperative
+#[Operator(factoryId: 'sf_fold_by_value')]
+final class ShortFoldByValue extends UnboundedOperator
 {
     use Echoes;
 
@@ -164,8 +164,8 @@ final class ShortFoldByValue extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_narrowed_key')]
-final class ShortNarrowedKey extends StreamOperative
+#[Operator(factoryId: 'sf_narrowed_key')]
+final class ShortNarrowedKey extends UnboundedOperator
 {
     use Echoes;
 
@@ -175,8 +175,8 @@ final class ShortNarrowedKey extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_wider_keys')]
-final class ShortWiderKeys extends StreamOperative
+#[Operator(factoryId: 'sf_wider_keys')]
+final class ShortWiderKeys extends UnboundedOperator
 {
     use Echoes;
 
@@ -186,8 +186,8 @@ final class ShortWiderKeys extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_void_state')]
-final class ShortVoidState extends StreamOperative
+#[Operator(factoryId: 'sf_void_state')]
+final class ShortVoidState extends UnboundedOperator
 {
     use Echoes;
 
@@ -196,8 +196,8 @@ final class ShortVoidState extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_untyped_return')]
-final class ShortUntypedReturn extends WorkflowOperative
+#[Operator(factoryId: 'sf_untyped_return')]
+final class ShortUntypedReturn extends BoundedOperator
 {
     use Echoes;
 
@@ -206,8 +206,8 @@ final class ShortUntypedReturn extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'sf_extra_argument')]
-final class ShortExtraArgument extends StreamOperative
+#[Operator(factoryId: 'sf_extra_argument')]
+final class ShortExtraArgument extends UnboundedOperator
 {
     use Echoes;
 
@@ -216,8 +216,8 @@ final class ShortExtraArgument extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_dropped_argument')]
-final class ShortDroppedArgument extends StreamOperative
+#[Operator(factoryId: 'sf_dropped_argument')]
+final class ShortDroppedArgument extends UnboundedOperator
 {
     use Echoes;
 
@@ -226,8 +226,8 @@ final class ShortDroppedArgument extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_intersected_timer')]
-final class ShortIntersectedTimer extends StreamOperative
+#[Operator(factoryId: 'sf_intersected_timer')]
+final class ShortIntersectedTimer extends UnboundedOperator
 {
     use Echoes;
 
@@ -236,8 +236,8 @@ final class ShortIntersectedTimer extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_static_hook')]
-final class ShortStaticHook extends StreamOperative
+#[Operator(factoryId: 'sf_static_hook')]
+final class ShortStaticHook extends UnboundedOperator
 {
     use Echoes;
 
@@ -247,8 +247,8 @@ final class ShortStaticHook extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sf_hidden_hook')]
-final class ShortHiddenHook extends WorkflowOperative
+#[Operator(factoryId: 'sf_hidden_hook')]
+final class ShortHiddenHook extends BoundedOperator
 {
     use Echoes;
 
@@ -258,8 +258,8 @@ final class ShortHiddenHook extends WorkflowOperative
 }
 
 /** Every widening PHP lets an override of these hooks make. */
-#[Operative(factoryId: 'sf_widened_hooks')]
-final class ShortWidenedHooks extends WorkflowOperative
+#[Operator(factoryId: 'sf_widened_hooks')]
+final class ShortWidenedHooks extends BoundedOperator
 {
     use Echoes;
 
@@ -286,7 +286,7 @@ final class ShortWidenedHooks extends WorkflowOperative
     }
 }
 
-#[Task(name: 'sf_task_kind', kind: 'stream')]
+#[Task(name: 'sf_task_kind', kind: 'unbounded')]
 final class TaskWithKind extends Tasklet
 {
     use Echoes;
@@ -438,20 +438,20 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
-    public function testAnOperativeWithoutTheAttributeIsRefused(): void
+    public function testAnOperatorWithoutTheAttributeIsRefused(): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('declares no #[Flezha\Attribute\Operative(factoryId: ...)]');
+        $this->expectExceptionMessage('declares no #[Flezha\Attribute\Operator(factoryId: ...)]');
 
         Unattributed::spec();
     }
 
-    public function testAWorkflowDeclaringNoTaskletsIsRefused(): void
+    public function testABoundedDeclaringNoTaskletsIsRefused(): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('declares no tasklets; a workflow runs a graph of tasklets');
+        $this->expectExceptionMessage('declares no tasklets; a bounded operator runs a graph of tasklets');
 
-        EmptyWorkflow::spec();
+        EmptyBounded::spec();
     }
 
     /**
@@ -473,7 +473,7 @@ final class AuthoringTest extends RepositoryTestCase
      * `named()` is honoured on the inter-task path and was dropped on the
      * plugin path, so `named('input')->sink('relay_out')` produced a channel
      * called `relay_out` — and the channel name is what a forwarded frame
-     * carries and what selects the receiving operative's entry channel.
+     * carries and what selects the receiving operator's entry channel.
      */
     public function testANamedEdgeTerminatingOnASinkNamesTheChannelToo(): void
     {
@@ -582,7 +582,7 @@ final class AuthoringTest extends RepositoryTestCase
         try {
             return Validate::spec(new ClassSpec(
                 factoryId: 'under_test',
-                kind: 'stream',
+                kind: 'unbounded',
                 persistent: true,
                 effectivelyOnce: $builder->effectivelyOnce,
                 checkpointAck: $builder->checkpointAck,
@@ -725,7 +725,7 @@ final class AuthoringTest extends RepositoryTestCase
     /** Each source is its own consumer edge into the one node, with its own mapping and the merge's key. */
     public function testTwoSourcesMergeIntoOneNodeThroughEdgesOfTheirOwn(): void
     {
-        $spec = MergeOperative::spec();
+        $spec = MergeOperator::spec();
 
         self::assertSame(
             [['ticks', 'entry', null, [0], null], ['quotes', 'entry', null, [0], null]],
@@ -857,60 +857,60 @@ final class AuthoringTest extends RepositoryTestCase
         );
     }
 
-    /** @return iterable<string, array{class-string<OperativeBase>, string}> */
-    public static function streamSettingsOnAWorkflow(): iterable
+    /** @return iterable<string, array{class-string<OperatorBase>, string}> */
+    public static function unboundedSettingsOnABounded(): iterable
     {
-        yield 'the effectively-once tier' => [TierWorkflow::class, 'EffectivelyOnceOnWorkflow'];
-        yield 'a checkpoint interval' => [CheckpointWorkflow::class, 'CheckpointOnWorkflow'];
-        yield 'a correction window' => [CorrectionWorkflow::class, 'CorrectionWindowOnWorkflow'];
+        yield 'the effectively-once tier' => [TierBounded::class, 'EffectivelyOnceOnBounded'];
+        yield 'a checkpoint interval' => [CheckpointBounded::class, 'CheckpointOnBounded'];
+        yield 'a correction window' => [CorrectionBounded::class, 'CorrectionWindowOnBounded'];
     }
 
     /**
-     * What a workflow's builder wrote reaches the core, which refuses a
-     * stream-only setting under its own name.
+     * What a bounded operator's builder wrote reaches the core, which refuses a
+     * unbounded-only setting under its own name.
      *
-     * @dataProvider streamSettingsOnAWorkflow
-     * @param class-string<OperativeBase> $class
+     * @dataProvider unboundedSettingsOnABounded
+     * @param class-string<OperatorBase> $class
      */
-    public function testAStreamOnlySettingOnAWorkflowIsRefusedByTheCoresName(string $class, string $name): void
+    public function testAnUnboundedOnlySettingOnABoundedIsRefusedByTheCoresName(string $class, string $name): void
     {
         try {
             self::derived($class::spec());
-            self::fail("a workflow writing what $name names was accepted");
+            self::fail("a bounded writing what $name names was accepted");
         } catch (DeclarationException $e) {
             self::assertSame([$name], $e->refusals);
         }
     }
 
-    /** @return iterable<string, array{class-string<OperativeBase>, bool}> */
+    /** @return iterable<string, array{class-string<OperatorBase>, bool}> */
     public static function sleepDefaults(): iterable
     {
-        yield 'a persistent workflow' => [SleepDefaultWorkflow::class, true];
-        yield 'a workflow with persistence off' => [UnpersistedWorkflow::class, false];
-        yield 'a stream' => [SleepDefaultStream::class, false];
+        yield 'a persistent bounded' => [SleepDefaultBounded::class, true];
+        yield 'a bounded operator with persistence off' => [UnpersistedBounded::class, false];
+        yield 'an unbounded operator' => [SleepDefaultUnbounded::class, false];
     }
 
     /**
-     * Unwritten, sleeping follows persistence on a workflow and is off on a stream.
+     * Unwritten, sleeping follows persistence on a bounded operator and is off on an unbounded operator.
      *
      * @dataProvider sleepDefaults
-     * @param class-string<OperativeBase> $class
+     * @param class-string<OperatorBase> $class
      */
-    public function testSleepingDefaultsToPersistenceOnAWorkflowOnly(string $class, bool $sleeps): void
+    public function testSleepingDefaultsToPersistenceOnABoundedOnly(string $class, bool $sleeps): void
     {
         self::assertSame($sleeps, HostClassDecl::of($class::spec())['sleep_when_idle']);
     }
 
-    /** @return iterable<string, array{class-string<OperativeBase>}> */
+    /** @return iterable<string, array{class-string<OperatorBase>}> */
     public static function sleepersWithoutPersistence(): iterable
     {
-        yield 'a stream' => [UnpersistedSleepingStream::class];
-        yield 'a workflow' => [UnpersistedSleepingWorkflow::class];
+        yield 'an unbounded operator' => [UnpersistedSleepingUnbounded::class];
+        yield 'a bounded operator' => [UnpersistedSleepingBounded::class];
     }
 
     /**
      * @dataProvider sleepersWithoutPersistence
-     * @param class-string<OperativeBase> $class
+     * @param class-string<OperatorBase> $class
      */
     public function testSleepingWithoutPersistenceIsRefusedByName(string $class): void
     {
@@ -922,26 +922,26 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
-    /** @return iterable<string, array{class-string<OperativeBase>, list<string>}> */
-    public static function workflowAttributesOnAStream(): iterable
+    /** @return iterable<string, array{class-string<OperatorBase>, list<string>}> */
+    public static function boundedAttributesOnAnUnbounded(): iterable
     {
         yield 'a loop mode' => [PerInputStream::class, []];
-        yield 'synchronous durability' => [SyncDurableStream::class, ['SyncDurabilityOnStream']];
+        yield 'synchronous durability' => [SyncDurableUnbounded::class, ['SyncDurabilityOnUnbounded']];
     }
 
     /**
-     * @dataProvider workflowAttributesOnAStream
-     * @param class-string<OperativeBase> $class
+     * @dataProvider boundedAttributesOnAnUnbounded
+     * @param class-string<OperatorBase> $class
      * @param list<string> $names
      */
-    public function testAWorkflowAttributeOnAStreamIsRefusedAtRegistration(string $class, array $names): void
+    public function testABoundedAttributeOnAnUnboundedIsRefusedAtRegistration(string $class, array $names): void
     {
         try {
             Flezha::createRunner('test')->registerFactory($class);
-            self::fail('a stream carrying #[Workflow] was registered');
+            self::fail('an unbounded operator carrying #[Bounded] was registered');
         } catch (DeclarationException $e) {
             self::assertSame($names, $e->refusals);
-            self::assertStringContainsString("$class extends StreamOperative and carries #[Workflow]", $e->getMessage());
+            self::assertStringContainsString("$class extends UnboundedOperator and carries #[Bounded]", $e->getMessage());
         }
     }
 
@@ -1092,11 +1092,11 @@ final class AuthoringTest extends RepositoryTestCase
 
     // -- the §5 short form -------------------------------------------------
 
-    /** @return iterable<string, array{class-string<OperativeBase>, class-string<OperativeBase>}> */
+    /** @return iterable<string, array{class-string<OperatorBase>, class-string<OperatorBase>}> */
     public static function shortFormTwins(): iterable
     {
-        yield 'a stream' => [ShortUpcase::class, ShortUpcaseTwinOperative::class];
-        yield 'a workflow' => [ShortPlace::class, ShortPlaceTwinOperative::class];
+        yield 'an unbounded operator' => [ShortUpcase::class, ShortUpcaseTwinOperator::class];
+        yield 'a bounded operator' => [ShortPlace::class, ShortPlaceTwinOperator::class];
     }
 
     /**
@@ -1106,8 +1106,8 @@ final class AuthoringTest extends RepositoryTestCase
      * grows into its full form.
      *
      * @dataProvider shortFormTwins
-     * @param class-string<OperativeBase> $short
-     * @param class-string<OperativeBase> $hand
+     * @param class-string<OperatorBase> $short
+     * @param class-string<OperatorBase> $hand
      */
     public function testAShortFormDeclaresWhatItsHandWrittenTwinDeclares(string $short, string $hand): void
     {
@@ -1119,16 +1119,16 @@ final class AuthoringTest extends RepositoryTestCase
         self::derived($spec);
     }
 
-    public function testAWorkflowShortFormIsAOnceWorkflow(): void
+    public function testABoundedShortFormIsAOnceBounded(): void
     {
-        self::assertSame(LoopMode::Once, ShortPlace::spec()->workflow?->loopMode);
+        self::assertSame(LoopMode::Once, ShortPlace::spec()->bounded?->loopMode);
     }
 
-    public function testAWorkflowShortFormDeclaresTheLoopModeItWrites(): void
+    public function testABoundedShortFormDeclaresTheLoopModeItWrites(): void
     {
         $spec = ShortPerInput::spec();
 
-        self::assertSame('per_input', HostClassDecl::of($spec)['workflow']['loop_mode']);
+        self::assertSame('per_input', HostClassDecl::of($spec)['bounded']['loop_mode']);
         self::assertSame(['sf_per_input'], array_column($spec->tasklets, 'name'));
         self::derived($spec);
     }
@@ -1160,7 +1160,7 @@ final class AuthoringTest extends RepositoryTestCase
 
     public function testAChannelsBodyStillDeclaresAFullForm(): void
     {
-        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinOperative::spec()->tasklets, 'class'));
+        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinOperator::spec()->tasklets, 'class'));
     }
 
     public function testTheRunnerRegistersAShortFormAsTheClassTheAuthorWrote(): void
@@ -1189,7 +1189,7 @@ final class AuthoringTest extends RepositoryTestCase
         ];
         yield 'a short form whose factory id would be derived' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(ShortUnattributed::class),
-            'declares no #[Flezha\Attribute\Operative(factoryId: ...)]',
+            'declares no #[Flezha\Attribute\Operator(factoryId: ...)]',
         ];
         yield 'a short form naming its tasklet' => [
             static fn (): mixed => ShortRenamed::spec(),
@@ -1198,11 +1198,11 @@ final class AuthoringTest extends RepositoryTestCase
         // A class-level setting but the loop mode is the full form's to write.
         yield 'a short form with persistence off' => [
             static fn (): mixed => ShortUnpersisted::spec(),
-            'and this one writes `persistent: false` on #[Operative]; write the full form',
+            'and this one writes `persistent: false` on #[Operator]; write the full form',
         ];
-        yield 'a short form with a workflow setting beside its loop mode' => [
+        yield 'a short form with a bounded setting beside its loop mode' => [
             static fn (): mixed => ShortPerInputTimeLimited::spec(),
-            'and this one writes `maxDurationMs` on #[Workflow]; write the full form',
+            'and this one writes `maxDurationMs` on #[Bounded]; write the full form',
         ];
         yield 'a short-form argument beside a topology body' => [
             static fn (): mixed => ShortCodecOnTopology::spec(),
@@ -1213,13 +1213,13 @@ final class AuthoringTest extends RepositoryTestCase
             '#[Task] carries a tasklet\'s settings, and this class wires its tasklets in '
             . '`channels()`; a full form\'s tasklet settings go on its tasklet classes',
         ];
-        yield 'an operative with no run wired as a tasklet' => [
-            static fn (): mixed => Definition::of(ShortUpcaseTwinOperative::class),
-            'is an operative with no `run`',
+        yield 'an operator with no run wired as a tasklet' => [
+            static fn (): mixed => Definition::of(ShortUpcaseTwinOperator::class),
+            'is an operator with no `run`',
         ];
-        yield 'a tasklet registered as an operative' => [
+        yield 'a tasklet registered as an operator' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(Echoer::class),
-            'is a tasklet, which declares no operative',
+            'is a tasklet, which declares no operator',
         ];
     }
 
@@ -1227,14 +1227,14 @@ final class AuthoringTest extends RepositoryTestCase
     {
         try {
             Flezha::createRunner('test')->registerFactory(ShortWithTopology::class);
-            self::fail('a class carrying both bodies declares two operatives in one');
+            self::fail('a class carrying both bodies declares two operators in one');
         } catch (DeclarationException $e) {
             self::assertSame(['ShortFormWithTopology'], $e->refusals);
             self::assertStringContainsString("\n  - ShortFormWithTopology: ", $e->getMessage());
         }
     }
 
-    /** @return iterable<string, array{class-string<OperativeBase>, string, string}> */
+    /** @return iterable<string, array{class-string<OperatorBase>, string, string}> */
     public static function shortFormsWithAHookATaskletCouldNotDeclare(): iterable
     {
         yield 'a fold by value' => [
@@ -1271,7 +1271,7 @@ final class AuthoringTest extends RepositoryTestCase
      * rule: a fold by value would otherwise fold nothing, silently.
      *
      * @dataProvider shortFormsWithAHookATaskletCouldNotDeclare
-     * @param class-string<OperativeBase> $class
+     * @param class-string<OperatorBase> $class
      */
     public function testAShortFormsHookKeepsATaskletsSignature(string $class, string $hook, string $defect): void
     {
@@ -1291,7 +1291,7 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /** @return iterable<string, array{class-string<Tasklet>, string}> */
-    public static function taskletsWithAnOperativeArgument(): iterable
+    public static function taskletsWithAnOperatorArgument(): iterable
     {
         yield 'kind' => [TaskWithKind::class, 'kind'];
         yield 'sink' => [TaskWithSink::class, 'sink'];
@@ -1300,18 +1300,18 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /**
-     * @dataProvider taskletsWithAnOperativeArgument
+     * @dataProvider taskletsWithAnOperatorArgument
      * @param class-string<Tasklet> $class
      */
-    public function testATaskletCarryingAnOperativeArgumentIsRefusedNamingIt(string $class, string $argument): void
+    public function testATaskletCarryingAnOperatorArgumentIsRefusedNamingIt(string $class, string $argument): void
     {
         $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessageMatches("/#\\[Task\\] takes no `$argument`.*#\\[Operative\\]/");
+        $this->expectExceptionMessageMatches("/#\\[Task\\] takes no `$argument`.*#\\[Operator\\]/");
 
         Flezha::createRunner('test')->registerFactory($class);
     }
 
-    public function testAStreamAndAWorkflowShortFormUnderOneIdCollide(): void
+    public function testAnUnboundedAndABoundedShortFormUnderOneIdCollide(): void
     {
         $registry = new Registry();
         $registry->add(ShortUpcase::spec());
@@ -1319,7 +1319,7 @@ final class AuthoringTest extends RepositoryTestCase
         $this->expectException(FlezhaException::class);
         $this->expectExceptionMessageMatches('/^DuplicateFactoryId: `sf_upcase`/');
 
-        $registry->add(ShortUpcaseWorkflow::spec());
+        $registry->add(ShortUpcaseBounded::spec());
     }
 
     /**
@@ -1329,7 +1329,7 @@ final class AuthoringTest extends RepositoryTestCase
      */
     public function testNoBodyCanDeclareNoOutput(): void
     {
-        foreach ([Tasklet::class, OperativeBase::class] as $base) {
+        foreach ([Tasklet::class, OperatorBase::class] as $base) {
             $returns = (new \ReflectionMethod($base, 'run'))->getReturnType();
             self::assertInstanceOf(\ReflectionNamedType::class, $returns);
             self::assertSame('mixed', $returns->getName(), $base);
@@ -1337,8 +1337,8 @@ final class AuthoringTest extends RepositoryTestCase
     }
 }
 
-#[Operative(factoryId: 'fan_out')]
-final class FanOut extends StreamOperative
+#[Operator(factoryId: 'fan_out')]
+final class FanOut extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1348,8 +1348,8 @@ final class FanOut extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'branched')]
-final class Branched extends StreamOperative
+#[Operator(factoryId: 'branched')]
+final class Branched extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1360,8 +1360,8 @@ final class Branched extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'hybrid')]
-final class Hybrid extends StreamOperative
+#[Operator(factoryId: 'hybrid')]
+final class Hybrid extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1370,8 +1370,8 @@ final class Hybrid extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'keyed_hybrid')]
-final class KeyedHybrid extends StreamOperative
+#[Operator(factoryId: 'keyed_hybrid')]
+final class KeyedHybrid extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1380,8 +1380,8 @@ final class KeyedHybrid extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'per_edge_transform')]
-final class PerEdgeTransform extends StreamOperative
+#[Operator(factoryId: 'per_edge_transform')]
+final class PerEdgeTransform extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1391,8 +1391,8 @@ final class PerEdgeTransform extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'tier_workflow')]
-final class TierWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'tier_bounded')]
+final class TierBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1401,8 +1401,8 @@ final class TierWorkflow extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'checkpoint_workflow')]
-final class CheckpointWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'checkpoint_bounded')]
+final class CheckpointBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1411,8 +1411,8 @@ final class CheckpointWorkflow extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'correction_workflow')]
-final class CorrectionWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'correction_bounded')]
+final class CorrectionBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1421,9 +1421,9 @@ final class CorrectionWorkflow extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'per_input_stream')]
-#[Workflow(loopMode: LoopMode::PerInput)]
-final class PerInputStream extends StreamOperative
+#[Operator(factoryId: 'per_input_unbounded')]
+#[Bounded(loopMode: LoopMode::PerInput)]
+final class PerInputStream extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1431,9 +1431,9 @@ final class PerInputStream extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'sync_durable_stream')]
-#[Workflow(syncDurability: true)]
-final class SyncDurableStream extends StreamOperative
+#[Operator(factoryId: 'sync_durable_unbounded')]
+#[Bounded(syncDurability: true)]
+final class SyncDurableUnbounded extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1441,21 +1441,12 @@ final class SyncDurableStream extends StreamOperative
     }
 }
 
-final class Unattributed extends StreamOperative
+final class Unattributed extends UnboundedOperator
 {
 }
 
-#[Operative(factoryId: 'sleep_default_workflow')]
-final class SleepDefaultWorkflow extends WorkflowOperative
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operative(factoryId: 'unpersisted_workflow', persistent: false)]
-final class UnpersistedWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'sleep_default_bounded')]
+final class SleepDefaultBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1463,8 +1454,8 @@ final class UnpersistedWorkflow extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'sleep_default_stream')]
-final class SleepDefaultStream extends StreamOperative
+#[Operator(factoryId: 'unpersisted_bounded', persistent: false)]
+final class UnpersistedBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1472,8 +1463,8 @@ final class SleepDefaultStream extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'unpersisted_sleeping_stream', persistent: false, sleepWhenIdle: true)]
-final class UnpersistedSleepingStream extends StreamOperative
+#[Operator(factoryId: 'sleep_default_unbounded')]
+final class SleepDefaultUnbounded extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1481,8 +1472,8 @@ final class UnpersistedSleepingStream extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'unpersisted_sleeping_workflow', persistent: false, sleepWhenIdle: true)]
-final class UnpersistedSleepingWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'unpersisted_sleeping_unbounded', persistent: false, sleepWhenIdle: true)]
+final class UnpersistedSleepingUnbounded extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1490,16 +1481,25 @@ final class UnpersistedSleepingWorkflow extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'empty_workflow')]
-final class EmptyWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'unpersisted_sleeping_bounded', persistent: false, sleepWhenIdle: true)]
+final class UnpersistedSleepingBounded extends BoundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class);
+    }
+}
+
+#[Operator(factoryId: 'empty_bounded')]
+final class EmptyBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
     }
 }
 
-#[Operative(factoryId: 'named_sink')]
-final class NamedSink extends StreamOperative
+#[Operator(factoryId: 'named_sink')]
+final class NamedSink extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1507,8 +1507,8 @@ final class NamedSink extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'unnamed_sink')]
-final class UnnamedSink extends StreamOperative
+#[Operator(factoryId: 'unnamed_sink')]
+final class UnnamedSink extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1516,8 +1516,8 @@ final class UnnamedSink extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'named_twice')]
-final class NamedTwice extends StreamOperative
+#[Operator(factoryId: 'named_twice')]
+final class NamedTwice extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1525,8 +1525,8 @@ final class NamedTwice extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'trailing_named')]
-final class TrailingNamed extends StreamOperative
+#[Operator(factoryId: 'trailing_named')]
+final class TrailingNamed extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1534,8 +1534,8 @@ final class TrailingNamed extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'trailing_keyed')]
-final class TrailingKeyed extends StreamOperative
+#[Operator(factoryId: 'trailing_keyed')]
+final class TrailingKeyed extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1543,8 +1543,8 @@ final class TrailingKeyed extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'one_sink_two_channels')]
-final class OneSinkTwoChannels extends StreamOperative
+#[Operator(factoryId: 'one_sink_two_channels')]
+final class OneSinkTwoChannels extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -1553,8 +1553,8 @@ final class OneSinkTwoChannels extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'diamond')]
-final class Diamond extends StreamOperative
+#[Operator(factoryId: 'diamond')]
+final class Diamond extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {

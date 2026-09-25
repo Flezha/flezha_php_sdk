@@ -9,7 +9,7 @@ use Flezha\Dropped;
 use Flezha\Fanned;
 use Flezha\Overflow;
 use Flezha\Exception\DeclarationException;
-use Flezha\Operative;
+use Flezha\Operator;
 use Flezha\Tasklet;
 
 /**
@@ -115,9 +115,9 @@ final class Edge
 
     /**
      * Wire this edge into a tasklet: a `Tasklet` subclass, or a short-form
-     * operative class, which is its own.
+     * operator class, which is its own.
      *
-     * @param class-string<Tasklet>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operator> $class
      */
     public function into(string $class, ?string $nodeName = null): self
     {

@@ -6,19 +6,19 @@ namespace Flezha\Tests;
 
 require_once __DIR__ . '/../examples/E07_LocalMode.php';
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
-use Flezha\Examples\E07\WordCountOperative;
+use Flezha\Examples\E07\WordCountOperator;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
-use Flezha\LocalOperative;
+use Flezha\LocalOperator;
 use Flezha\Tasklet;
 use Flezha\SinkOutput;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 
 /**
- * The PHP SDK's local mode: the shipped example's operative class, its
+ * The PHP SDK's local mode: the shipped example's operator class, its
  * declared two-tasklet graph, and no controller anywhere.
  *
  * The example is what is asserted rather than a copy of it, so the file a
@@ -57,7 +57,7 @@ final class LocalModeTest extends RepositoryTestCase
     {
         [$lines, $expected] = $this->scenario();
         $released = [];
-        $run = LocalOperative::start(WordCountOperative::class);
+        $run = LocalOperator::start(WordCountOperator::class);
 
         try {
             $run->onSink('totals', static function (SinkOutput $out) use (&$released): void {
@@ -91,7 +91,7 @@ final class LocalModeTest extends RepositoryTestCase
 
     public function testAChannelTheClassDoesNotDeclareIsRefusedByName(): void
     {
-        $run = LocalOperative::start(WordCountOperative::class);
+        $run = LocalOperator::start(WordCountOperator::class);
 
         try {
             $this->expectException(FlezhaException::class);
@@ -105,7 +105,7 @@ final class LocalModeTest extends RepositoryTestCase
     public function testAnUndeclaredEntryReadsJsonAndAnUndeclaredSinkFollowsTheValue(): void
     {
         $released = [];
-        $run = LocalOperative::start(DefaultCodecs::class);
+        $run = LocalOperator::start(DefaultCodecs::class);
 
         try {
             $run->onSink('out', static function (SinkOutput $out) use (&$released): void {
@@ -134,8 +134,8 @@ final class DefaultCodecsTasklet extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'local_default_codecs_php')]
-final class DefaultCodecs extends StreamOperative
+#[Operator(factoryId: 'local_default_codecs_php')]
+final class DefaultCodecs extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {

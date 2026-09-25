@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-/** How many times a workflow instance's chain runs. */
+/** How many times a bounded instance's chain runs. */
 enum LoopMode: string
 {
     case Once = 'once';

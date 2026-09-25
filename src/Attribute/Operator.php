@@ -8,23 +8,23 @@ use Attribute;
 use Flezha\ChannelCodec;
 
 /**
- * The factory id an operative class registers under, whether its change bytes
+ * The factory id an operator class registers under, whether its change bytes
  * reach the per-cell WAL, and whether an idle instance sleeps: written out and
- * dropped from memory until its next input. Unwritten, a workflow sleeps when
- * it persists and a stream never does.
+ * dropped from memory until its next input. Unwritten, a bounded operator sleeps when
+ * it persists and an unbounded operator never does.
  *
  * On a §5 short form, a class that defines its one tasklet's `run` instead
  * of `channels()`, it also names the channels that tasklet is wired between:
  * the entry channel (`input` when none is written) and its `codec`, and the
  * plugin `sink` the tasklet's output reaches, if any.
  *
- * Deliberately not inherited: two operatives cannot share a factory id, and a
+ * Deliberately not inherited: two operators cannot share a factory id, and a
  * subclass silently taking its parent's would be refused by the core at
  * declare time rather than here. PHP attributes are not inherited by default,
  * which is the behaviour this wants.
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-final class Operative
+final class Operator
 {
     public function __construct(
         public readonly string $factoryId,

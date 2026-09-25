@@ -144,7 +144,7 @@ final class Dispatcher
             spec: $registered->spec,
             node: $node,
             outgoing: $registered->outgoing[$node->index],
-            operative: (string) $activation['operative'],
+            operator: (string) $activation['operator'],
             cellKey: $activation['cell_key'],
             changeSeq: (int) $activation['change_seq'],
             now: $now,
@@ -285,13 +285,13 @@ final class Dispatcher
         // This node's own edge off the channel: a transform chain declared
         // before one `into` belongs to that consumer and to no other. It is
         // evaluated here only for a payload that reached us untransformed — an
-        // entry payload, whose producer is the wire, or a workflow stage's
-        // released value. A stream producer evaluated it as its activation
+        // entry payload, whose producer is the wire, or a bounded stage's
+        // released value. An unbounded producer evaluated it as its activation
         // completed, and evaluating it again would compose the chain with
         // itself.
         $untransformed = $channel === null
             || $channel->kind === 'entry'
-            || $registered->spec->structuredWorkflow();
+            || $registered->spec->structuredBounded();
         $edge = $untransformed ? self::edgeInto($channel, $node->index) : null;
         foreach (self::entryValues($channel, $edge, (string) $item['payload']) as $input) {
             if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->cellKey)) {
@@ -544,7 +544,7 @@ final class Dispatcher
      * What a failure says on the wire.
      *
      * `Class: message`, in family with what the other SDKs send — this string
-     * is stored in a dead-letter entry and read by an operator, and a
+     * is stored in a dead-letter entry and read by a user, and a
      * multi-line backtrace there is noise the retry ladder multiplies.
      */
     private static function message(Throwable $e): string

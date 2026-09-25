@@ -10,13 +10,13 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 
 // -- poison_probe / wedge_probe ----------------------------------------------
 
@@ -38,8 +38,8 @@ final class PoisonProbe extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'poison_probe')]
-final class PoisonProbeOperative extends StreamOperative
+#[Operator(factoryId: 'poison_probe')]
+final class PoisonProbeOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -51,7 +51,7 @@ final class PoisonProbeOperative extends StreamOperative
 
 /**
  * The `pool_wedge` fixture: the two ways a runner stops doing work, on one
- * operative.
+ * operator.
  *
  *   "wedge" — blocks the dispatch inside user code forever, so the SDK's
  *     dispatch counter stops advancing while the heartbeat keeps reporting the
@@ -84,8 +84,8 @@ final class WedgeProbe extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'wedge_probe')]
-final class WedgeProbeOperative extends StreamOperative
+#[Operator(factoryId: 'wedge_probe')]
+final class WedgeProbeOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {

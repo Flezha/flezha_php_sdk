@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\BeyondWindow;
 use Flezha\CheckpointOutputs;
 
@@ -17,7 +17,7 @@ final class ClassSpec
      */
     public function __construct(
         public readonly string $factoryId,
-        /** `stream` | `workflow` */
+        /** `unbounded` | `bounded` */
         public readonly string $kind,
         public readonly bool $persistent,
         public readonly bool $effectivelyOnce,
@@ -31,7 +31,7 @@ final class ClassSpec
         public readonly ?int $compactAfterBytes,
         public readonly array $tasklets,
         public readonly array $channels,
-        public readonly ?Workflow $workflow = null,
+        public readonly ?Bounded $bounded = null,
         public readonly bool $sleepWhenIdle = false,
     ) {
     }
@@ -39,24 +39,24 @@ final class ClassSpec
     /**
      * Whether this class's producers release their values untransformed.
      *
-     * A structured workflow's stage releases ONE value per emit and the driver
+     * A structured bounded operator's stage releases ONE value per emit and the driver
      * fans it out to every consumer itself, so each consumer edge — its
      * transforms and its key — belongs to the consumer. The producer and the
      * consumer read this one predicate, so they cannot disagree about which
      * side applies the edge.
      */
-    public function structuredWorkflow(): bool
+    public function structuredBounded(): bool
     {
-        return $this->kind === 'workflow';
+        return $this->kind === 'bounded';
     }
 
     /**
      * Whether each invocation's output rides one effect record the controller
      * stamps at flush: under the effectively-once tier, and for a durable
-     * workflow, whose stage commit names the record.
+     * bounded operator, whose stage commit names the record.
      */
     public function recordsEffects(): bool
     {
-        return $this->effectivelyOnce || ($this->kind === 'workflow' && $this->persistent);
+        return $this->effectivelyOnce || ($this->kind === 'bounded' && $this->persistent);
     }
 }

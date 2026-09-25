@@ -3,18 +3,18 @@
 declare(strict_types=1);
 
 /**
- * The durable-loop workflow twins — the chat loop with suspension, its
+ * The durable-loop bounded twins — the chat loop with suspension, its
  * stateless twin and the rewindable variant — and the chains and loop
- * `mix bench.workflow` drives. The reference's own partition
- * (test/apps/rust_runner/src/workflow_loop.rs); loaded after
- * fixtures_workflow.php, whose gate and bases these share.
+ * `mix bench.bounded` drives. The reference's own partition
+ * (test/apps/rust_runner/src/bounded_loop.rs); loaded after
+ * fixtures_bounded.php, whose gate and bases these share.
  */
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\SpawnException;
@@ -23,13 +23,13 @@ use Flezha\LoopMode;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
 use Flezha\Timer;
-use Flezha\StreamOperative;
-use Flezha\WorkflowOperative;
+use Flezha\UnboundedOperator;
+use Flezha\BoundedOperator;
 
 // -- the durable loop family -------------------------------------------------
 //
-// chat_loop_workflow is the durable-loop + suspension shape
-// (workflow_loop.rs:8). One iteration per inbox item: TURN commits the turn to
+// chat_loop_bounded is the durable-loop + suspension shape
+// (bounded_loop.rs:8). One iteration per inbox item: TURN commits the turn to
 // Cell state, so a resumed iteration is visible in the WAL, and REPLY emits
 // the answer to the sink. Between turns the loop finds an empty inbox at a
 // committed boundary and PARKS — the instance is evicted and rehydrated by the
@@ -41,12 +41,12 @@ use Flezha\WorkflowOperative;
 // passes on like any turn, and completes the instance with the number of turns
 // recorded, as decimal text.
 //
-// stateless_loop_workflow is the same loop MINUS its stateful first tasklet:
+// stateless_loop_bounded is the same loop MINUS its stateful first tasklet:
 // ChatReply alone holds no per-Cell state, so nothing writes a Cell WAL
 // and the instance's task-journal reaches the driver only if it rides the bind
 // itself.
 //
-// chat_rewind_workflow is the loop whose replying tasklet can be undone. The
+// chat_rewind_bounded is the loop whose replying tasklet can be undone. The
 // undo handle lives in Cell state, because a rewind's compensation is rebuilt
 // from the journal and is handed NO retained outputs, so the hook reads the
 // last thing it said, retracts it and pops it.
@@ -132,11 +132,11 @@ final class ChatReplyUndoable extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'chat_loop_workflow')]
+#[Operator(factoryId: 'chat_loop_bounded')]
 // A chat session ends on the turn `bye`; the duration backstop keeps a stray
 // instance from outliving the test run.
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class ChatLoopWorkflow extends WorkflowOperative
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class ChatLoopBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -147,9 +147,9 @@ final class ChatLoopWorkflow extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'stateless_loop_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class StatelessLoopWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'stateless_loop_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class StatelessLoopBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -159,9 +159,9 @@ final class StatelessLoopWorkflow extends WorkflowOperative
     }
 }
 
-// keyed_loop_workflow is a durable per-input loop keyed on its entry edge by
+// keyed_loop_bounded is a durable per-input loop keyed on its entry edge by
 // the text before the first `:`, so one Cell counts one symbol's messages and
-// emits `<symbol>:<count>`: the shape a partition group of workflow members
+// emits `<symbol>:<count>`: the shape a partition group of bounded operator members
 // takes.
 
 #[Task(name: 'keyed_loop_count', dynamicCells: true)]
@@ -187,21 +187,21 @@ final class KeyedLoopCount extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'keyed_loop_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class KeyedLoopWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'keyed_loop_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class KeyedLoopBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
         $c->input('trades', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
             ->into(KeyedLoopCount::class)
-            ->sink('keyed_loop_workflow_out');
+            ->sink('keyed_loop_bounded_out');
     }
 }
 
-#[Operative(factoryId: 'chat_rewind_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class ChatRewindWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'chat_rewind_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class ChatRewindBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -222,7 +222,7 @@ final class BlockingReply extends Tasklet
     public function run(mixed $input, Ctx $ctx): mixed
     {
         if ($input === self::REPLY_CRASH_TURN) {
-            WorkflowGate::blockUntilReleased();
+            BoundedGate::blockUntilReleased();
         }
         $ctx->emit("reply:$input");
 
@@ -232,9 +232,9 @@ final class BlockingReply extends Tasklet
 
 // The chat loop with the block moved AFTER the root's commit, so a SIGKILL
 // lands between a root's `task_committed` and the pass's `iter_committed`.
-#[Operative(factoryId: 'reply_block_loop_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class ReplyBlockLoopWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'reply_block_loop_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class ReplyBlockLoopBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -247,7 +247,7 @@ final class ReplyBlockLoopWorkflow extends WorkflowOperative
 
 // -- spawn_requester ---------------------------------------------------------
 //
-// On each input it spawns stateless_loop_workflow once with no id and once under
+// On each input it spawns stateless_loop_bounded once with no id and once under
 // the input as its id, and prints both results, because a handle's answer is
 // observable nowhere but in the tasklet that read it.
 
@@ -257,8 +257,8 @@ final class SpawnRequester extends Tasklet
     public function run(mixed $input, Ctx $ctx): mixed
     {
         $handles = [
-            'unnamed' => $ctx->spawnWorkflow('stateless_loop_workflow', (string) $input),
-            'named' => $ctx->spawnWorkflow('stateless_loop_workflow', (string) $input, id: (string) $input),
+            'unnamed' => $ctx->spawnBounded('stateless_loop_bounded', (string) $input),
+            'named' => $ctx->spawnBounded('stateless_loop_bounded', (string) $input, id: (string) $input),
         ];
         foreach ($handles as $label => $handle) {
             self::report($label, $handle);
@@ -279,8 +279,8 @@ final class SpawnRequester extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'spawn_requester')]
-final class SpawnRequesterOperative extends StreamOperative
+#[Operator(factoryId: 'spawn_requester')]
+final class SpawnRequesterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -292,7 +292,7 @@ final class SpawnRequesterOperative extends StreamOperative
 
 // -- spawn_once_requester ----------------------------------------------------
 //
-// On each input it spawns `typed_once_workflow` with no id, the input inside a
+// On each input it spawns `typed_once_bounded` with no id, the input inside a
 // JSON object its entry channel decodes, and prints the result as
 // spawn_requester does.
 
@@ -301,14 +301,14 @@ final class SpawnOnceRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        SpawnRequester::report('once', $ctx->spawnWorkflow('typed_once_workflow', ['text' => (string) $input]));
+        SpawnRequester::report('once', $ctx->spawnBounded('typed_once_bounded', ['text' => (string) $input]));
 
         return null;
     }
 }
 
-#[Operative(factoryId: 'spawn_once_requester')]
-final class SpawnOnceRequesterOperative extends StreamOperative
+#[Operator(factoryId: 'spawn_once_requester')]
+final class SpawnOnceRequesterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -320,7 +320,7 @@ final class SpawnOnceRequesterOperative extends StreamOperative
 
 // -- the bench chains --------------------------------------------------------
 //
-// What `mix bench.workflow --scenario chain` drives (workflow_loop.rs:232): K
+// What `mix bench.bounded --scenario chain` drives (bounded_loop.rs:232): K
 // durable pass-through steps in a line, the payload unchanged, so the sink
 // receives the seed input and the bench reads its own seq and send timestamp
 // back. Each chain position needs its own tasklet and a PHP tasklet is a
@@ -408,7 +408,7 @@ final class BenchS15 extends DurableStep
 }
 
 /** A linear chain `in → BenchS0 → … → bench_sink`, STEPS positions long. */
-abstract class BenchChain extends WorkflowOperative
+abstract class BenchChain extends BoundedOperator
 {
     /** @var list<class-string<DurableStep>> */
     public const STEP_CLASSES = [
@@ -430,33 +430,33 @@ abstract class BenchChain extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'bench_chain_1')]
+#[Operator(factoryId: 'bench_chain_1')]
 final class BenchChain1 extends BenchChain
 {
     protected const STEPS = 1;
 }
 
-#[Operative(factoryId: 'bench_chain_4')]
+#[Operator(factoryId: 'bench_chain_4')]
 final class BenchChain4 extends BenchChain
 {
     protected const STEPS = 4;
 }
 
-#[Operative(factoryId: 'bench_chain_16')]
+#[Operator(factoryId: 'bench_chain_16')]
 final class BenchChain16 extends BenchChain
 {
     protected const STEPS = 16;
 }
 
-#[Operative(factoryId: 'bench_chain_optout_4', persistent: false)]
+#[Operator(factoryId: 'bench_chain_optout_4', persistent: false)]
 final class BenchChainOptout4 extends BenchChain
 {
     protected const STEPS = 4;
 }
 
-// -- bench_loop_workflow -----------------------------------------------------
+// -- bench_loop_bounded -----------------------------------------------------
 //
-// The long-lived loop the `turns` scenario drives (workflow_loop.rs:359): the
+// The long-lived loop the `turns` scenario drives (bounded_loop.rs:359): the
 // chat loop's shape with a BOUNDED per-turn state, so a million-turn soak
 // snapshots the same few bytes at every iteration. With
 // `FLEZHA_BENCH_WAKE_AFTER_MS` set each turn arms a timer that far out, whose
@@ -495,9 +495,9 @@ final class BenchTurn extends Tasklet
 }
 
 // A day, not the chat loop's ten minutes: a soak outlives 600 s.
-#[Operative(factoryId: 'bench_loop_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 24 * 3_600_000)]
-final class BenchLoopWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'bench_loop_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 24 * 3_600_000)]
+final class BenchLoopBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -508,11 +508,11 @@ final class BenchLoopWorkflow extends WorkflowOperative
     }
 }
 
-// -- static_cell_workflow ----------------------------------------------------
+// -- static_cell_bounded ----------------------------------------------------
 //
 // A per-input loop whose one tasklet declares three static cells and routes
 // every message to two of them; each cell that runs emits `<cell key>:<message>`,
-// so one message yields exactly two outputs (workflow.rs).
+// so one message yields exactly two outputs (bounded.rs).
 
 #[Task(name: 'static_cell_step', cellKeys: ['a', 'b', 'c'])]
 final class StaticCellStep extends Tasklet
@@ -530,9 +530,9 @@ final class StaticCellStep extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'static_cell_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class StaticCellWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'static_cell_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class StaticCellBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {

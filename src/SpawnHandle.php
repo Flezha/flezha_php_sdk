@@ -7,14 +7,14 @@ namespace Flezha;
 use Flezha\Codec\Json;
 use Flezha\Exception\SpawnAlreadyRunningException;
 use Flezha\Exception\SpawnException;
-use Flezha\Exception\SpawnFactoryNotWorkflowException;
+use Flezha\Exception\SpawnFactoryNotBoundedException;
 use Flezha\Exception\SpawnFactoryUnknownException;
 use Flezha\Exception\SpawnRefusedException;
 use Flezha\Exception\SpawnTimeoutException;
 use Flezha\Exception\SpawnUnavailableException;
 
 /**
- * The answer to one {@see Ctx::spawnWorkflow()} request.
+ * The answer to one {@see Ctx::spawnBounded()} request.
  *
  * Read it inside the invocation that made it, where a resolved handle answers
  * every read the same: once that invocation completes the core releases the
@@ -73,7 +73,7 @@ final class SpawnHandle
         throw new (match ($answer['error']) {
             'already_running' => SpawnAlreadyRunningException::class,
             'factory_unknown' => SpawnFactoryUnknownException::class,
-            'factory_not_workflow' => SpawnFactoryNotWorkflowException::class,
+            'factory_not_bounded' => SpawnFactoryNotBoundedException::class,
             'refused' => SpawnRefusedException::class,
             'timeout' => SpawnTimeoutException::class,
             'unavailable' => SpawnUnavailableException::class,

@@ -15,7 +15,7 @@ use JsonException;
  * restart, a restore fold and a hot-swap migration, and `serialize()` embeds
  * fully-qualified class names and mangles private property names, so a class
  * rename breaks the restore of every record already written. It is also what
- * `flz state at` shows an operator, and what a migration handover carries —
+ * `flz state at` shows a user, and what a migration handover carries —
  * so the durable form, the live read and the handover are one encoding rather
  * than three.
  *

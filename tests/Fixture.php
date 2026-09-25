@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Clock;
@@ -13,17 +13,17 @@ use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
-use Flezha\WorkflowOperative;
+use Flezha\UnboundedOperator;
+use Flezha\BoundedOperator;
 
 /**
- * The tasklets and operatives the unit suite declares against.
+ * The tasklets and operators the unit suite declares against.
  *
  * One file, so a test that needs "a stateful keyed tasklet" names one rather
  * than declaring a fourth almost-identical class.
  */
 
-/** The echo body, for a tasklet and a short-form operative alike. */
+/** The echo body, for a tasklet and a short-form operator alike. */
 trait Echoes
 {
     public function run(mixed $input, Ctx $ctx): mixed
@@ -87,8 +87,8 @@ final class Keyed extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'echo_operative')]
-final class EchoOperative extends StreamOperative
+#[Operator(factoryId: 'echo_operator')]
+final class EchoOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -96,8 +96,8 @@ final class EchoOperative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'counter_operative')]
-final class CounterOperative extends StreamOperative
+#[Operator(factoryId: 'counter_operator')]
+final class CounterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -106,8 +106,8 @@ final class CounterOperative extends StreamOperative
 }
 
 /** A short form that only keeps state: no `sink`, and a body answering nothing. */
-#[Operative(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
-final class ShortCounter extends StreamOperative
+#[Operator(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
+final class ShortCounter extends UnboundedOperator
 {
     public function state(?string $cellKey): mixed
     {
@@ -127,8 +127,8 @@ final class ShortCounter extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'keyed_operative')]
-final class KeyedOperative extends StreamOperative
+#[Operator(factoryId: 'keyed_operator')]
+final class KeyedOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -169,8 +169,8 @@ final class StampEmitter extends Tasklet
  * One keyed plugin channel: the topology every SDK can express, and where the
  * per-emit ordinal has to be right.
  */
-#[Operative(factoryId: 'stamp_operative')]
-final class StampOperative extends StreamOperative
+#[Operator(factoryId: 'stamp_operator')]
+final class StampOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -212,8 +212,8 @@ final class FanTarget extends Tasklet
  * attached sink is `TransformAfterTerminal` in every SDK — the sink serializes
  * the channel's own value, so the order says which value that is.
  */
-#[Operative(factoryId: 'mixed_stamp_operative')]
-final class MixedStampOperative extends StreamOperative
+#[Operator(factoryId: 'mixed_stamp_operator')]
+final class MixedStampOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -245,8 +245,8 @@ final class Poison extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'poison_operative')]
-final class PoisonOperative extends StreamOperative
+#[Operator(factoryId: 'poison_operator')]
+final class PoisonOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -269,8 +269,8 @@ final class Flaky extends Tasklet
 }
 
 /** A text entry whose edge transform rejects `poison`, into a handler that rejects `boom`. */
-#[Operative(factoryId: 'flaky_entry_operative')]
-final class FlakyEntryOperative extends StreamOperative
+#[Operator(factoryId: 'flaky_entry_operator')]
+final class FlakyEntryOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -303,8 +303,8 @@ final class SagaStep extends Tasklet
     }
 }
 
-#[\Flezha\Attribute\Operative(factoryId: 'saga_operative')]
-final class SagaOperative extends \Flezha\WorkflowOperative
+#[\Flezha\Attribute\Operator(factoryId: 'saga_operator')]
+final class SagaOperator extends \Flezha\BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -315,7 +315,7 @@ final class SagaOperative extends \Flezha\WorkflowOperative
 // -- a tasklet's completion ------------------------------------------------
 //
 // One tasklet under both kinds: the SDK carries the request either way, and
-// the core decides what it means, ending a workflow or failing a stream's item.
+// the core decides what it means, ending a bounded operator or failing an unbounded operator's item.
 
 #[Task(name: 'completer')]
 final class Completer extends Tasklet
@@ -342,14 +342,14 @@ trait CompletingGraph
     }
 }
 
-#[Operative(factoryId: 'completing_workflow')]
-final class CompletingWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'completing_bounded')]
+final class CompletingBounded extends BoundedOperator
 {
     use CompletingGraph;
 }
 
-#[Operative(factoryId: 'completing_stream')]
-final class CompletingStream extends StreamOperative
+#[Operator(factoryId: 'completing_unbounded')]
+final class CompletingUnbounded extends UnboundedOperator
 {
     use CompletingGraph;
 }
@@ -399,28 +399,28 @@ trait TimingGraph
     }
 }
 
-#[Operative(factoryId: 'timing_workflow')]
-final class TimingWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'timing_bounded')]
+final class TimingBounded extends BoundedOperator
 {
     use TimingGraph;
 }
 
-#[Operative(factoryId: 'timing_stream')]
-final class TimingStream extends StreamOperative
+#[Operator(factoryId: 'timing_unbounded')]
+final class TimingUnbounded extends UnboundedOperator
 {
     use TimingGraph;
 }
 
-// -- the structured-workflow emit arm ----------------------------------------
+// -- the structured-bounded emit arm ----------------------------------------
 //
-// One released value is ONE edge output on a workflow class, untransformed and
+// One released value is ONE edge output on a bounded class, untransformed and
 // unkeyed, naming the producing channel and its first consumer: the driver fans
-// it out from the journaled handoff. On a stream class the same topology
+// it out from the journaled handoff. On an unbounded class the same topology
 // releases one output per consumer, transformed and keyed. The plugin output
 // rides alongside either way.
 
-#[Task(name: 'wf_producer')]
-final class WfProducer extends Tasklet
+#[Task(name: 'bounded_producer')]
+final class BoundedProducer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -437,8 +437,8 @@ final class Delivered
     public static array $values = [];
 }
 
-#[Task(name: 'wf_b')]
-final class WfB extends Tasklet
+#[Task(name: 'bounded_b')]
+final class BoundedB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -448,8 +448,8 @@ final class WfB extends Tasklet
     }
 }
 
-#[Task(name: 'wf_c')]
-final class WfC extends Tasklet
+#[Task(name: 'bounded_c')]
+final class BoundedC extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
@@ -459,37 +459,37 @@ final class WfC extends Tasklet
     }
 }
 
-trait WorkflowEmitGraph
+trait BoundedEmitGraph
 {
     public static function channels(Builder $c): void
     {
-        $edge = $c->input('in')->into(WfProducer::class)->named('handoff');
-        $edge->map(static fn (mixed $v): mixed => $v + 1)->into(WfB::class);
-        $edge->into(WfC::class);
+        $edge = $c->input('in')->into(BoundedProducer::class)->named('handoff');
+        $edge->map(static fn (mixed $v): mixed => $v + 1)->into(BoundedB::class);
+        $edge->into(BoundedC::class);
         $edge->sink();
     }
 }
 
 /** An entry naming no codec, into a consumer that records what it was handed. */
-#[Operative(factoryId: 'json_entry_operative')]
-final class JsonEntryOperative extends StreamOperative
+#[Operator(factoryId: 'json_entry_operator')]
+final class JsonEntryOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(WfB::class);
+        $c->input('in')->into(BoundedB::class);
     }
 }
 
-#[Operative(factoryId: 'wf_emit')]
-final class WfEmitOperative extends WorkflowOperative
+#[Operator(factoryId: 'bounded_emit')]
+final class BoundedEmitOperator extends BoundedOperator
 {
-    use WorkflowEmitGraph;
+    use BoundedEmitGraph;
 }
 
-#[Operative(factoryId: 'wf_emit_stream')]
-final class WfEmitStreamOperative extends StreamOperative
+#[Operator(factoryId: 'bounded_emit_stream')]
+final class BoundedEmitUnboundedOperator extends UnboundedOperator
 {
-    use WorkflowEmitGraph;
+    use BoundedEmitGraph;
 }
 
 // -- merges, the router and fanned keys -------------------------------------
@@ -523,8 +523,8 @@ final class StaticRecorder extends Tasklet
 }
 
 /** Two entries merged into one tasklet, each tagged by its own mapping and keyed on the tag's symbol. */
-#[Operative(factoryId: 'merge_operative')]
-final class MergeOperative extends StreamOperative
+#[Operator(factoryId: 'merge_operator')]
+final class MergeOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -538,8 +538,8 @@ final class MergeOperative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'route_latest_operative')]
-final class RouteLatestOperative extends StreamOperative
+#[Operator(factoryId: 'route_latest_operator')]
+final class RouteLatestOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -549,8 +549,8 @@ final class RouteLatestOperative extends StreamOperative
 }
 
 /** An entry payload fanned into several values, keyed on the wiring and by a static key set. */
-#[Operative(factoryId: 'fanned_operative')]
-final class FannedOperative extends StreamOperative
+#[Operator(factoryId: 'fanned_operator')]
+final class FannedOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {

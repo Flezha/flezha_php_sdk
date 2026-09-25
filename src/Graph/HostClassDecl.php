@@ -40,7 +40,7 @@ final class HostClassDecl
     /** @return array<string, mixed> */
     public static function of(ClassSpec $spec): array
     {
-        $workflow = $spec->workflow;
+        $bounded = $spec->bounded;
 
         return self::compact([
             'factory_id' => $spec->factoryId,
@@ -57,13 +57,13 @@ final class HostClassDecl
             'correction_window_ms' => $spec->correctionWindowMs,
             'beyond_window_policy' => $spec->beyondWindowPolicy->value,
             'compact_after_bytes' => $spec->compactAfterBytes,
-            'sync_durability' => $workflow?->syncDurability ?? false,
+            'sync_durability' => $bounded?->syncDurability ?? false,
             'channels' => array_map(self::channel(...), $spec->channels),
             'tasklets' => array_map(self::tasklet(...), $spec->tasklets),
-            'workflow' => $workflow === null ? null : self::compact([
-                'loop_mode' => $workflow->loopMode->value,
-                'rollback_mode' => $workflow->rollbackMode->value,
-                'max_duration_ms' => $workflow->maxDurationMs,
+            'bounded' => $bounded === null ? null : self::compact([
+                'loop_mode' => $bounded->loopMode->value,
+                'rollback_mode' => $bounded->rollbackMode->value,
+                'max_duration_ms' => $bounded->maxDurationMs,
             ]),
         ]);
     }

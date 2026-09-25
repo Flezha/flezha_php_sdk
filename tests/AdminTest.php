@@ -11,7 +11,7 @@ use Flezha\StartOutcome;
 use Flezha\StartResult;
 use PHPUnit\Framework\TestCase;
 
-/** Starting an operative from application code. */
+/** Starting an operator from application code. */
 final class AdminTest extends TestCase
 {
     /** @var list<array{string, string}> each call's verb and JSON arguments */
@@ -19,19 +19,19 @@ final class AdminTest extends TestCase
 
     public function testAStartWithoutAnIdSendsNoneAndAnswersTheGeneratedOne(): void
     {
-        $result = $this->answering('{"id":"echo-k7m2qzxw4pd3fn2a","outcome":"started"}')->startOperative('echo');
+        $result = $this->answering('{"id":"echo-k7m2qzxw4pd3fn2a","outcome":"started"}')->startOperator('echo');
 
-        self::assertSame([['Operative.start', '[{"factory_id":"echo"}]']], $this->calls);
+        self::assertSame([['Operator.start', '[{"factory_id":"echo"}]']], $this->calls);
         self::assertEquals(new StartResult('echo-k7m2qzxw4pd3fn2a', StartOutcome::Started), $result);
     }
 
     public function testAStartOfARunningIdAnswersAlreadyRunning(): void
     {
         $result = $this->answering('{"id":"my_echo","outcome":"already_running"}')
-            ->startOperative('echo', id: 'my_echo');
+            ->startOperator('echo', id: 'my_echo');
 
         self::assertSame(
-            [['Operative.start', '[{"factory_id":"echo","id":"my_echo"}]']],
+            [['Operator.start', '[{"factory_id":"echo","id":"my_echo"}]']],
             $this->calls,
         );
         self::assertEquals(new StartResult('my_echo', StartOutcome::AlreadyRunning), $result);
@@ -42,7 +42,7 @@ final class AdminTest extends TestCase
         $this->expectException(FlezhaException::class);
         $this->expectExceptionMessage('"duplicate"');
 
-        $this->answering('"duplicate"')->startOperative('echo', id: 'my_echo');
+        $this->answering('"duplicate"')->startOperator('echo', id: 'my_echo');
     }
 
     /** Reported as every administration call reports a refusal: the core's reason, thrown. */
@@ -54,7 +54,7 @@ final class AdminTest extends TestCase
             $this->expectException(FlezhaException::class);
             $this->expectExceptionMessage('no control plane');
 
-            (new Admin($core->adminCall(...)))->startOperative('echo');
+            (new Admin($core->adminCall(...)))->startOperator('echo');
         } finally {
             $core->free();
         }

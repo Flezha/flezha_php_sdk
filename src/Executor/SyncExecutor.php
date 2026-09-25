@@ -18,7 +18,7 @@ use Flezha\Runner;
  * The ceiling that follows is stated rather than discovered: throughput per
  * loop is roughly the inverse of body latency, and in-flight concurrency is
  * the loop count, which here is one per process. More cores come from more
- * processes; `SwooleExecutor` is what lifts a *single* operative past one.
+ * processes; `SwooleExecutor` is what lifts a *single* operator past one.
  */
 final class SyncExecutor implements Executor
 {

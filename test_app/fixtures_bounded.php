@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Twins of the reference's crash-resume workflow fixtures — the commit chain,
+ * Twins of the reference's crash-resume bounded fixtures — the commit chain,
  * the saga, the output identity, the branch, the diamond and the retry
  * ladder, plus the run-once echo — under the same factory ids, tasklet
  * names, channel names and output bytes as
- * test/apps/rust_runner/src/workflow.rs. Loaded after fixtures.php, whose
- * `Wire` codecs these share; fixtures_workflow_loop.php carries the loop and
+ * test/apps/rust_runner/src/bounded.rs. Loaded after fixtures.php, whose
+ * `Wire` codecs these share; fixtures_bounded_loop.php carries the loop and
  * bench families and is loaded after this file, as the reference splits them.
  *
  * Entry payloads and plugin frames are UTF-8 text on the wire, as in the
@@ -24,9 +24,9 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Clock;
 use Flezha\Ctx;
@@ -36,7 +36,7 @@ use Flezha\Graph\Edge;
 use Flezha\LoopMode;
 use Flezha\Tasklet;
 use Flezha\Timer;
-use Flezha\WorkflowOperative;
+use Flezha\BoundedOperator;
 
 // -- the release gate --------------------------------------------------------
 
@@ -54,9 +54,9 @@ use Flezha\WorkflowOperative;
  * a read on a socket nothing ever writes — no timer, no spin, off the CPU
  * until the process ends.
  */
-final class WorkflowGate
+final class BoundedGate
 {
-    public const RELEASE_ENV = 'FLEZHA_WORKFLOW_E2E_RELEASE';
+    public const RELEASE_ENV = 'FLEZHA_BOUNDED_E2E_RELEASE';
 
     public static function released(): bool
     {
@@ -66,7 +66,7 @@ final class WorkflowGate
     /** Park at `$point` when this runner was booted to hold there, until the release. */
     public static function holdAt(string $point): void
     {
-        if (getenv('FLEZHA_WORKFLOW_E2E_HOLD') === $point) {
+        if (getenv('FLEZHA_BOUNDED_E2E_HOLD') === $point) {
             self::blockUntilReleased();
         }
     }
@@ -104,7 +104,7 @@ final class WorkflowGate
 // -- the three bases ---------------------------------------------------------
 
 /**
- * The reference's `durable_step!` (workflow.rs:66-108): a step committing one
+ * The reference's `durable_step!` (bounded.rs:66-108): a step committing one
  * idempotent Change keyed by its own name, so a re-run after a resume folds to
  * the state it already had.
  *
@@ -122,7 +122,7 @@ abstract class DurableStep extends Tasklet
     /**
      * A sorted, de-duplicated list. The reference's `SeenState` is a
      * `BTreeSet<String>`, chosen because a set keeps snapshot bytes
-     * deterministic (workflow.rs:50); a PHP array keeps insertion order, so the
+     * deterministic (bounded.rs:50); a PHP array keeps insertion order, so the
      * fold sorts for the same determinism and skips a repeat for the same
      * idempotent re-run.
      */
@@ -141,7 +141,7 @@ abstract class DurableStep extends Tasklet
         // always finds it as the uncommitted producer while its sibling arm has
         // committed.
         if ($this->gated($input)) {
-            WorkflowGate::blockUntilReleased();
+            BoundedGate::blockUntilReleased();
         }
         $ctx->change(['insert' => $this->changeValue($input)]);
         $this->release($input, $ctx);
@@ -172,7 +172,7 @@ abstract class DurableStep extends Tasklet
  * Declared here rather than on {@see DurableStep} because `Definition` reads
  * which class declared a hook: a `compensate` on the durable base would make
  * every durable step compensable and contradict
- * test/fixtures/declarations/commit_block_workflow.json.
+ * test/fixtures/declarations/commit_block_bounded.json.
  */
 abstract class UndoingStep extends DurableStep
 {
@@ -183,7 +183,7 @@ abstract class UndoingStep extends DurableStep
     public function compensate(array $outputs, Ctx $ctx): void
     {
         if ($this->compensationGated()) {
-            WorkflowGate::blockUntilReleased();
+            BoundedGate::blockUntilReleased();
         }
         $record = $this->undoRecord();
         if ($record !== null) {
@@ -211,9 +211,9 @@ abstract class FailingStep extends Tasklet
     }
 }
 
-// -- echo_workflow -----------------------------------------------------------
+// -- echo_bounded -----------------------------------------------------------
 //
-// The run-once shape (workflow.rs:14): one tasklet emits its first message
+// The run-once shape (bounded.rs:14): one tasklet emits its first message
 // back once and the pass ends, so the controller deregisters the instance.
 
 #[Task(name: 'echo_args')]
@@ -225,8 +225,8 @@ final class EchoArgs extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'echo_workflow')]
-final class EchoWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'echo_bounded')]
+final class EchoBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -236,9 +236,9 @@ final class EchoWorkflow extends WorkflowOperative
     }
 }
 
-// -- typed_once_workflow -----------------------------------------------------
+// -- typed_once_bounded -----------------------------------------------------
 //
-// The KB-381 shape: a `once` workflow whose entry channel decodes the
+// The KB-381 shape: a `once` bounded operator whose entry channel decodes the
 // payload's type. Its one tasklet prints what the entry decoded and completes
 // with it, because the runner's stdout and the completion record are the two
 // places the scenario can read.
@@ -256,8 +256,8 @@ final class OncePlaced extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'typed_once_workflow')]
-final class TypedOnceWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'typed_once_bounded')]
+final class TypedOnceBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -267,11 +267,11 @@ final class TypedOnceWorkflow extends WorkflowOperative
     }
 }
 
-// -- commit_block_workflow / sync_durable_workflow ---------------------------
+// -- commit_block_bounded / sync_durable_bounded ---------------------------
 //
 // Task A commits durable state, task B parks until the resumed runner sets the
 // release variable — so a SIGKILL lands with A's state already on the WAL and B
-// never finished. `sync_durable_workflow` is the same chain declaring
+// never finished. `sync_durable_bounded` is the same chain declaring
 // SYNCHRONOUS remote durability, which is what lets the kill-the-disk drill
 // destroy the state directory and still resume with A committed.
 
@@ -285,13 +285,13 @@ final class BlockB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        WorkflowGate::blockUntilReleased();
+        BoundedGate::blockUntilReleased();
 
         return null;
     }
 }
 
-abstract class CommitBlockChain extends WorkflowOperative
+abstract class CommitBlockChain extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -301,14 +301,14 @@ abstract class CommitBlockChain extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'commit_block_workflow')]
-final class CommitBlockWorkflow extends CommitBlockChain
+#[Operator(factoryId: 'commit_block_bounded')]
+final class CommitBlockBounded extends CommitBlockChain
 {
 }
 
-#[Operative(factoryId: 'sync_durable_workflow')]
-#[Workflow(syncDurability: true)]
-final class SyncDurableWorkflow extends CommitBlockChain
+#[Operator(factoryId: 'sync_durable_bounded')]
+#[Bounded(syncDurability: true)]
+final class SyncDurableBounded extends CommitBlockChain
 {
 }
 
@@ -319,8 +319,8 @@ final class SyncDurableWorkflow extends CommitBlockChain
 // durable state. A crash re-runs the chain from the top, so the sink sees A's
 // marker once per run and no journal file exists.
 
-#[Operative(factoryId: 'optout_commit_block', persistent: false)]
-final class OptoutCommitBlock extends WorkflowOperative
+#[Operator(factoryId: 'optout_commit_block', persistent: false)]
+final class OptoutCommitBlock extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -331,11 +331,11 @@ final class OptoutCommitBlock extends WorkflowOperative
     }
 }
 
-// -- tier_commit_block_workflow ----------------------------------------------
+// -- tier_commit_block_bounded ----------------------------------------------
 //
 // Task A commits durable state AND emits `committed:<input>` under a stable
 // key on a keyed hybrid channel; task B parks, so a SIGKILL lands with A's
-// stage committed and B unfinished. A workflow commits stage by stage, so the
+// stage committed and B unfinished. A bounded operator commits stage by stage, so the
 // class declares no tier of its own.
 
 #[Task(name: 'tier_commit_a')]
@@ -347,8 +347,8 @@ final class TierCommitA extends DurableStep
     }
 }
 
-#[Operative(factoryId: 'tier_commit_block_workflow')]
-final class TierCommitBlockWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'tier_commit_block_bounded')]
+final class TierCommitBlockBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -359,7 +359,7 @@ final class TierCommitBlockWorkflow extends WorkflowOperative
     }
 }
 
-// -- saga_block_workflow -----------------------------------------------------
+// -- saga_block_bounded -----------------------------------------------------
 //
 // SA and SB commit durable state and compensate; SC fails, triggering
 // reverse-order rollback (SB then SA). SA's compensation PARKS, so a SIGKILL
@@ -385,8 +385,8 @@ final class SagaC extends FailingStep
 {
 }
 
-#[Operative(factoryId: 'saga_block_workflow')]
-final class SagaBlockWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'saga_block_bounded')]
+final class SagaBlockBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -397,7 +397,7 @@ final class SagaBlockWorkflow extends WorkflowOperative
     }
 }
 
-// -- keyed_block_workflow / keyed_saga_workflow -----------------------------
+// -- keyed_block_bounded / keyed_saga_bounded -----------------------------
 //
 // The entry's comma-separated key list is split into one value per key, and a
 // `keyBy` on that value mints one Cell per key of a durable compensable tasklet
@@ -428,7 +428,7 @@ final class KeyedFail extends FailingStep
 {
 }
 
-abstract class KeyedCommits extends WorkflowOperative
+abstract class KeyedCommits extends BoundedOperator
 {
     protected static function keyedCommits(Builder $c): Edge
     {
@@ -439,8 +439,8 @@ abstract class KeyedCommits extends WorkflowOperative
     }
 }
 
-#[Operative(factoryId: 'keyed_block_workflow')]
-final class KeyedBlockWorkflow extends KeyedCommits
+#[Operator(factoryId: 'keyed_block_bounded')]
+final class KeyedBlockBounded extends KeyedCommits
 {
     public static function channels(Builder $c): void
     {
@@ -448,8 +448,8 @@ final class KeyedBlockWorkflow extends KeyedCommits
     }
 }
 
-#[Operative(factoryId: 'keyed_saga_workflow')]
-final class KeyedSagaWorkflow extends KeyedCommits
+#[Operator(factoryId: 'keyed_saga_bounded')]
+final class KeyedSagaBounded extends KeyedCommits
 {
     public static function channels(Builder $c): void
     {
@@ -457,9 +457,9 @@ final class KeyedSagaWorkflow extends KeyedCommits
     }
 }
 
-// -- outbox_block_workflow ---------------------------------------------------
+// -- outbox_block_bounded ---------------------------------------------------
 //
-// A workflow output's identity. Task A commits durable state AND emits once,
+// A bounded output's identity. Task A commits durable state AND emits once,
 // keyed `k` with one metadata pair, on a keyed hybrid channel; the output rides
 // A's Cell record and reaches the sink once A's stage commits. Task B parks, so
 // a SIGKILL lands with A committed and B unfinished.
@@ -473,8 +473,8 @@ final class OutboxA extends DurableStep
     }
 }
 
-#[Operative(factoryId: 'outbox_block_workflow')]
-final class OutboxBlockWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'outbox_block_bounded')]
+final class OutboxBlockBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -485,7 +485,7 @@ final class OutboxBlockWorkflow extends WorkflowOperative
     }
 }
 
-// -- undo_outbox_workflow ----------------------------------------------------
+// -- undo_outbox_bounded ----------------------------------------------------
 //
 // A compensation's undo output. Task UA commits, emits its forward output on a
 // hybrid plugin channel, and compensates by EMITTING an undo record, which
@@ -514,8 +514,8 @@ final class UndoOutboxC extends FailingStep
 {
 }
 
-#[Operative(factoryId: 'undo_outbox_workflow')]
-final class UndoOutboxWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'undo_outbox_bounded')]
+final class UndoOutboxBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -526,7 +526,7 @@ final class UndoOutboxWorkflow extends WorkflowOperative
     }
 }
 
-// -- failed_stage_workflow ---------------------------------------------------
+// -- failed_stage_bounded ---------------------------------------------------
 //
 // A failed stage delivers nothing. The entry's two values reach one
 // `failed_stage` Cell in order: the first emits on a plugin channel, so the
@@ -547,8 +547,8 @@ final class FailedStage extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'failed_stage_workflow')]
-final class FailedStageWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'failed_stage_bounded')]
+final class FailedStageBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -559,12 +559,12 @@ final class FailedStageWorkflow extends WorkflowOperative
     }
 }
 
-// -- branch_workflow ---------------------------------------------------------
+// -- branch_bounded ---------------------------------------------------------
 //
 //     BranchA ─┬─▶ BranchB ─▶ BranchD
 //              └─▶ BranchC
 //
-// The tasklet TREE (workflow.rs:352). Every tasklet commits durable state
+// The tasklet TREE (bounded.rs:352). Every tasklet commits durable state
 // and compensates by emitting an undo record, so both tree behaviours are
 // observable at one sink:
 //
@@ -618,18 +618,18 @@ final class BranchD extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): mixed
     {
-        if (WorkflowGate::armed('FLEZHA_BRANCH_FAIL')) {
+        if (BoundedGate::armed('FLEZHA_BRANCH_FAIL')) {
             throw new \RuntimeException('branch_d failed');
         }
-        WorkflowGate::blockUntilReleased();
+        BoundedGate::blockUntilReleased();
         $ctx->emit("d:$input");
 
         return null;
     }
 }
 
-#[Operative(factoryId: 'branch_workflow')]
-final class BranchWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'branch_bounded')]
+final class BranchBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -649,12 +649,12 @@ final class BranchWorkflow extends WorkflowOperative
     }
 }
 
-// -- diamond_workflow --------------------------------------------------------
+// -- diamond_bounded --------------------------------------------------------
 //
 //     DiamA ─┬─▶ DiamB1 ─▶ DiamB2(parks) ─┬─▶ DiamJoin
 //            └─▶ DiamC ───────────────────┘
 //
-// The fan-in DAG (workflow.rs:475). The join accumulates BOTH arms' outputs and
+// The fan-in DAG (bounded.rs:475). The join accumulates BOTH arms' outputs and
 // is dispatched exactly once, after both commit. DiamB2 parks one level BELOW
 // its sibling arm — siblings commit at one level barrier — so a SIGKILL lands
 // with A, B1 and C committed and B2 mid-run: the respawn re-runs B2 alone, and
@@ -711,8 +711,8 @@ final class DiamJoin extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'diamond_workflow')]
-final class DiamondWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'diamond_bounded')]
+final class DiamondBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -732,11 +732,11 @@ final class DiamondWorkflow extends WorkflowOperative
     }
 }
 
-// -- retry_workflow ----------------------------------------------------------
+// -- retry_bounded ----------------------------------------------------------
 //
-// The per-cell retry ladder (workflow.rs:607). Task RA commits durable state,
+// The per-cell retry ladder (bounded.rs:607). Task RA commits durable state,
 // forwards on a hybrid channel, and compensates by emitting an undo record;
-// `retry_flaky` fails its first FLEZHA_WORKFLOW_RETRY_FAILS attempts (none by
+// `retry_flaky` fails its first FLEZHA_BOUNDED_RETRY_FAILS attempts (none by
 // default — each scenario arms it) and then emits `attempt:<n>:<input>`. One
 // armed failure is absorbed by the ladder, so the run completes and the sink
 // sees attempt 2; arming more failures than the ladder has attempts exhausts
@@ -754,7 +754,7 @@ final class RetryA extends UndoingStep
 #[Task(name: 'retry_flaky')]
 final class RetryFlaky extends Tasklet
 {
-    private const FAILS_ENV = 'FLEZHA_WORKFLOW_RETRY_FAILS';
+    private const FAILS_ENV = 'FLEZHA_BOUNDED_RETRY_FAILS';
 
     /**
      * Attempts made in this interpreter. A retry re-runs the tasklet of the
@@ -777,8 +777,8 @@ final class RetryFlaky extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'retry_workflow')]
-final class RetryWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'retry_bounded')]
+final class RetryBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -790,13 +790,13 @@ final class RetryWorkflow extends WorkflowOperative
     }
 }
 
-// -- timer_loop_workflow -----------------------------------------------------
+// -- timer_loop_bounded -----------------------------------------------------
 //
 // `in -> tick -> relay -> out`, a per-input loop whose `tick` arms a
 // processing-time timer of the delay `after:<ms>` names and emits `armed:<at>`;
 // its firing emits `fired:<at>` and opens a pass of its own. `slow:<ms>` holds
-// `tick` that long, for a firing due mid-pass (workflow.rs). On a runner booted
-// with `FLEZHA_WORKFLOW_E2E_HOLD` the firing parks at the gate: `timer` inside
+// `tick` that long, for a firing due mid-pass (bounded.rs). On a runner booted
+// with `FLEZHA_BOUNDED_E2E_HOLD` the firing parks at the gate: `timer` inside
 // `on_timer`, before `tick` commits; `relay` in `relay`, after.
 
 #[Task(name: 'tick')]
@@ -822,7 +822,7 @@ final class TimerTick extends DurableStep
 
     public function onTimer(Timer $timer, Ctx $ctx): void
     {
-        WorkflowGate::holdAt('timer');
+        BoundedGate::holdAt('timer');
         $ctx->emit("fired:{$timer->scheduledAt}");
     }
 }
@@ -833,7 +833,7 @@ final class TimerRelay extends Tasklet
     public function run(mixed $input, Ctx $ctx): mixed
     {
         if (str_starts_with((string) $input, 'fired:')) {
-            WorkflowGate::holdAt('relay');
+            BoundedGate::holdAt('relay');
         }
         $ctx->emit("relay:$input");
 
@@ -841,9 +841,9 @@ final class TimerRelay extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'timer_loop_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class TimerLoopWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'timer_loop_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class TimerLoopBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -854,11 +854,11 @@ final class TimerLoopWorkflow extends WorkflowOperative
     }
 }
 
-// -- event_timer_workflow ----------------------------------------------------
+// -- event_timer_bounded ----------------------------------------------------
 //
 // An entry-fed tasklet whose clock is the message's leading event time; each
 // message arms an event-time timer 100 later and emits `seen:<t>`, and the
-// firing emits `fired:<at>` (workflow.rs).
+// firing emits `fired:<at>` (bounded.rs).
 
 #[Task(name: 'event_tick', clock: Clock::EventTime)]
 final class EventTick extends DurableStep
@@ -883,9 +883,9 @@ final class EventTick extends DurableStep
     }
 }
 
-#[Operative(factoryId: 'event_timer_workflow')]
-#[Workflow(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class EventTimerWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'event_timer_bounded')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class EventTimerBounded extends BoundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -895,40 +895,40 @@ final class EventTimerWorkflow extends WorkflowOperative
 
 // -- registration ------------------------------------------------------------
 
-final class WorkflowFixtures
+final class BoundedFixtures
 {
-    /** @return list<class-string<\Flezha\Operative>> */
+    /** @return list<class-string<\Flezha\Operator>> */
     public static function all(): array
     {
         return [
-            EchoWorkflow::class,
-            TypedOnceWorkflow::class,
-            CommitBlockWorkflow::class,
-            SyncDurableWorkflow::class,
+            EchoBounded::class,
+            TypedOnceBounded::class,
+            CommitBlockBounded::class,
+            SyncDurableBounded::class,
             OptoutCommitBlock::class,
-            TierCommitBlockWorkflow::class,
-            SagaBlockWorkflow::class,
-            KeyedBlockWorkflow::class,
-            KeyedSagaWorkflow::class,
-            OutboxBlockWorkflow::class,
-            UndoOutboxWorkflow::class,
-            FailedStageWorkflow::class,
-            ChatLoopWorkflow::class,
-            StatelessLoopWorkflow::class,
-            KeyedLoopWorkflow::class,
-            ChatRewindWorkflow::class,
-            ReplyBlockLoopWorkflow::class,
-            RetryWorkflow::class,
-            BranchWorkflow::class,
-            DiamondWorkflow::class,
+            TierCommitBlockBounded::class,
+            SagaBlockBounded::class,
+            KeyedBlockBounded::class,
+            KeyedSagaBounded::class,
+            OutboxBlockBounded::class,
+            UndoOutboxBounded::class,
+            FailedStageBounded::class,
+            ChatLoopBounded::class,
+            StatelessLoopBounded::class,
+            KeyedLoopBounded::class,
+            ChatRewindBounded::class,
+            ReplyBlockLoopBounded::class,
+            RetryBounded::class,
+            BranchBounded::class,
+            DiamondBounded::class,
             BenchChain1::class,
             BenchChain4::class,
             BenchChain16::class,
             BenchChainOptout4::class,
-            BenchLoopWorkflow::class,
-            StaticCellWorkflow::class,
-            TimerLoopWorkflow::class,
-            EventTimerWorkflow::class,
+            BenchLoopBounded::class,
+            StaticCellBounded::class,
+            TimerLoopBounded::class,
+            EventTimerBounded::class,
         ];
     }
 }

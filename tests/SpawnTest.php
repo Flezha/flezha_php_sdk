@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\ActivationCodec;
@@ -16,7 +16,7 @@ use Flezha\Dispatch\Registry;
 use Flezha\Exception\FlezhaException;
 use Flezha\Exception\SpawnAlreadyRunningException;
 use Flezha\Exception\SpawnException;
-use Flezha\Exception\SpawnFactoryNotWorkflowException;
+use Flezha\Exception\SpawnFactoryNotBoundedException;
 use Flezha\Exception\SpawnFactoryUnknownException;
 use Flezha\Exception\SpawnRefusedException;
 use Flezha\Exception\SpawnTimeoutException;
@@ -31,7 +31,7 @@ use Flezha\SpawnBridge;
 use Flezha\SpawnHandle;
 use Flezha\SpawnOutcome;
 use Flezha\SpawnResult;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 /** Spawns once with no id and once with the id `w1`, reads both, then emits its input. */
@@ -44,8 +44,8 @@ final class Spawner extends Tasklet
     public function run(mixed $input, Ctx $ctx): mixed
     {
         $handles = [
-            $ctx->spawnWorkflow('worker', (string) $input),
-            $ctx->spawnWorkflow('worker', (string) $input, id: 'w1'),
+            $ctx->spawnBounded('worker', (string) $input),
+            $ctx->spawnBounded('worker', (string) $input, id: 'w1'),
         ];
         foreach ($handles as $handle) {
             try {
@@ -59,8 +59,8 @@ final class Spawner extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'spawner')]
-final class SpawnerOperative extends StreamOperative
+#[Operator(factoryId: 'spawner')]
+final class SpawnerOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -121,7 +121,7 @@ final class SpawnTest extends TestCase
     public function testTheCallReturnsAHandleThatAnswersPendingUntilTheAnswerArrives(): void
     {
         $bridge = new ScriptedSpawns([null, '{"id":"worker-k7m2qzxw4pd3fn2a","outcome":"spawned"}']);
-        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p1'));
+        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p1'));
 
         self::assertSame(
             [[self::TOKEN, 'worker', '', 'p1', 'deliver', false]],
@@ -141,7 +141,7 @@ final class SpawnTest extends TestCase
     public function testASpawnWithAnIdDeliversByDefaultAndAnswersThatId(): void
     {
         $bridge = new ScriptedSpawns(['{"id":"w1","outcome":"delivered"}']);
-        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p2', id: 'w1'));
+        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p2', id: 'w1'));
 
         self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', 'deliver', false]], $bridge->requests);
         self::assertEquals(new SpawnResult('w1', SpawnOutcome::Delivered), $handle->wait());
@@ -156,9 +156,9 @@ final class SpawnTest extends TestCase
     {
         $bridge = new ScriptedSpawns(['{"id":"a","outcome":"spawned"}', '{"id":"b","outcome":"spawned"}']);
         self::spawn($bridge, static function (Ctx $ctx): SpawnHandle {
-            $ctx->spawnWorkflow('worker', 'ticket-1');
+            $ctx->spawnBounded('worker', 'ticket-1');
 
-            return $ctx->spawnWorkflow('worker', ['symbol' => 'AAPL', 'quantity' => 10]);
+            return $ctx->spawnBounded('worker', ['symbol' => 'AAPL', 'quantity' => 10]);
         });
 
         self::assertSame('ticket-1', $bridge->requests[0][3], 'a string travels as it stands');
@@ -170,7 +170,7 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns([]);
 
         try {
-            self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p', ifRunning: 'error'));
+            self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p', ifRunning: 'error'));
             self::fail('a spawn with ifRunning and no id was accepted');
         } catch (\InvalidArgumentException $e) {
             self::assertStringContainsString('ifRunning without an id', $e->getMessage());
@@ -183,7 +183,7 @@ final class SpawnTest extends TestCase
     {
         yield 'the error policy' => ['already_running', SpawnAlreadyRunningException::class];
         yield 'an unknown factory' => ['factory_unknown', SpawnFactoryUnknownException::class];
-        yield 'a stream factory' => ['factory_not_workflow', SpawnFactoryNotWorkflowException::class];
+        yield 'an unbounded factory' => ['factory_not_bounded', SpawnFactoryNotBoundedException::class];
         yield 'a refusal' => ['refused', SpawnRefusedException::class];
         yield 'a timeout' => ['timeout', SpawnTimeoutException::class];
         yield 'no control plane' => ['unavailable', SpawnUnavailableException::class];
@@ -200,7 +200,7 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns([Json::encode(['id' => 'w1', 'error' => $error, 'message' => $message])]);
         $handle = self::spawn(
             $bridge,
-            static fn (Ctx $ctx): SpawnHandle => $ctx->spawnWorkflow('worker', 'p', id: 'w1', ifRunning: 'error'),
+            static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p', id: 'w1', ifRunning: 'error'),
         );
         self::assertSame([[self::TOKEN, 'worker', 'w1', 'p', 'error', false]], $bridge->requests);
 
@@ -298,10 +298,10 @@ final class SpawnTest extends TestCase
     /** Run `$call` against a real `Ctx` over `$bridge`, the way the dispatcher runs one item. */
     private static function spawn(SpawnBridge $bridge, callable $call): SpawnHandle
     {
-        $spec = SpawnerOperative::spec();
+        $spec = SpawnerOperator::spec();
         $handle = null;
         Dispatcher::invoke(
-            ['token' => self::TOKEN, 'operative' => 'op', 'cell_key' => null, 'change_seq' => 0],
+            ['token' => self::TOKEN, 'operator' => 'op', 'cell_key' => null, 'change_seq' => 0],
             new RegisteredClass($spec),
             $spec->tasklets[0],
             $bridge,
@@ -329,7 +329,7 @@ final class SpawnTest extends TestCase
         $core = Core::create();
 
         try {
-            $spec = SpawnerOperative::spec();
+            $spec = SpawnerOperator::spec();
             Validate::spec($spec, $core);
             $registry = new Registry();
             $registry->add($spec);

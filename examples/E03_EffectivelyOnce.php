@@ -16,13 +16,13 @@ namespace Flezha\Examples\E03;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 
 #[Task(dynamicCells: true)]
 final class Ledger extends Tasklet
@@ -52,8 +52,8 @@ final class Ledger extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'ledger')]
-final class LedgerOperative extends StreamOperative
+#[Operator(factoryId: 'ledger')]
+final class LedgerOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -67,5 +67,5 @@ final class LedgerOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(LedgerOperative::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(LedgerOperator::class)->run();
 }

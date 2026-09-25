@@ -38,7 +38,7 @@ final class Identity
     public static function cell(string $instanceId, string $taskletName, string $cellKey): string
     {
         if (strlen($instanceId) > 255 || strlen($taskletName) > 255) {
-            throw new FlezhaException('operative class / tasklet id must be at most 255 bytes');
+            throw new FlezhaException('operator class / tasklet id must be at most 255 bytes');
         }
         if (strlen($cellKey) > 0xFFFF) {
             throw new FlezhaException('cell key must be at most 65535 bytes');

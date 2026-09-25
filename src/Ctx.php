@@ -43,7 +43,7 @@ final class Ctx
         private readonly ClassSpec $spec,
         private readonly TaskNode $node,
         private readonly array $outgoing,
-        private readonly string $operative,
+        private readonly string $operator,
         public readonly ?string $cellKey,
         private readonly int $changeSeq,
         private readonly int $now,
@@ -67,7 +67,7 @@ final class Ctx
         // Lazily, because most invocations never ask and the identity is the
         // one part of the derivation that costs an allocation.
         $this->identity ??= Identity::cell(
-            $this->operative,
+            $this->operator,
             $this->node->name,
             (string) $this->cellKey,
         );
@@ -194,12 +194,12 @@ final class Ctx
     }
 
     /**
-     * End this tasklet's workflow instance with `$result` once the current
+     * End this tasklet's bounded instance with `$result` once the current
      * iteration commits, instead of waiting for its next input. The rest of
      * the iteration still runs, and a later call replaces an earlier one. The
      * result travels as a sink naming no codec sends a value: a string as it
-     * stands, anything else as JSON, and `null` as no result. In a stream
-     * operative, which never completes, the item fails.
+     * stands, anything else as JSON, and `null` as no result. In an unbounded
+     * operator, which never completes, the item fails.
      */
     public function complete(mixed $result = null): void
     {
@@ -207,7 +207,7 @@ final class Ctx
     }
 
     /**
-     * Ask the controller for a workflow instance of `$factoryId`, with
+     * Ask the controller for a bounded instance of `$factoryId`, with
      * `$payload` as its first input. Returns the handle at once: the call never
      * waits, and a refusal reaches only a read of the handle.
      *
@@ -228,7 +228,7 @@ final class Ctx
      *
      * @throws \InvalidArgumentException for an `$ifRunning` with no `$id`; nothing is sent
      */
-    public function spawnWorkflow(
+    public function spawnBounded(
         string $factoryId,
         mixed $payload,
         ?string $id = null,
@@ -236,7 +236,7 @@ final class Ctx
     ): SpawnHandle {
         if ($ifRunning !== null && ($id ?? '') === '') {
             throw new \InvalidArgumentException(sprintf(
-                '%s: spawnWorkflow was given ifRunning without an id; ifRunning applies to a running '
+                '%s: spawnBounded was given ifRunning without an id; ifRunning applies to a running '
                 . 'instance an id names, and a spawn without an id always starts a new one',
                 $this->node->name,
             ));
@@ -287,9 +287,9 @@ final class Ctx
     private function release(ChannelSpec $channel, mixed $value, ?string $key, ?array $metadata): void
     {
         // A channel with no consumer releases nothing on the edge path: on a
-        // workflow that is the plugin-bound terminal, and seeding the next
+        // bounded operator that is the plugin-bound terminal, and seeding the next
         // stage from it would hand the driver a terminal output.
-        if ($this->spec->structuredWorkflow()) {
+        if ($this->spec->structuredBounded()) {
             $first = $channel->consumers[0] ?? null;
             if ($first !== null) {
                 $this->outputs[] = [
@@ -409,7 +409,7 @@ final class Ctx
      * Output identity for one plugin frame, appended after the user's metadata.
      *
      * Written only when the class records no effects: under the tier, and for
-     * a durable workflow, the controller derives the identity from the durable
+     * a durable bounded operator, the controller derives the identity from the durable
      * effect record, and a second answer here would contradict it. The
      * ordinal advances on every plugin output, stamped or not, so hosts of one
      * topology agree on the sequence, and a `flatMap` fan-out produces
@@ -422,7 +422,7 @@ final class Ctx
         if ($channel->keyed && !$this->spec->recordsEffects()) {
             $pairs['flz.cell'] = sprintf(
                 '%s/%s/%s',
-                $this->operative,
+                $this->operator,
                 $this->node->name,
                 (string) $this->cellKey,
             );

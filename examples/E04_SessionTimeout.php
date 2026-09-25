@@ -16,13 +16,13 @@ namespace Flezha\Examples\E04;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 use Flezha\Timer;
 
 #[Task(dynamicCells: true, idleTtlMs: 3_600_000)]
@@ -67,8 +67,8 @@ final class Session extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'sessions')]
-final class SessionOperative extends StreamOperative
+#[Operator(factoryId: 'sessions')]
+final class SessionOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -80,5 +80,5 @@ final class SessionOperative extends StreamOperative
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(SessionOperative::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(SessionOperator::class)->run();
 }

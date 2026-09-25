@@ -13,7 +13,7 @@ namespace Flezha;
  * way out — so a filter cannot mean one thing on one path and something else
  * elsewhere.
  *
- * The answer is a list because that is the shape all three operators share: a
+ * The answer is a list because that is the shape all three users share: a
  * dropped value is the empty list, a mapped one is a list of one, and a fan is
  * a list of many. A later link runs over every surviving value and its results
  * concatenate, so `flatMap` followed by `filter` yields exactly the survivors.

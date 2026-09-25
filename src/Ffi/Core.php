@@ -113,7 +113,7 @@ final class Core implements SpawnBridge
         return (int) $this->ffi->flz_core_schema_version();
     }
 
-    /** Register one operative class from its `HostClassDecl` JSON. */
+    /** Register one operator class from its `HostClassDecl` JSON. */
     public function declareClass(string $json): void
     {
         $this->check($this->ffi->flz_core_declare_class($this->live(), $json, strlen($json)));
@@ -164,9 +164,9 @@ final class Core implements SpawnBridge
      * Start the declared class as a local run: no controller, no socket. The
      * alternative to {@see start()}, never an addition.
      */
-    public function localStart(string $factoryId, string $operativeId): void
+    public function localStart(string $factoryId, string $operatorId): void
     {
-        $this->check($this->ffi->flz_core_local_start($this->live(), $factoryId, $operativeId));
+        $this->check($this->ffi->flz_core_local_start($this->live(), $factoryId, $operatorId));
     }
 
     /** Queue a declared sink for {@see localNextOutput()}. */

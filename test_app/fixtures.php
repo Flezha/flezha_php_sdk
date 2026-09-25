@@ -15,9 +15,9 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operative;
+use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Workflow;
+use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Clock;
 use Flezha\Ctx;
@@ -26,9 +26,9 @@ use Flezha\Graph\Builder;
 use Flezha\LoopMode;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\StreamOperative;
+use Flezha\UnboundedOperator;
 use Flezha\Timer;
-use Flezha\WorkflowOperative;
+use Flezha\BoundedOperator;
 
 /** The readings of a text input every fixture that talks to another SDK shares. */
 final class Wire
@@ -57,8 +57,8 @@ final class DoNothing extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'do_nothing')]
-final class DoNothingOperative extends StreamOperative
+#[Operator(factoryId: 'do_nothing')]
+final class DoNothingOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -73,8 +73,8 @@ final class DoNothingOperative extends StreamOperative
  * merge-blocking bench factory and must not change; this keeps the round-trip
  * bench's back-pressure posture independent of it.
  */
-#[Operative(factoryId: 'bench_echo')]
-final class BenchEchoOperative extends StreamOperative
+#[Operator(factoryId: 'bench_echo')]
+final class BenchEchoOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -104,8 +104,8 @@ final class CompareFilter extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'compare_filter')]
-final class CompareFilterOperative extends StreamOperative
+#[Operator(factoryId: 'compare_filter')]
+final class CompareFilterOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -115,7 +115,7 @@ final class CompareFilterOperative extends StreamOperative
     }
 }
 
-// -- static_cell / sugar_static_cell / mixed_operative -------------------
+// -- static_cell / sugar_static_cell / mixed_operator -------------------
 
 #[Task(name: 'static_entry_tasklet', cellKeys: ['a', 'b', 'c', 'd'])]
 class StaticEntry extends Tasklet
@@ -176,8 +176,8 @@ final class MacroStaticDownstream extends PassThrough
 {
 }
 
-#[Operative(factoryId: 'static_cell')]
-final class StaticCellOperative extends StreamOperative
+#[Operator(factoryId: 'static_cell')]
+final class StaticCellOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -192,8 +192,8 @@ final class StaticCellOperative extends StreamOperative
  * The reference pipeline sugar leaves the hop unnamed and lets the sink name
  * the producing channel.
  */
-#[Operative(factoryId: 'sugar_static_cell')]
-final class SugarStaticCellOperative extends StreamOperative
+#[Operator(factoryId: 'sugar_static_cell')]
+final class SugarStaticCellOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -214,8 +214,8 @@ final class MixedHandDownstream extends PassThrough
 {
 }
 
-#[Operative(factoryId: 'mixed_operative')]
-final class MixedOperative extends StreamOperative
+#[Operator(factoryId: 'mixed_operator')]
+final class MixedOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -228,18 +228,18 @@ final class MixedOperative extends StreamOperative
 
 // -- the §5 short forms ------------------------------------------------------
 //
-// One class each: an operative that defines its one tasklet's `run` instead
+// One class each: an operator that defines its one tasklet's `run` instead
 // of `channels()`, and `runner.php` registers the class itself. No tasklet
 // class stands beside them.
 
-#[Operative(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
-final class SugarDoNothing extends StreamOperative
+#[Operator(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
+final class SugarDoNothing extends UnboundedOperator
 {
     use PassesThrough;
 }
 
-#[Operative(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
-final class SugarStoreInput extends StreamOperative
+#[Operator(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
+final class SugarStoreInput extends UnboundedOperator
 {
     public function state(?string $cellKey): mixed
     {
@@ -259,34 +259,34 @@ final class SugarStoreInput extends StreamOperative
     }
 }
 
-#[Operative(
+#[Operator(
     factoryId: 'sugar_named_input',
     sink: 'sugar_named_input_sink',
     input: 'prices',
     codec: ChannelCodec::Text,
 )]
-final class SugarNamedInput extends StreamOperative
+final class SugarNamedInput extends UnboundedOperator
 {
     use PassesThrough;
 }
 
-#[Operative(factoryId: 'sugar_workflow', sink: 'sugar_workflow_placed', input: 'order', codec: ChannelCodec::Text)]
-final class SugarWorkflow extends WorkflowOperative
+#[Operator(factoryId: 'sugar_bounded', sink: 'sugar_bounded_placed', input: 'order', codec: ChannelCodec::Text)]
+final class SugarBounded extends BoundedOperator
 {
     use PassesThrough;
 }
 
 /** The loop mode, the one class-level setting a short form keeps. */
-#[Operative(factoryId: 'sugar_workflow_per_input', sink: 'sugar_workflow_per_input_out', codec: ChannelCodec::Text)]
-#[Workflow(loopMode: LoopMode::PerInput)]
-final class SugarWorkflowPerInput extends WorkflowOperative
+#[Operator(factoryId: 'sugar_bounded_per_input', sink: 'sugar_bounded_per_input_out', codec: ChannelCodec::Text)]
+#[Bounded(loopMode: LoopMode::PerInput)]
+final class SugarBoundedPerInput extends BoundedOperator
 {
     use PassesThrough;
 }
 
 /** No `sink`: the tasklet only keeps what it is sent, and answers nothing. */
-#[Operative(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
-final class SugarStateOnly extends StreamOperative
+#[Operator(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
+final class SugarStateOnly extends UnboundedOperator
 {
     public function state(?string $cellKey): mixed
     {
@@ -310,7 +310,7 @@ final class SugarStateOnly extends StreamOperative
 //
 // One emit reaching two destinations: an inter-tasklet consumer and a plugin
 // wire with its own serializer. The serializer refuses a sentinel value, so an
-// operator can observe end to end that a refusal is isolated to the emit rather
+// user can observe end to end that a refusal is isolated to the emit rather
 // than failing the item.
 
 #[Task(name: 'hybrid_producer_tasklet')]
@@ -344,8 +344,8 @@ final class HybridConsumer extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'hybrid_channel')]
-final class HybridChannelOperative extends StreamOperative
+#[Operator(factoryId: 'hybrid_channel')]
+final class HybridChannelOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -379,8 +379,8 @@ final class MergeLabel extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'merged_input')]
-final class MergedInputOperative extends StreamOperative
+#[Operator(factoryId: 'merged_input')]
+final class MergedInputOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -416,8 +416,8 @@ final class TransformLabel extends PassThrough
 {
 }
 
-#[Operative(factoryId: 'transform_chain')]
-final class TransformChainOperative extends StreamOperative
+#[Operator(factoryId: 'transform_chain')]
+final class TransformChainOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -477,8 +477,8 @@ final class StressD extends StressToP0
 {
 }
 
-#[Operative(factoryId: 'cell_stress')]
-final class CellStressOperative extends StreamOperative
+#[Operator(factoryId: 'cell_stress')]
+final class CellStressOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -532,8 +532,8 @@ final class Candle extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'candle')]
-final class CandleOperative extends StreamOperative
+#[Operator(factoryId: 'candle')]
+final class CandleOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -585,8 +585,8 @@ final class SessionTimeout extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'session_timeout')]
-final class SessionTimeoutOperative extends StreamOperative
+#[Operator(factoryId: 'session_timeout')]
+final class SessionTimeoutOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -635,8 +635,8 @@ final class DropOldestMailbox extends BoundedMailbox
 {
 }
 
-#[Operative(factoryId: 'bounded_mailbox_drop_nothing')]
-final class BoundedMailboxDropNothingOperative extends StreamOperative
+#[Operator(factoryId: 'bounded_mailbox_drop_nothing')]
+final class BoundedMailboxDropNothingOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -646,8 +646,8 @@ final class BoundedMailboxDropNothingOperative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'bounded_mailbox_drop_newest')]
-final class BoundedMailboxDropNewestOperative extends StreamOperative
+#[Operator(factoryId: 'bounded_mailbox_drop_newest')]
+final class BoundedMailboxDropNewestOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -657,8 +657,8 @@ final class BoundedMailboxDropNewestOperative extends StreamOperative
     }
 }
 
-#[Operative(factoryId: 'bounded_mailbox_drop_oldest')]
-final class BoundedMailboxDropOldestOperative extends StreamOperative
+#[Operator(factoryId: 'bounded_mailbox_drop_oldest')]
+final class BoundedMailboxDropOldestOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -670,11 +670,11 @@ final class BoundedMailboxDropOldestOperative extends StreamOperative
 
 // -- partition_relay ---------------------------------------------------------
 //
-// The partitioned-operatives upstream: keyed on the wiring so it can be
+// The partitioned-operators upstream: keyed on the wiring so it can be
 // partitioned at all, and emitting keyed so a partitioned forward target can
 // resolve the owning member. The plugin channel is named `input` because a
 // forwarded frame keeps its producing channel's name, and that is what selects
-// the receiving operative's entry channel — so the entry here is `in`.
+// the receiving operator's entry channel — so the entry here is `in`.
 
 #[Task(name: 'partition_relay_tasklet', dynamicCells: true)]
 final class PartitionRelay extends Tasklet
@@ -698,8 +698,8 @@ final class PartitionRelay extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'partition_relay')]
-final class PartitionRelayOperative extends StreamOperative
+#[Operator(factoryId: 'partition_relay')]
+final class PartitionRelayOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -735,8 +735,8 @@ final class DynamicCell extends Tasklet
     }
 }
 
-#[Operative(factoryId: 'dynamic_cell')]
-final class DynamicCellOperative extends StreamOperative
+#[Operator(factoryId: 'dynamic_cell')]
+final class DynamicCellOperator extends UnboundedOperator
 {
     public static function channels(Builder $c): void
     {
@@ -750,54 +750,54 @@ final class DynamicCellOperative extends StreamOperative
     }
 }
 
-/** Every operative this app registers, in declaration order. */
+/** Every operator this app registers, in declaration order. */
 final class Fixtures
 {
-    /** @return list<class-string<\Flezha\Operative>> */
+    /** @return list<class-string<\Flezha\Operator>> */
     public static function all(): array
     {
         return [
-            DoNothingOperative::class,
-            BenchEchoOperative::class,
-            CompareFilterOperative::class,
-            StaticCellOperative::class,
-            SugarStaticCellOperative::class,
-            MixedOperative::class,
-            HybridChannelOperative::class,
-            MergedInputOperative::class,
-            TransformChainOperative::class,
-            CellStressOperative::class,
-            BenchKeyedNoPersistOperative::class,
-            StoreInputOperative::class,
-            StatefulCounterOperative::class,
-            PersistenceOffCounterOperative::class,
-            SleepingCounterOperative::class,
-            CoalescingCounterOperative::class,
-            ResumeProbeOperative::class,
-            BenchKeyedOperative::class,
-            SchemaEvolutionV1Operative::class,
-            SchemaEvolutionV2Operative::class,
-            TierStoreOperative::class,
-            CheckpointStoreOperative::class,
-            CheckpointBatchedOperative::class,
-            BenchCheckpointOperative::class,
-            CandleOperative::class,
-            PoisonProbeOperative::class,
-            WedgeProbeOperative::class,
-            SessionTimeoutOperative::class,
-            BoundedMailboxDropNothingOperative::class,
-            BoundedMailboxDropNewestOperative::class,
-            BoundedMailboxDropOldestOperative::class,
-            PartitionRelayOperative::class,
-            DynamicCellOperative::class,
-            SpawnRequesterOperative::class,
-            SpawnOnceRequesterOperative::class,
+            DoNothingOperator::class,
+            BenchEchoOperator::class,
+            CompareFilterOperator::class,
+            StaticCellOperator::class,
+            SugarStaticCellOperator::class,
+            MixedOperator::class,
+            HybridChannelOperator::class,
+            MergedInputOperator::class,
+            TransformChainOperator::class,
+            CellStressOperator::class,
+            BenchKeyedNoPersistOperator::class,
+            StoreInputOperator::class,
+            StatefulCounterOperator::class,
+            PersistenceOffCounterOperator::class,
+            SleepingCounterOperator::class,
+            CoalescingCounterOperator::class,
+            ResumeProbeOperator::class,
+            BenchKeyedOperator::class,
+            SchemaEvolutionV1Operator::class,
+            SchemaEvolutionV2Operator::class,
+            TierStoreOperator::class,
+            CheckpointStoreOperator::class,
+            CheckpointBatchedOperator::class,
+            BenchCheckpointOperator::class,
+            CandleOperator::class,
+            PoisonProbeOperator::class,
+            WedgeProbeOperator::class,
+            SessionTimeoutOperator::class,
+            BoundedMailboxDropNothingOperator::class,
+            BoundedMailboxDropNewestOperator::class,
+            BoundedMailboxDropOldestOperator::class,
+            PartitionRelayOperator::class,
+            DynamicCellOperator::class,
+            SpawnRequesterOperator::class,
+            SpawnOnceRequesterOperator::class,
             // The §5 short forms.
             SugarDoNothing::class,
             SugarStoreInput::class,
             SugarNamedInput::class,
-            SugarWorkflow::class,
-            SugarWorkflowPerInput::class,
+            SugarBounded::class,
+            SugarBoundedPerInput::class,
             SugarStateOnly::class,
         ];
     }

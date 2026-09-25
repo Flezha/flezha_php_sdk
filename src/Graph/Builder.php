@@ -9,12 +9,12 @@ use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
 use Flezha\Definition;
 use Flezha\Exception\DeclarationException;
-use Flezha\Operative;
+use Flezha\Operator;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 
 /**
- * The fluent channel builder an operative's `channels()` receives.
+ * The fluent channel builder an operator's `channels()` receives.
  *
  * Class-wide declarations (the tier, the correction window, compaction) are
  * methods on the builder rather than a second attribute, because they are
@@ -156,7 +156,7 @@ final class Builder
     }
 
     /**
-     * Turn an operative-wide document stream into per-key deliveries: every key
+     * Turn an operator-wide document stream into per-key deliveries: every key
      * seen on `$traffic` receives each distinct document once, on that key's
      * own next traffic item, as a `[$key, $document]` pair.
      *
@@ -166,7 +166,7 @@ final class Builder
      * nothing. A document whose JSON is identical to the retained one is inert.
      *
      * The node is `route_latest` like any tasklet node, so a second router in
-     * one operative needs {@see routeLatestNamed()}.
+     * one operator needs {@see routeLatestNamed()}.
      *
      * @param callable(mixed):string $keyFn
      */
@@ -211,7 +211,7 @@ final class Builder
      * node — the naming convention every SDK mirrors — so a diamond that fans
      * out and back in has one instance, not two.
      *
-     * @param class-string<Tasklet>|class-string<Operative> $class
+     * @param class-string<Tasklet>|class-string<Operator> $class
      */
     public function nodeFor(string $class, ?string $name = null): TaskNode
     {

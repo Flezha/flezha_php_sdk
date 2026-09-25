@@ -15,9 +15,9 @@ use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 
 /**
- * Running a declared operative graph in this process, with no controller.
+ * Running a declared operator graph in this process, with no controller.
  *
- * {@see start()} takes the operative class you deploy and runs the
+ * {@see start()} takes the operator class you deploy and runs the
  * `channels()` graph it already declares — no local-mode member on the class,
  * no second declaration. What runs is the deployed machinery: entry decode,
  * edge transforms and keying, one Cell per resolved key with its own
@@ -34,7 +34,7 @@ use Flezha\Graph\Validate;
  * and multi-runner scale all need a controller; the run says so on stderr
  * every time it starts. `docs/quickstart.md` walks through it.
  */
-final class LocalOperative
+final class LocalOperator
 {
     /** One poll turn. Short, because a turn that hands nothing back is a probe. */
     private const POLL_MS = 20;
@@ -56,7 +56,7 @@ final class LocalOperative
     /**
      * Register `$class`'s declared graph and start it locally.
      *
-     * @param class-string<Operative> $class
+     * @param class-string<Operator> $class
      *
      * @throws FlezhaException naming the capability when the declaration needs
      *                         a controller
@@ -66,7 +66,7 @@ final class LocalOperative
         $core = Core::create();
 
         try {
-            $spec = Operative::specFor($class);
+            $spec = Operator::specFor($class);
             // `Validate::spec` is what writes the derived edges back into the
             // spec, so it runs before anything is declared.
             Validate::spec($spec, $core);
