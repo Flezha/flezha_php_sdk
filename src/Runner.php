@@ -375,8 +375,6 @@ final class Runner
             self::reportSizing($state);
         }
 
-        $this->idle?->stop();
-
         // The context is released only when nothing is still running against
         // it; `abandonContext` is what a bounded drain that gave up leaves.
         $this->core?->free();
