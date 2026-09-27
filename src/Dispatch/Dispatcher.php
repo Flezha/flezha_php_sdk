@@ -139,6 +139,7 @@ final class Dispatcher
         int $now,
         bool $replay,
         callable $body,
+        ?int $offset = null,
     ): Ctx {
         $ctx = new Ctx(
             spec: $registered->spec,
@@ -152,6 +153,7 @@ final class Dispatcher
             state: $registered->stateOf($node, $activation['cell_key']),
             bridge: $bridge,
             token: (int) $activation['token'],
+            offset: $offset,
             compensating: ($activation['kind'] ?? null) === 'compensate_run',
         );
 
@@ -216,6 +218,7 @@ final class Dispatcher
                 $now,
                 (bool) ($item['replay'] ?? false),
                 fn (Ctx $ctx) => $this->serve($ctx, $registered, $node, $item, $now),
+                $item['consumed_offset'] ?? null,
             );
 
             return $ctx->effect($item['consumed_offset'] ?? null);

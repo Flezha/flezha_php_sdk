@@ -51,6 +51,10 @@ final class Ctx
         public mixed $state,
         private readonly SpawnBridge $bridge,
         private readonly int $token,
+        // The input-log offset of the item this invocation runs: a spawn
+        // carries it so a crash re-run of the same input resolves to the
+        // worker the first run spawned.
+        private readonly ?int $offset = null,
         private readonly bool $compensating = false,
     ) {
     }
@@ -251,6 +255,7 @@ final class Ctx
             ChannelCodec::plain($payload, $this->node->name),
             $ifRunning ?? 'deliver',
             $this->replay,
+            $this->offset,
         ));
     }
 

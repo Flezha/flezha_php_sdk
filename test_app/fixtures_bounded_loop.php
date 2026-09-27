@@ -20,6 +20,7 @@ use Flezha\Ctx;
 use Flezha\Exception\SpawnException;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
+use Flezha\Overflow;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
 use Flezha\Timer;
@@ -286,6 +287,37 @@ final class SpawnRequesterOperator extends UnboundedOperator
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SpawnRequester::class)
+            ->sink('out');
+    }
+}
+
+// -- spawn_hold_requester ----------------------------------------------------
+//
+// An effectively-once stream whose tasklet spawns stateless_loop_bounded with
+// no id, prints the answer as `spawn_result hold <id> <outcome>`, then blocks
+// until the release env is set, so a runner killed there dies with the spawn
+// answered and its input not durably consumed.
+
+#[Task(name: 'spawn_hold_requester')]
+final class SpawnHoldRequester extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        SpawnRequester::report('hold', $ctx->spawnBounded('stateless_loop_bounded', (string) $input));
+        BoundedGate::blockUntilReleased();
+
+        return null;
+    }
+}
+
+#[Operator(factoryId: 'spawn_hold_requester')]
+final class SpawnHoldRequesterOperator extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->effectivelyOnce();
+        $c->input('in', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
+            ->into(SpawnHoldRequester::class)->keyed()
             ->sink('out');
     }
 }

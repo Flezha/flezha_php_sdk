@@ -292,6 +292,7 @@ final class Core implements SpawnBridge
         string $payload,
         string $ifRunning,
         bool $replay,
+        ?int $offset,
     ): int {
         $handle = $this->ffi->new('uint64_t');
         $this->check($this->ffi->flz_core_spawn_request(
@@ -303,6 +304,7 @@ final class Core implements SpawnBridge
             strlen($payload),
             $ifRunning,
             $replay ? 1 : 0,
+            $offset ?? -1,
             FFI::addr($handle),
         ));
 

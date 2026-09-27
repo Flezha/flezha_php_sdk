@@ -198,6 +198,7 @@ final class Harness implements SpawnBridge
         string $payload,
         string $ifRunning,
         bool $replay,
+        ?int $offset,
     ): int {
         $handle = $this->spawnCount++;
         if ($id === '' && !$replay) {

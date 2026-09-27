@@ -778,6 +778,7 @@ final class Fixtures
             SchemaEvolutionV1Operator::class,
             SchemaEvolutionV2Operator::class,
             TierStoreOperator::class,
+            TierChainOperator::class,
             CheckpointStoreOperator::class,
             CheckpointBatchedOperator::class,
             BenchCheckpointOperator::class,
@@ -791,6 +792,7 @@ final class Fixtures
             PartitionRelayOperator::class,
             DynamicCellOperator::class,
             SpawnRequesterOperator::class,
+            SpawnHoldRequesterOperator::class,
             SpawnOnceRequesterOperator::class,
             // The §5 short forms.
             SugarDoNothing::class,

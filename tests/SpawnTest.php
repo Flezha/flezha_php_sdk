@@ -96,8 +96,9 @@ final class ScriptedSpawns implements SpawnBridge
         string $payload,
         string $ifRunning,
         bool $replay,
+        ?int $offset,
     ): int {
-        $this->requests[] = [$token, $factoryId, $id, $payload, $ifRunning, $replay];
+        $this->requests[] = [$token, $factoryId, $id, $payload, $ifRunning, $replay, $offset];
 
         return count($this->requests);
     }
@@ -117,6 +118,7 @@ final class ScriptedSpawns implements SpawnBridge
 final class SpawnTest extends TestCase
 {
     private const TOKEN = 7;
+    private const OFFSET = 11;
 
     public function testTheCallReturnsAHandleThatAnswersPendingUntilTheAnswerArrives(): void
     {
@@ -124,9 +126,9 @@ final class SpawnTest extends TestCase
         $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p1'));
 
         self::assertSame(
-            [[self::TOKEN, 'worker', '', 'p1', 'deliver', false]],
+            [[self::TOKEN, 'worker', '', 'p1', 'deliver', false, self::OFFSET]],
             $bridge->requests,
-            'no id asks the controller to generate one, from the activation the call ran under',
+            'no id asks the controller to generate one, from the activation and input offset the call ran under',
         );
         self::assertNull($handle->tryResult());
         $result = new SpawnResult('worker-k7m2qzxw4pd3fn2a', SpawnOutcome::Spawned);
@@ -143,7 +145,7 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns(['{"id":"w1","outcome":"delivered"}']);
         $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p2', id: 'w1'));
 
-        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', 'deliver', false]], $bridge->requests);
+        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', 'deliver', false, self::OFFSET]], $bridge->requests);
         self::assertEquals(new SpawnResult('w1', SpawnOutcome::Delivered), $handle->wait());
     }
 
@@ -202,7 +204,7 @@ final class SpawnTest extends TestCase
             $bridge,
             static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p', id: 'w1', ifRunning: 'error'),
         );
-        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p', 'error', false]], $bridge->requests);
+        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p', 'error', false, self::OFFSET]], $bridge->requests);
 
         try {
             $handle->wait();
@@ -271,7 +273,15 @@ final class SpawnTest extends TestCase
         $handle = null;
         self::withActivation(
             static function (array $activation, Dispatcher $dispatcher, Core $core) use (&$handle): void {
-                $handle = new SpawnHandle($core, $core->spawnRequest($activation['token'], 'worker', 'w1', '"p"', 'deliver', false));
+                $handle = new SpawnHandle($core, $core->spawnRequest(
+                    $activation['token'],
+                    'worker',
+                    'w1',
+                    '"p"',
+                    'deliver',
+                    false,
+                    $activation['items'][0]['consumed_offset'] ?? null,
+                ));
                 $reads = [];
                 foreach ([$handle->tryResult(...), $handle->wait(...)] as $read) {
                     try {
@@ -310,6 +320,7 @@ final class SpawnTest extends TestCase
             static function (Ctx $ctx) use ($call, &$handle): void {
                 $handle = $call($ctx);
             },
+            self::OFFSET,
         );
 
         return $handle;

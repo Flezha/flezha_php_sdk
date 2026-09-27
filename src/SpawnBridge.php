@@ -18,7 +18,8 @@ interface SpawnBridge
     /**
      * Send one request from the activation `$token` and answer its handle
      * number at once. An empty `$id` asks the controller to generate one; a
-     * replay sends nothing.
+     * replay sends nothing. `$offset` is the input-log offset of the item the
+     * request runs under, if it has one.
      */
     public function spawnRequest(
         int $token,
@@ -27,6 +28,7 @@ interface SpawnBridge
         string $payload,
         string $ifRunning,
         bool $replay,
+        ?int $offset,
     ): int;
 
     /**

@@ -149,6 +149,70 @@ final class TierStoreOperator extends UnboundedOperator
     }
 }
 
+// -- tier_chain --------------------------------------------------------------
+//
+// An effectively-once stream of two tasklets. `tier_relay` counts what it
+// relays and passes each `key:value` on; `tier_tally` counts each key's inputs
+// and emits `key=count`. Until the release env is set the tally fails the value
+// `hold` and keeps retrying it, so a runner killed there has made the relay's
+// record durable and not the tally's.
+
+#[Task]
+abstract class Counting extends Tasklet
+{
+    public function state(?string $cellKey): mixed
+    {
+        return ['value' => 0];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['value'] += $change['delta'];
+    }
+}
+
+#[Task(name: 'tier_relay')]
+final class TierRelay extends Counting
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        $ctx->change(['delta' => 1]);
+        $ctx->emit($input);
+
+        return null;
+    }
+}
+
+#[Task(name: 'tier_tally')]
+final class TierTally extends Counting
+{
+    public function run(mixed $input, Ctx $ctx): mixed
+    {
+        [$key, $value] = explode(':', (string) $input, 2) + [1 => ''];
+        if ($value === 'hold' && !BoundedGate::released()) {
+            throw new \RuntimeException('held until released');
+        }
+        $ctx->change(['delta' => 1]);
+        $ctx->emitKeyed($key, "{$key}={$ctx->state['value']}");
+
+        return null;
+    }
+}
+
+#[Operator(factoryId: 'tier_chain')]
+final class TierChainOperator extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->effectivelyOnce();
+        $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
+            ->into(TierRelay::class)
+            ->keyBy(Wire::prefix(...))->retryMax(1_000)
+            ->into(TierTally::class)->keyed()
+            ->sink('sink');
+    }
+}
+
 #[Operator(factoryId: 'checkpoint_store')]
 final class CheckpointStoreOperator extends UnboundedOperator
 {
