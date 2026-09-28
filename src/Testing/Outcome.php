@@ -16,7 +16,6 @@ final class Outcome
         public readonly array $outputs,
         public readonly array $changes,
         public readonly array $timers,
-        public readonly mixed $returned,
     ) {
     }
 }

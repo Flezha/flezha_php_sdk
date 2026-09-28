@@ -31,24 +31,22 @@ use Flezha\SinkOutput;
 use Flezha\UnboundedOperator;
 
 /** One line into its words: the hop to `Tally` is the runtime's job. */
-#[Task]
+#[Task(name: 'split')]
 final class Split extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         foreach (preg_split('/\s+/', trim((string) $input), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $word) {
             $ctx->emit(strtolower($word));
         }
-
-        return null;
     }
 }
 
 /** One Cell per word, minted on first sight of it. */
-#[Task(dynamicCells: true)]
+#[Task(name: 'tally')]
 final class Tally extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return 0;
     }
@@ -58,12 +56,12 @@ final class Tally extends Tasklet
         $state = (int) $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $seen = ((int) $ctx->state) + 1;
         $ctx->change($seen);
 
-        return (string) $input . ' ' . $seen;
+        $ctx->emit((string) $input . ' ' . $seen);
     }
 }
 

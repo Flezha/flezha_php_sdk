@@ -8,7 +8,6 @@ use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded;
 use Flezha\BeyondWindow;
-use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
@@ -256,10 +255,10 @@ final class DeclKeysTest extends RepositoryTestCase
 }
 
 /** A declaration populated far enough that every optional key is present. */
-#[Task(name: 'entry', clock: Clock::EventTime, mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1)]
+#[Task(name: 'entry', mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1)]
 final class FullEntry extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -279,20 +278,18 @@ final class FullEntry extends Tasklet
         return \Flezha\Codec\Json::decode($bytes);
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
-
-        return null;
     }
 }
 
-#[Task(name: 'downstream', dynamicCells: true, idleTtlMs: 1_000, maxCells: 16)]
+#[Task(name: 'downstream', idleTtlSeconds: 1, maxCells: 16)]
 final class FullDownstream extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 
     public function compensate(array $outputs, Ctx $ctx): void
@@ -308,9 +305,9 @@ final class FullFanned extends Tasklet
         return ['a'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -354,20 +351,17 @@ final class FullBounded extends BoundedOperator
 #[Task(name: 'hybrid_producer_tasklet')]
 final class HybridProducer extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit($input);
-
-        return null;
     }
 }
 
 #[Task(name: 'hybrid_consumer_tasklet')]
 final class HybridConsumer extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return null;
     }
 }
 
@@ -386,20 +380,17 @@ final class HybridChannelTopology extends UnboundedOperator
 #[Task(name: 'tier_commit_a')]
 final class TierCommitA extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit($input, 'job');
-
-        return null;
     }
 }
 
 #[Task(name: 'block_b')]
 final class BlockB extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return null;
     }
 }
 

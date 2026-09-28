@@ -16,7 +16,7 @@ namespace Flezha;
  *     #[Task(name: 'echo')]
  *     final class EchoTasklet extends Tasklet
  *     {
- *         public function run(mixed $input, Ctx $ctx): mixed { return $input; }
+ *         public function run(mixed $input, Ctx $ctx): void { $ctx->emit($input); }
  *     }
  *
  *     #[Operator(factoryId: 'echo')]

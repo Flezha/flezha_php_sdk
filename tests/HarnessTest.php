@@ -14,10 +14,10 @@ use Flezha\Testing\Harness;
 use Flezha\Testing\ReplayMismatch;
 use PHPUnit\Framework\TestCase;
 
-#[Task]
+#[Task(name: 'mutates_without_recording')]
 final class MutatesWithoutRecording extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['count' => 0];
     }
@@ -27,20 +27,18 @@ final class MutatesWithoutRecording extends Tasklet
         $state['count'] += (int) $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // The failure this SDK cannot make impossible: PHP has no cheap deep
         // read-only view, so the state is writable and the rule is a rule.
         $ctx->state['count'] += (int) $input;
-
-        return null;
     }
 }
 
-#[Task]
+#[Task(name: 'impure_fold')]
 final class ImpureFold extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['calls' => 0];
     }
@@ -50,11 +48,9 @@ final class ImpureFold extends Tasklet
         $state['calls'] = random_int(1, 1_000_000);
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change($input);
-
-        return null;
     }
 }
 
@@ -74,12 +70,9 @@ final class HarnessTest extends TestCase
         self::assertSame([], $outcome->outputs);
     }
 
-    public function testAReturnedValueIsEmittedExactlyAsTheDispatcherDoesIt(): void
+    public function testAnEmittedValueIsReportedExactlyAsTheDispatcherSendsIt(): void
     {
-        $outcome = (new Harness(Echoer::class))->feed('hello');
-
-        self::assertSame(['hello'], $outcome->outputs);
-        self::assertSame('hello', $outcome->returned);
+        self::assertSame(['hello'], (new Harness(Echoer::class))->feed('hello')->outputs);
     }
 
     /** The harness reads its sink back as JSON, so a string is not reported as its bytes. */
@@ -233,29 +226,27 @@ final class HarnessTest extends TestCase
     }
 }
 
-#[Task]
+#[Task(name: 'spawns_twice')]
 final class SpawnsTwice extends Tasklet
 {
     /** @var list<SpawnHandle> the handles the latest run made */
     public static array $handles = [];
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         self::$handles = [$ctx->spawnBounded('worker', (string) $input), $ctx->spawnBounded('worker', (string) $input, id: 'w1')];
         foreach (self::$handles as $handle) {
             $result = $handle->tryResult();
             $ctx->emit([$result?->id, $result?->outcome->value]);
         }
-
-        return null;
     }
 }
 
-#[Task]
+#[Task(name: 'stable_id_probe')]
 final class StableIdProbe extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return [$ctx->stableId(), $ctx->stableId()];
+        $ctx->emit([$ctx->stableId(), $ctx->stableId()]);
     }
 }

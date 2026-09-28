@@ -24,10 +24,10 @@ use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 use Flezha\UnboundedOperator;
 
-#[Task(dynamicCells: true)]
+#[Task(name: 'ledger')]
 final class Ledger extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['balance' => 0];
     }
@@ -37,7 +37,7 @@ final class Ledger extends Tasklet
         $state['balance'] += (int) $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change((int) $input['delta']);
 
@@ -48,7 +48,7 @@ final class Ledger extends Tasklet
             $ctx->checkpoint();
         }
 
-        return ['account' => $ctx->cellKey, 'balance' => $ctx->state['balance']];
+        $ctx->emit(['account' => $ctx->cellKey, 'balance' => $ctx->state['balance']]);
     }
 }
 

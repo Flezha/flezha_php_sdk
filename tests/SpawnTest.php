@@ -35,13 +35,13 @@ use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 /** Spawns once with no id and once with the id `w1`, reads both, then emits its input. */
-#[Task]
+#[Task(name: 'spawner')]
 final class Spawner extends Tasklet
 {
     /** @var list<SpawnResult|SpawnException> what each read answered, in order */
     public static array $read = [];
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $handles = [
             $ctx->spawnBounded('worker', (string) $input),
@@ -55,7 +55,7 @@ final class Spawner extends Tasklet
             }
         }
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 

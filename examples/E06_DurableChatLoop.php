@@ -25,10 +25,10 @@ use Flezha\LoopMode;
 use Flezha\Tasklet;
 use Flezha\BoundedOperator;
 
-#[Task]
+#[Task(name: 'chat_turn')]
 final class ChatTurn extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['history' => []];
     }
@@ -38,17 +38,17 @@ final class ChatTurn extends Tasklet
         $state['history'][] = $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if (($input['kind'] ?? null) === 'end') {
             $ctx->complete(['messages' => count($ctx->state['history'])]);
 
-            return null;
+            return;
         }
 
         $ctx->change($input['text']);
 
-        return ['reply' => 'noted: ' . $input['text'], 'seen' => count($ctx->state['history'])];
+        $ctx->emit(['reply' => 'noted: ' . $input['text'], 'seen' => count($ctx->state['history'])]);
     }
 }
 

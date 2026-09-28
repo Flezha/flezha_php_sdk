@@ -35,24 +35,33 @@ final class RegisteredClass
     /**
      * The cell's live state, created from the declaration on first touch.
      *
+     * A cell is addressed by its operator too: one class serves every
+     * operator of its factory on this runner, such as each instance of a
+     * bounded operator, and each has cells of its own under the same keys.
+     *
      * No lock, and none is missing: a `Swoole\Thread` is a separate
      * interpreter with its own object graph, so two threads never share this
      * map — and per-cell exclusivity, which is the core's rather than this
      * map's, is what makes the cell a thread holds the only one in play
      * while it holds it.
      */
-    public function stateOf(TaskNode $node, ?string $cellKey): mixed
+    public function stateOf(TaskNode $node, string $operator, ?string $cellKey): mixed
     {
-        $key = $node->index . "\0" . $cellKey;
-        if (!array_key_exists($key, $this->cells)) {
-            $this->cells[$key] = $node->definition->initialState($cellKey);
+        $address = self::address($node, $operator, $cellKey);
+        if (!array_key_exists($address, $this->cells)) {
+            $this->cells[$address] = $node->definition->initialState($cellKey);
         }
 
-        return $this->cells[$key];
+        return $this->cells[$address];
     }
 
-    public function setState(TaskNode $node, ?string $cellKey, mixed $state): void
+    public function setState(TaskNode $node, string $operator, ?string $cellKey, mixed $state): void
     {
-        $this->cells[$node->index . "\0" . $cellKey] = $state;
+        $this->cells[self::address($node, $operator, $cellKey)] = $state;
+    }
+
+    private static function address(TaskNode $node, string $operator, ?string $cellKey): string
+    {
+        return $operator . "\0" . $node->index . "\0" . $cellKey;
     }
 }

@@ -134,23 +134,6 @@ final class Ctx
     }
 
     /**
-     * Emit what a handler returned, if anything.
-     *
-     * `null` emits nothing, which is how a handler writes a filter — so a
-     * handler that emits through the context and one that returns a value
-     * compose rather than conflict. A value returned by a tasklet with no
-     * outgoing channel is left alone, as the reference leaves an unconsumed
-     * output. One method, because the dispatcher and the test harness must not
-     * disagree about it.
-     */
-    public function emitReturned(mixed $returned): void
-    {
-        if ($returned !== null && $this->outgoing !== []) {
-            $this->emit($returned);
-        }
-    }
-
-    /**
      * Emit with an explicit routing key — the spelling for a keyed channel.
      *
      * @param array<string, string>|null $metadata

@@ -48,7 +48,7 @@ final class LatestDocumentRouter extends Tasklet
     }
 
     /** `delivered` grows with the keys this member sees, which it already pays for as cells. */
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['document' => null, 'version' => 0, 'delivered' => []];
     }
@@ -69,7 +69,7 @@ final class LatestDocumentRouter extends Tasklet
         $state['delivered'][$change['delivered']['key']] = $change['delivered']['version'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $state = $ctx->state;
         // Version 0 means nothing retained, so the first document lands at 1
@@ -81,18 +81,16 @@ final class LatestDocumentRouter extends Tasklet
                 $ctx->change(['retain' => $input['document']]);
             }
 
-            return null;
+            return;
         }
 
         $key = $input['traffic'];
         if (!$retained || ($state['delivered'][$key] ?? 0) >= $state['version']) {
-            return null;
+            return;
         }
         // Emit first: a failed emit rides the channel's retry ladder, and
         // recording the delivery before it would make the retry silent.
         $ctx->emit([$key, $state['document']]);
         $ctx->change(['delivered' => ['key' => $key, 'version' => $state['version']]]);
-
-        return null;
     }
 }

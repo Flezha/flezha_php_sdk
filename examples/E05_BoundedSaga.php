@@ -25,12 +25,12 @@ use Flezha\Tasklet;
 use Flezha\RollbackMode;
 use Flezha\BoundedOperator;
 
-#[Task]
+#[Task(name: 'reserve_stock')]
 final class ReserveStock extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return ['order' => $input['order'], 'reservation' => $ctx->stableId()];
+        $ctx->emit(['order' => $input['order'], 'reservation' => $ctx->stableId()]);
     }
 
     public function compensate(array $outputs, Ctx $ctx): void
@@ -41,12 +41,12 @@ final class ReserveStock extends Tasklet
     }
 }
 
-#[Task]
+#[Task(name: 'charge_card')]
 final class ChargeCard extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return ['order' => $input['order'], 'charge' => $ctx->stableId()];
+        $ctx->emit(['order' => $input['order'], 'charge' => $ctx->stableId()]);
     }
 
     public function compensate(array $outputs, Ctx $ctx): void

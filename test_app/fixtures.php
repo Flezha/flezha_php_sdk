@@ -19,7 +19,6 @@ use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
-use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
@@ -51,9 +50,9 @@ final class Wire
 #[Task(name: 'do_nothing_tasklet')]
 final class DoNothing extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -93,14 +92,16 @@ final class BenchEchoOperator extends UnboundedOperator
 #[Task(name: 'compare_filter_tasklet')]
 final class CompareFilter extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['comparable' => 'default', 'inverted' => false];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $ctx->state['comparable'] === $input ? $input : null;
+        if ($ctx->state['comparable'] === $input) {
+            $ctx->emit($input);
+        }
     }
 }
 
@@ -120,7 +121,7 @@ final class CompareFilterOperator extends UnboundedOperator
 #[Task(name: 'static_entry_tasklet', cellKeys: ['a', 'b', 'c', 'd'])]
 class StaticEntry extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -137,11 +138,11 @@ class StaticEntry extends Tasklet
         return [in_array($first, ['a', 'b', 'c', 'd'], true) ? $first : 'd'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -154,13 +155,13 @@ final class MacroStaticEntry extends StaticEntry
 /** The body that answers its input unchanged, for a tasklet and a short form alike. */
 trait PassesThrough
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
-#[Task]
+#[Task(name: 'pass_through')]
 class PassThrough extends Tasklet
 {
     use PassesThrough;
@@ -241,7 +242,7 @@ final class SugarDoNothing extends UnboundedOperator
 #[Operator(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
 final class SugarStoreInput extends UnboundedOperator
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['text_inputs' => []];
     }
@@ -251,11 +252,11 @@ final class SugarStoreInput extends UnboundedOperator
         $state['text_inputs'][] = $change['push'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -288,7 +289,7 @@ final class SugarBoundedPerInput extends BoundedOperator
 #[Operator(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
 final class SugarStateOnly extends UnboundedOperator
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -298,11 +299,9 @@ final class SugarStateOnly extends UnboundedOperator
         $state['seen'][] = $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change($input);
-
-        return null;
     }
 }
 
@@ -318,7 +317,7 @@ final class HybridProducer extends Tasklet
 {
     public const SENTINEL = 0xDEADBEEF;
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $parsed = filter_var((string) $input, FILTER_VALIDATE_INT);
         $value = is_int($parsed) && $parsed >= 0 && $parsed <= 0xFFFFFFFF ? $parsed : 0;
@@ -328,19 +327,15 @@ final class HybridProducer extends Tasklet
         } catch (\Throwable $e) {
             fwrite(STDERR, "hybrid_producer_tasklet: serializer refused an emit: {$e->getMessage()}\n");
         }
-
-        return null;
     }
 }
 
 #[Task(name: 'hybrid_consumer_tasklet')]
 final class HybridConsumer extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         echo "hybrid_consumer_tasklet: received $input\n";
-
-        return null;
     }
 }
 
@@ -370,12 +365,12 @@ final class HybridChannelOperator extends UnboundedOperator
 // value with the channel it came from, the merge keys on the symbol the mapping
 // read, and the emitted line is `<source>:<payload>`.
 
-#[Task(name: 'merge_label_tasklet', dynamicCells: true)]
+#[Task(name: 'merge_label_tasklet')]
 final class MergeLabel extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return "{$input['source']}:{$input['payload']}";
+        $ctx->emit("{$input['source']}:{$input['payload']}");
     }
 }
 
@@ -411,7 +406,7 @@ final class MergedInputOperator extends UnboundedOperator
 // Every value transform on one edge: `drop` is filtered out, a comma list fans
 // out into one value per element, each is upper-cased and keyed on its prefix.
 
-#[Task(name: 'transform_label_tasklet', dynamicCells: true)]
+#[Task(name: 'transform_label_tasklet')]
 final class TransformLabel extends PassThrough
 {
 }
@@ -442,13 +437,13 @@ final class StressA extends Tasklet
         return ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
-#[Task(cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
+#[Task(name: 'stress_to_p0', cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
 class StressToP0 extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -456,9 +451,9 @@ class StressToP0 extends Tasklet
         return ['p0'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -499,11 +494,11 @@ final class CellStressOperator extends UnboundedOperator
 // the engine rewinds behind 200, replays the retained input log sorted by event
 // time, and the fold order becomes [100, 200, 300].
 
-#[Task(name: 'candle_tasklet', clock: Clock::EventTime)]
+#[Task(name: 'candle_tasklet')]
 final class Candle extends Tasklet
 {
     /** Event times in fold order: the assertion surface. */
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['folded' => []];
     }
@@ -518,7 +513,7 @@ final class Candle extends Tasklet
         return Wire::int(explode(':', (string) $input, 2)[0]);
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // `$ctx->now()` IS the extracted event time under an event-time clock.
         $eventTime = $ctx->now();
@@ -527,8 +522,6 @@ final class Candle extends Tasklet
         // rather than appending a second row.
         $bucket = intdiv($eventTime, 1000);
         $ctx->emitKeyed("candle/$bucket", "$bucket=$input");
-
-        return null;
     }
 }
 
@@ -554,7 +547,7 @@ final class CandleOperator extends UnboundedOperator
 #[Task(name: 'session_timeout_tasklet')]
 final class SessionTimeout extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['touched' => [], 'closed_at' => []];
     }
@@ -568,14 +561,12 @@ final class SessionTimeout extends Tasklet
         }
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['touched' => $input]);
         // A processing-time timer, because the answer to "nothing has arrived"
         // cannot be an event-time one: nothing would advance the clock.
         $ctx->timerAfter(Wire::int(getenv('TIMER_TEST_TIMEOUT_MS')) ?: 1000);
-
-        return null;
     }
 
     public function onTimer(Timer $timer, Ctx $ctx): void
@@ -599,10 +590,10 @@ final class SessionTimeoutOperator extends UnboundedOperator
 // -- bounded_mailbox_{drop_nothing,drop_newest,drop_oldest} ------------------
 
 /** The capacity and the fold reach each subclass by inheritance. */
-#[Task(mailboxCapacity: 4)]
+#[Task(name: 'bounded_mailbox', mailboxCapacity: 4)]
 class BoundedMailbox extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['processed' => 0];
     }
@@ -612,11 +603,11 @@ class BoundedMailbox extends Tasklet
         $state['processed']++;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['processed' => true]);
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -676,10 +667,10 @@ final class BoundedMailboxDropOldestOperator extends UnboundedOperator
 // forwarded frame keeps its producing channel's name, and that is what selects
 // the receiving operator's entry channel — so the entry here is `in`.
 
-#[Task(name: 'partition_relay_tasklet', dynamicCells: true)]
+#[Task(name: 'partition_relay_tasklet')]
 final class PartitionRelay extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -689,12 +680,10 @@ final class PartitionRelay extends Tasklet
         $state['seen'][] = $change['push'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
         $ctx->emitKeyed(Wire::prefix($input), $input);
-
-        return null;
     }
 }
 
@@ -714,10 +703,10 @@ final class PartitionRelayOperator extends UnboundedOperator
 // Rust reads the eviction TTL from `DYN_TEST_TTL_MS`; an attribute argument
 // must be a constant expression, so this fixture declares none. Only the
 // reference-runtime scenario arms a TTL, so nothing here reads one.
-#[Task(name: 'dynamic_cell_tasklet', dynamicCells: true)]
+#[Task(name: 'dynamic_cell_tasklet')]
 final class DynamicCell extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -727,11 +716,11 @@ final class DynamicCell extends Tasklet
         $state['seen'][] = $change['push'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 

@@ -25,7 +25,7 @@ final class PoisonProbe extends Tasklet
 {
     private static bool $antidoteTaken = false;
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === 'antidote') {
             self::$antidoteTaken = true;
@@ -34,7 +34,7 @@ final class PoisonProbe extends Tasklet
             throw new \RuntimeException('poison payload');
         }
 
-        return "ok:$input";
+        $ctx->emit("ok:$input");
     }
 }
 
@@ -67,7 +67,7 @@ final class WedgeProbe extends Tasklet
 {
     private static bool $aborted = false;
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === 'wedge') {
             while (true) {
@@ -80,7 +80,7 @@ final class WedgeProbe extends Tasklet
             throw new \RuntimeException('wedge_probe: killing the worker holding this activation');
         }
 
-        return "ok:$input";
+        $ctx->emit("ok:$input");
     }
 }
 

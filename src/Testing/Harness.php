@@ -92,7 +92,7 @@ final class Harness implements SpawnBridge
     /** The cell's live state, as the dispatcher left it. */
     public function state(): mixed
     {
-        return $this->registered->stateOf($this->node, $this->cellKey);
+        return $this->registered->stateOf($this->node, $this->operator, $this->cellKey);
     }
 
     /** Run the tasklet against one input. */
@@ -101,19 +101,17 @@ final class Harness implements SpawnBridge
         return $this->drive(
             $now,
             $replay,
-            fn (Ctx $ctx): mixed => $this->definition->instance->run($input, $ctx),
+            fn (Ctx $ctx) => $this->definition->instance->run($input, $ctx),
         );
     }
 
     /** Fire a per-cell timer. `now` IS the scheduled time, as it is live. */
     public function fireTimer(string $kind, int $scheduledAt): Outcome
     {
-        return $this->drive($scheduledAt, false, function (Ctx $ctx) use ($kind, $scheduledAt): mixed {
+        return $this->drive($scheduledAt, false, function (Ctx $ctx) use ($kind, $scheduledAt): void {
             if ($this->definition->declares('onTimer')) {
                 $this->definition->instance->onTimer(new Timer($kind, $scheduledAt), $ctx);
             }
-
-            return null;
         });
     }
 
@@ -124,12 +122,10 @@ final class Harness implements SpawnBridge
      */
     public function compensate(array $outputs): Outcome
     {
-        return $this->drive(0, false, function (Ctx $ctx) use ($outputs): mixed {
+        return $this->drive(0, false, function (Ctx $ctx) use ($outputs): void {
             if ($this->definition->declares('compensate')) {
                 $this->definition->instance->compensate($outputs, $ctx);
             }
-
-            return null;
         });
     }
 
@@ -141,7 +137,7 @@ final class Harness implements SpawnBridge
      */
     public function restore(?string $snapshot = null, array $changes = []): void
     {
-        $this->registered->setState($this->node, $this->cellKey, Restore::fold(
+        $this->registered->setState($this->node, $this->operator, $this->cellKey, Restore::fold(
             $this->definition,
             [
                 'snapshot' => $snapshot === null ? null : ['bytes' => $snapshot, 'from_version' => null],
@@ -237,7 +233,6 @@ final class Harness implements SpawnBridge
 
     private function drive(int $now, bool $replay, callable $body): Outcome
     {
-        $returned = null;
         try {
             $ctx = Dispatcher::invoke(
                 [
@@ -251,10 +246,7 @@ final class Harness implements SpawnBridge
                 $this,
                 $now,
                 $replay,
-                function (Ctx $ctx) use ($body, &$returned): void {
-                    $returned = $body($ctx);
-                    $ctx->emitReturned($returned);
-                },
+                $body,
             );
         } finally {
             $this->spawns = [];
@@ -270,7 +262,6 @@ final class Harness implements SpawnBridge
             ),
             changes: array_map($this->decodeChange(...), $ctx->changes),
             timers: $ctx->timers,
-            returned: $returned,
         );
     }
 

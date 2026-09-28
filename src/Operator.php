@@ -33,14 +33,13 @@ abstract class Operator
      * `channels()`: the entry channel its `#[Operator]` names feeds that
      * tasklet, named the factory id, whose output reaches the `sink` if one
      * is written. A short form may also define the hooks {@see Tasklet}
-     * declares (`state`, `applyChange`, ...), which that tasklet takes, held
-     * to the signatures `Tasklet` gives them.
+     * declares (`initState`, `applyChange`, ...), which that tasklet takes,
+     * held to the signatures `Tasklet` gives them.
      *
-     * Declared here, `: mixed`, so an override narrowing it to `: void` does
-     * not load: a body declaring no output cannot be written, and this SDK
-     * owes no `SinkWithoutOutput`.
+     * Declared `: void`, as a tasklet's is, so a value leaves only through
+     * `$ctx->emit()` and a body returning one does not load.
      */
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         throw new LogicException(static::class . ' defines no `run`; its channels() wires its tasklets');
     }

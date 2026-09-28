@@ -4,21 +4,19 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
-use Flezha\Clock;
 use Flezha\Codec\Json;
 use Flezha\Exception\DeclarationException;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 
 /**
- * The verdict on one declaration, and the two defects a record cannot carry.
+ * The verdict on one declaration, and the defect a record cannot carry.
  *
  * The topology is judged in ONE place, `flz_core::host::register::check`: this
  * class builds the record, submits it through `flz_core_check_class`, and
  * renders the core's verdict as this package's own refusal. What is refused
- * here instead is what the record cannot state — whether a PHP class defines
- * the method its declaration promises, and whether it supplies the migration a
- * schema floor needs. The core cannot see either.
+ * here instead is what the record cannot state: whether a PHP class supplies
+ * the migration a schema floor needs. The core cannot see it.
  */
 final class Validate
 {
@@ -31,15 +29,16 @@ final class Validate
      * channel names, kinds, consumers, sink names and acknowledgement
      * granularity it read off the record.
      *
-     * The defects this package can see are refused first, so an author reads
-     * "no eventTime method" rather than a topology verdict about a clock the
-     * class does declare.
+     * The defect this package can see is refused first, so an author reads
+     * "no migration" rather than a topology verdict.
      *
      * @return array<string, mixed>
      */
     public static function spec(ClassSpec $spec, Core $core): array
     {
-        self::tasklets($spec);
+        foreach ($spec->tasklets as $node) {
+            self::schema($spec, $node);
+        }
 
         return self::submit($spec, $core);
     }
@@ -110,40 +109,6 @@ final class Validate
     private static function refuse(ClassSpec $spec, ?string $handler, string $defect): never
     {
         throw new DeclarationException($spec->factoryId, $handler, $defect);
-    }
-
-    private static function tasklets(ClassSpec $spec): void
-    {
-        foreach ($spec->tasklets as $node) {
-            self::clocks($spec, $node);
-            self::schema($spec, $node);
-        }
-    }
-
-    /**
-     * A clock is a promise about a method, and a record carries the clock but
-     * not the class: only this package can see that the method is missing.
-     */
-    private static function clocks(ClassSpec $spec, TaskNode $node): void
-    {
-        $definition = $node->definition;
-        $clock = $definition->decl->clock;
-
-        if ($clock === Clock::EventTime && !$definition->declares('eventTime')) {
-            self::refuse(
-                $spec,
-                $node->name,
-                'declares an event_time clock but no eventTime method; the core evaluates '
-                . 'the declared clock per input and has nothing to evaluate'
-            );
-        }
-        if ($clock !== Clock::EventTime && $definition->declares('eventTime')) {
-            self::refuse($spec, $node->name, sprintf(
-                'declares an eventTime method with clock `%s`; the extractor is only '
-                . 'consulted by an event_time clock, so one of the two is not what was meant',
-                $clock->value,
-            ));
-        }
     }
 
     /**

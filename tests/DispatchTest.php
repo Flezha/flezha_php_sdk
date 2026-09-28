@@ -24,6 +24,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class DispatchTest extends TestCase
 {
+    use Dispatches;
+
     private static ?Core $core = null;
     private Dispatcher $dispatcher;
     private Registry $registry;
@@ -57,7 +59,7 @@ final class DispatchTest extends TestCase
         $this->dispatcher = new Dispatcher($this->registry, self::core());
     }
 
-    public function testAnInputReachesTheTaskletAndItsReturnIsEmitted(): void
+    public function testAnInputReachesTheTaskletAndWhatItEmitsIsSent(): void
     {
         $result = $this->work('echo_operator', 0, [self::input('"hello"')]);
 
@@ -770,21 +772,7 @@ final class DispatchTest extends TestCase
         $registered = $this->registry->get($factory);
         self::assertNotNull($registered);
 
-        return $registered->stateOf($registered->spec->tasklets[0], null);
-    }
-
-    /** @return array<string, mixed> */
-    private static function input(string $payload, ?int $offset = null, int $channel = 0): array
-    {
-        return [
-            'kind' => 'input',
-            'channel' => $channel,
-            'payload' => $payload,
-            'metadata' => [],
-            'consumed_offset' => $offset,
-            'replay' => false,
-            'now' => 1_000,
-        ];
+        return $registered->stateOf($registered->spec->tasklets[0], 'op', null);
     }
 
     private static function core(): Core

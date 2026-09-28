@@ -28,7 +28,6 @@ use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
-use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Graph\Builder;
@@ -114,7 +113,7 @@ final class BoundedGate
  */
 abstract class DurableStep extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['items' => []];
     }
@@ -135,7 +134,7 @@ abstract class DurableStep extends Tasklet
         sort($state['items']);
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // A gated step waits BEFORE its change and its emit, so the kill window
         // always finds it as the uncommitted producer while its sibling arm has
@@ -145,8 +144,6 @@ abstract class DurableStep extends Tasklet
         }
         $ctx->change(['insert' => $this->changeValue($input)]);
         $this->release($input, $ctx);
-
-        return null;
     }
 
     protected function gated(mixed $input): bool
@@ -205,7 +202,7 @@ abstract class UndoingStep extends DurableStep
 /** A terminal step that always fails, which is how a saga is made to unwind. */
 abstract class FailingStep extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         throw new \RuntimeException(Definition::of(static::class)->name . ' always fails');
     }
@@ -219,9 +216,9 @@ abstract class FailingStep extends Tasklet
 #[Task(name: 'echo_args')]
 final class EchoArgs extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return "echo:$input";
+        $ctx->emit("echo:$input");
     }
 }
 
@@ -246,13 +243,13 @@ final class EchoBounded extends BoundedOperator
 #[Task(name: 'once_placed')]
 final class OncePlaced extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $text = (string) $input['text'];
         echo "once_ran $text\n";
         $ctx->complete($text);
 
-        return "placed:$text";
+        $ctx->emit("placed:$text");
     }
 }
 
@@ -283,11 +280,9 @@ final class CommitA extends DurableStep
 #[Task(name: 'block_b')]
 final class BlockB extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         BoundedGate::blockUntilReleased();
-
-        return null;
     }
 }
 
@@ -408,17 +403,15 @@ final class SagaBlockBounded extends BoundedOperator
 #[Task(name: 'key_split')]
 final class KeySplit extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         foreach (explode(',', (string) $input) as $key) {
             $ctx->emit($key);
         }
-
-        return null;
     }
 }
 
-#[Task(name: 'keyed_commit', dynamicCells: true)]
+#[Task(name: 'keyed_commit')]
 final class KeyedCommit extends UndoingStep
 {
 }
@@ -536,14 +529,12 @@ final class UndoOutboxBounded extends BoundedOperator
 #[Task(name: 'failed_stage')]
 final class FailedStage extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === 'b') {
             throw new \RuntimeException('failed_stage fails on b');
         }
         $ctx->emit($input);
-
-        return null;
     }
 }
 
@@ -616,15 +607,13 @@ final class BranchC extends UndoingStep
 #[Task(name: 'branch_d')]
 final class BranchD extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if (BoundedGate::armed('FLEZHA_BRANCH_FAIL')) {
             throw new \RuntimeException('branch_d failed');
         }
         BoundedGate::blockUntilReleased();
         $ctx->emit("d:$input");
-
-        return null;
     }
 }
 
@@ -703,11 +692,9 @@ final class DiamC extends DurableStep
 #[Task(name: 'diam_join')]
 final class DiamJoin extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit("j:$input");
-
-        return null;
     }
 }
 
@@ -764,7 +751,7 @@ final class RetryFlaky extends Tasklet
      */
     private static int $attempts = 0;
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         self::$attempts++;
         $armed = (int) (getenv(self::FAILS_ENV) ?: '0');
@@ -772,8 +759,6 @@ final class RetryFlaky extends Tasklet
             throw new \RuntimeException('flaky attempt ' . self::$attempts);
         }
         $ctx->emit('attempt:' . self::$attempts . ":$input");
-
-        return null;
     }
 }
 
@@ -802,7 +787,7 @@ final class RetryBounded extends BoundedOperator
 #[Task(name: 'tick')]
 final class TimerTick extends DurableStep
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $input = (string) $input;
         if (str_starts_with($input, 'after:')) {
@@ -810,14 +795,12 @@ final class TimerTick extends DurableStep
             $ctx->change(['insert' => "armed:$at"]);
             $ctx->emit("armed:$at");
 
-            return null;
+            return;
         }
         if (str_starts_with($input, 'slow:')) {
             usleep(Wire::int(substr($input, strlen('slow:'))) * 1000);
         }
         $ctx->emit($input);
-
-        return null;
     }
 
     public function onTimer(Timer $timer, Ctx $ctx): void
@@ -830,14 +813,12 @@ final class TimerTick extends DurableStep
 #[Task(name: 'relay')]
 final class TimerRelay extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if (str_starts_with((string) $input, 'fired:')) {
             BoundedGate::holdAt('relay');
         }
         $ctx->emit("relay:$input");
-
-        return null;
     }
 }
 
@@ -860,7 +841,7 @@ final class TimerLoopBounded extends BoundedOperator
 // message arms an event-time timer 100 later and emits `seen:<t>`, and the
 // firing emits `fired:<at>` (bounded.rs).
 
-#[Task(name: 'event_tick', clock: Clock::EventTime)]
+#[Task(name: 'event_tick')]
 final class EventTick extends DurableStep
 {
     public function eventTime(mixed $input): int
@@ -868,13 +849,11 @@ final class EventTick extends DurableStep
         return Wire::int(explode(':', (string) $input, 2)[0]);
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $at = $ctx->timerAtEventTime($ctx->now() + 100);
         $ctx->change(['insert' => "armed:$at"]);
         $ctx->emit("seen:{$ctx->now()}");
-
-        return null;
     }
 
     public function onTimer(Timer $timer, Ctx $ctx): void

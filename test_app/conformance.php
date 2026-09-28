@@ -31,7 +31,6 @@ namespace Flezha\TestApp;
 use Flezha\Attribute\Operator as OperatorAttribute;
 use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded;
-use Flezha\Clock;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Dispatch\Registry;
@@ -57,9 +56,9 @@ use Flezha\BoundedOperator;
 #[Task(name: 'plain')]
 class PalettePlain extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -88,17 +87,17 @@ final class PaletteRouted extends PalettePlain
     }
 }
 
-#[Task(name: 'dynamic', dynamicCells: true)]
+#[Task(name: 'dynamic')]
 final class PaletteDynamic extends PalettePlain
 {
 }
 
-#[Task(name: 'nochange', clock: Clock::Logical)]
+#[Task(name: 'nochange', logicalClock: true)]
 final class PaletteNoChange extends PalettePlain
 {
 }
 
-#[Task(name: 'eventtime', clock: Clock::EventTime)]
+#[Task(name: 'eventtime')]
 final class PaletteEventTime extends PalettePlain
 {
     public function eventTime(mixed $input): int

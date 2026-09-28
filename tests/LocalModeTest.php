@@ -8,7 +8,6 @@ require_once __DIR__ . '/../examples/E07_LocalMode.php';
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Examples\E07\WordCountOperator;
 use Flezha\Exception\FlezhaException;
@@ -103,21 +102,6 @@ final class LocalModeTest extends RepositoryTestCase
         }
     }
 
-    public function testASinklessShortFormWhoseRunReturnsAValueRunsItOnce(): void
-    {
-        Echoless::$calls = 0;
-        $run = LocalOperator::start(Echoless::class);
-
-        try {
-            $run->feed('ticks', 'a');
-            $run->runUntilIdle(5_000);
-        } finally {
-            $run->close();
-        }
-
-        self::assertSame(1, Echoless::$calls, 'a value with nowhere to go is left alone, never retried');
-    }
-
     public function testAnUndeclaredEntryReadsJsonAndAnUndeclaredSinkFollowsTheValue(): void
     {
         $released = [];
@@ -141,12 +125,10 @@ final class LocalModeTest extends RepositoryTestCase
 #[Task(name: 'defaults')]
 final class DefaultCodecsTasklet extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit('a is ' . $input['a']);
         $ctx->emit(['a' => $input['a']]);
-
-        return null;
     }
 }
 
@@ -156,19 +138,5 @@ final class DefaultCodecs extends UnboundedOperator
     public static function channels(Builder $c): void
     {
         $c->input('in')->into(DefaultCodecsTasklet::class)->sink('out');
-    }
-}
-
-/** A short form with no `sink` whose body answers a value. */
-#[Operator(factoryId: 'local_echoless_php', input: 'ticks', codec: ChannelCodec::Text)]
-final class Echoless extends UnboundedOperator
-{
-    public static int $calls = 0;
-
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        self::$calls++;
-
-        return 'got ' . $input;
     }
 }

@@ -9,7 +9,6 @@ use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
-use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Dispatch\Registry;
@@ -153,7 +152,7 @@ final class ShortFoldByValue extends UnboundedOperator
 {
     use Echoes;
 
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -169,7 +168,7 @@ final class ShortNarrowedKey extends UnboundedOperator
 {
     use Echoes;
 
-    public function state(string $cellKey): mixed
+    public function initState(string $cellKey): mixed
     {
         return [];
     }
@@ -191,7 +190,7 @@ final class ShortVoidState extends UnboundedOperator
 {
     use Echoes;
 
-    public function state(?string $cellKey): void
+    public function initState(?string $cellKey): void
     {
     }
 }
@@ -263,7 +262,7 @@ final class ShortWidenedHooks extends BoundedOperator
 {
     use Echoes;
 
-    public function state($cellKey): array
+    public function initState($cellKey): array
     {
         return [];
     }
@@ -310,34 +309,15 @@ final class TaskWithCodec extends Tasklet
     use Echoes;
 }
 
-#[Task(clock: Clock::EventTime)]
-final class NoExtractor extends Tasklet
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return null;
-    }
-}
-
-#[Task(cellKeys: ['a'], dynamicCells: true)]
-final class BothModes extends Tasklet
-{
-    public function run(mixed $input, Ctx $ctx): mixed
-    {
-        return null;
-    }
-}
-
-#[Task]
+#[Task(name: 'fold_without_state')]
 final class FoldWithoutState extends Tasklet
 {
     public function applyChange(mixed &$state, mixed $change): void
     {
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return null;
     }
 }
 
@@ -357,21 +337,9 @@ final class AuthoringTest extends RepositoryTestCase
     /** @return iterable<string, array{callable, string}> */
     public static function refusals(): iterable
     {
-        // A clock is a promise about a method, and a record carries the clock
-        // but not the class: only this package can see the method is missing.
-        yield 'an event-time clock with no extractor' => [
-            static fn (): mixed => self::validate(static function (Builder $c): void {
-                $c->input('in')->into(NoExtractor::class)->sink();
-            }),
-            'declares an event_time clock but no eventTime method',
-        ];
-        yield 'both cell modes' => [
-            static fn (): mixed => Definition::of(BothModes::class),
-            'declares both a static key set and dynamic cells',
-        ];
         yield 'a fold with nothing to fold into' => [
             static fn (): mixed => Definition::of(FoldWithoutState::class),
-            'declares applyChange but no state',
+            'declares applyChange but no initState',
         ];
         // The other refusal the builder keeps: a channel with no producer has
         // no value to serialize, and the core reads a sink as the terminal of
@@ -511,7 +479,6 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $definition = Definition::of(SilentSubclass::class);
 
-        self::assertSame('static', $definition->cellMode());
         self::assertSame(['a', 'b'], $definition->decl->cellKeys);
         self::assertSame(8, $definition->decl->mailboxCapacity);
         self::assertSame(3, $definition->decl->schemaVersion);
@@ -537,7 +504,6 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $definition = Definition::of(RenamingSubclass::class);
 
-        self::assertSame('static', $definition->cellMode());
         self::assertSame(['a', 'b'], $definition->decl->cellKeys);
         self::assertSame(8, $definition->decl->mailboxCapacity);
         self::assertSame(3, $definition->decl->schemaVersion);
@@ -1244,11 +1210,11 @@ final class AuthoringTest extends RepositoryTestCase
         ];
         yield 'a narrowed parameter' => [
             ShortNarrowedKey::class,
-            'state',
+            'initState',
             '`$cellKey` is typed `string`, which does not accept every `?string`',
         ];
         yield 'a wider return' => [ShortWiderKeys::class, 'cellsFor', 'it returns `?array`, not `array`'];
-        yield 'a void for a mixed' => [ShortVoidState::class, 'state', 'it returns `void`, not `mixed`'];
+        yield 'a void for a mixed' => [ShortVoidState::class, 'initState', 'it returns `void`, not `mixed`'];
         yield 'no return type' => [ShortUntypedReturn::class, 'compensate', 'it declares no return type, not `void`'];
         yield 'an extra required argument' => [
             ShortExtraArgument::class,
@@ -1285,7 +1251,7 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $definition = Definition::of(ShortWidenedHooks::class);
 
-        foreach (['state', 'applyChange', 'onTimer', 'migrateState', 'compensate'] as $hook) {
+        foreach (['initState', 'applyChange', 'onTimer', 'migrateState', 'compensate'] as $hook) {
             self::assertTrue($definition->declares($hook), $hook);
         }
     }
@@ -1324,15 +1290,16 @@ final class AuthoringTest extends RepositoryTestCase
 
     /**
      * fails when: either `run` a body can override stops being declared
-     * `: mixed`, which is what makes a body declaring no output unwritable in
-     * PHP, and so a `SinkWithoutOutput` this SDK does not owe.
+     * `: void`, which is what holds every body to emitting through its
+     * context. No body declares an output type, so this SDK owes no
+     * `SinkWithoutOutput`.
      */
-    public function testNoBodyCanDeclareNoOutput(): void
+    public function testEveryBodyIsVoid(): void
     {
         foreach ([Tasklet::class, OperatorBase::class] as $base) {
             $returns = (new \ReflectionMethod($base, 'run'))->getReturnType();
             self::assertInstanceOf(\ReflectionNamedType::class, $returns);
-            self::assertSame('mixed', $returns->getName(), $base);
+            self::assertSame('void', $returns->getName(), $base);
         }
     }
 }
@@ -1564,7 +1531,7 @@ final class Diamond extends UnboundedOperator
     }
 }
 
-#[Task(cellKeys: ['a', 'b'], mailboxCapacity: 8, schemaVersion: 3)]
+#[Task(name: 'declaring_base', cellKeys: ['a', 'b'], mailboxCapacity: 8, schemaVersion: 3)]
 class DeclaringBase extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -1572,13 +1539,14 @@ class DeclaringBase extends Tasklet
         return ['a'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
-/** Declares nothing of its own: everything but the node name is the parent's. */
+/** Declares only its name: everything else is the parent's. */
+#[Task(name: 'silent_subclass')]
 final class SilentSubclass extends DeclaringBase
 {
 }

@@ -15,19 +15,21 @@ use Flezha\Attribute\Task;
  * declaration that it does, so a declaration and its implementation cannot
  * disagree.
  *
- *     #[Task(cellKeys: ['a', 'b'])]
+ * A value leaves only through `$ctx->emit()`: `run` returns nothing.
+ *
+ *     #[Task(name: 'totals', cellKeys: ['a', 'b'])]
  *     final class Totals extends Tasklet
  *     {
  *         public function cellsFor(mixed $input): array { return ['a', 'b']; }
- *         public function state(?string $cellKey): mixed { return ['sum' => 0]; }
+ *         public function initState(?string $cellKey): mixed { return ['sum' => 0]; }
  *         public function applyChange(mixed &$state, mixed $change): void { $state['sum'] += $change; }
- *         public function run(mixed $input, Ctx $ctx): mixed { $ctx->change((int) $input); return null; }
+ *         public function run(mixed $input, Ctx $ctx): void { $ctx->change((int) $input); }
  *     }
  */
 abstract class Tasklet
 {
     /** What one input does. The only method a tasklet must write. */
-    abstract public function run(mixed $input, Ctx $ctx): mixed;
+    abstract public function run(mixed $input, Ctx $ctx): void;
 
     /**
      * A cell's state before anything has happened to it.
@@ -35,7 +37,7 @@ abstract class Tasklet
      * Override to declare that this tasklet is stateful. `$cellKey` is
      * null for a single-cell tasklet and at the representability check.
      */
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return null;
     }
@@ -67,7 +69,11 @@ abstract class Tasklet
         return [];
     }
 
-    /** The input's event time. Override with `Clock::EventTime`. */
+    /**
+     * The input's event time. Overriding it makes the tasklet's clock event
+     * time; `#[Task(logicalClock: true)]` makes it logical; otherwise it is
+     * the wall clock.
+     */
     public function eventTime(mixed $input): int
     {
         return 0;

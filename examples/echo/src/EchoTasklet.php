@@ -10,12 +10,12 @@ use Flezha\Tasklet;
 
 /**
  * A processing stage of the operator's graph, run once per message. This one
- * prefixes the input, and what `run` returns is emitted.
+ * prefixes the input and emits it through the context: `run` returns nothing.
  *
- * `name` is the tasklet's stable identity. State is filed under it, so
- * renaming it later declares a different tasklet rather than renaming this
- * one. With no `state` and no `applyChange` overridden, nothing is kept between
- * messages and nothing is journaled.
+ * `name` is the tasklet's stable identity, and it is required. State is filed
+ * under it, so renaming the class keeps it, and renaming `name` declares a
+ * different tasklet. With no `initState` and no `applyChange` overridden,
+ * nothing is kept between messages and nothing is journaled.
  *
  * Where the result goes is not decided here. The operator decides that, so the
  * graph can be rewired without touching this class.
@@ -23,8 +23,8 @@ use Flezha\Tasklet;
 #[Task(name: 'echo')]
 final class EchoTasklet extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return 'echo: ' . $input;
+        $ctx->emit('echo: ' . $input);
     }
 }

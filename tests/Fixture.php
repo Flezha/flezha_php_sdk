@@ -7,7 +7,6 @@ namespace Flezha\Tests;
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
-use Flezha\Clock;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
@@ -26,13 +25,13 @@ use Flezha\BoundedOperator;
 /** The echo body, for a tasklet and a short-form operator alike. */
 trait Echoes
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 
-#[Task]
+#[Task(name: 'echoer')]
 final class Echoer extends Tasklet
 {
     use Echoes;
@@ -41,7 +40,7 @@ final class Echoer extends Tasklet
 #[Task(name: 'counter')]
 final class Counter extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['count' => 0, 'seen' => []];
     }
@@ -52,11 +51,9 @@ final class Counter extends Tasklet
         $state['seen'][] = $change['push'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
-
-        return null;
     }
 
     public function onTimer(\Flezha\Timer $timer, Ctx $ctx): void
@@ -65,10 +62,10 @@ final class Counter extends Tasklet
     }
 }
 
-#[Task(dynamicCells: true)]
+#[Task(name: 'keyed')]
 final class Keyed extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['key' => $cellKey, 'values' => []];
     }
@@ -78,12 +75,10 @@ final class Keyed extends Tasklet
         $state['values'][] = $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change($input);
         $ctx->emit($input, key: (string) $ctx->cellKey);
-
-        return null;
     }
 }
 
@@ -109,7 +104,7 @@ final class CounterOperator extends UnboundedOperator
 #[Operator(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
 final class ShortCounter extends UnboundedOperator
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['seen' => []];
     }
@@ -119,11 +114,9 @@ final class ShortCounter extends UnboundedOperator
         $state['seen'][] = $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change($input);
-
-        return null;
     }
 }
 
@@ -145,10 +138,10 @@ final class KeyedOperator extends UnboundedOperator
 /**
  * The keyed plugin emitter: one output channel, carrying the identity stamps.
  */
-#[Task(name: 'stamp_emitter', dynamicCells: true)]
+#[Task(name: 'stamp_emitter')]
 final class StampEmitter extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === 'twice') {
             $ctx->emit('a', channel: 'keyed_out');
@@ -160,8 +153,6 @@ final class StampEmitter extends Tasklet
         } else {
             $ctx->emit('k', channel: 'keyed_out', metadata: ['user' => 'meta']);
         }
-
-        return null;
     }
 }
 
@@ -182,23 +173,20 @@ final class StampOperator extends UnboundedOperator
     }
 }
 
-#[Task]
+#[Task(name: 'plain_emitter')]
 final class PlainEmitter extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit('p', channel: 'plain_out');
-
-        return null;
     }
 }
 
-#[Task]
+#[Task(name: 'fan_target')]
 final class FanTarget extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return null;
     }
 }
 
@@ -232,16 +220,16 @@ final class MixedStampOperator extends UnboundedOperator
     }
 }
 
-#[Task]
+#[Task(name: 'poison')]
 final class Poison extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === 'poison') {
             throw new \Flezha\Exception\NonRetryableException('poisoned payload');
         }
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -258,13 +246,13 @@ final class PoisonOperator extends UnboundedOperator
 #[Task(name: 'flaky')]
 final class Flaky extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === 'boom') {
             throw new \RuntimeException('the handler rejected it');
         }
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -290,9 +278,9 @@ final class FlakyEntryOperator extends UnboundedOperator
 #[Task(name: 'saga_step')]
 final class SagaStep extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return ['step' => $input, 'receipt' => $ctx->stableId()];
+        $ctx->emit(['step' => $input, 'receipt' => $ctx->stableId()]);
     }
 
     public function compensate(array $outputs, Ctx $ctx): void
@@ -320,7 +308,7 @@ final class SagaOperator extends \Flezha\BoundedOperator
 #[Task(name: 'completer')]
 final class Completer extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // Twice, so the effect shows the later call replacing the earlier one;
         // a string input completes with itself, which rides unquoted.
@@ -330,7 +318,7 @@ final class Completer extends Tasklet
             throw new \RuntimeException('failed after completing');
         }
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -354,10 +342,10 @@ final class CompletingUnbounded extends UnboundedOperator
     use CompletingGraph;
 }
 
-#[Task(name: 'timing', clock: Clock::EventTime)]
+#[Task(name: 'timing')]
 final class Timing extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['fired' => []];
     }
@@ -372,7 +360,7 @@ final class Timing extends Tasklet
         return (int) $input;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // Both kinds, and a cancellation by the value a registration answered:
         // the processing-time one is anchored on `now()`, never an ambient
@@ -381,8 +369,6 @@ final class Timing extends Tasklet
         $after = $ctx->timerAfter(1_000);
         $at = $ctx->timerAtEventTime($ctx->now() + 5_000);
         $ctx->cancelTimer('processing_time', $after);
-
-        return null;
     }
 
     public function onTimer(\Flezha\Timer $timer, Ctx $ctx): void
@@ -422,11 +408,9 @@ final class TimingUnbounded extends UnboundedOperator
 #[Task(name: 'bounded_producer')]
 final class BoundedProducer extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit($input);
-
-        return null;
     }
 }
 
@@ -440,22 +424,18 @@ final class Delivered
 #[Task(name: 'bounded_b')]
 final class BoundedB extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         Delivered::$values[] = $input;
-
-        return null;
     }
 }
 
 #[Task(name: 'bounded_c')]
 final class BoundedC extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         Delivered::$values[] = $input;
-
-        return null;
     }
 }
 
@@ -495,14 +475,12 @@ final class BoundedEmitUnboundedOperator extends UnboundedOperator
 // -- merges, the router and fanned keys -------------------------------------
 
 /** What it was handed, under which cell. */
-#[Task(name: 'recorder', dynamicCells: true)]
+#[Task(name: 'recorder')]
 final class Recorder extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         Delivered::$values[] = [$ctx->cellKey, $input];
-
-        return null;
     }
 }
 
@@ -514,11 +492,9 @@ final class StaticRecorder extends Tasklet
         return [explode(':', (string) $input)[0]];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         Delivered::$values[] = [$ctx->cellKey, $input];
-
-        return null;
     }
 }
 

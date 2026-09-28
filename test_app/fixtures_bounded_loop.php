@@ -58,15 +58,15 @@ final class ChatTurn extends DurableStep
     public const CRASH_TURN = 'mid-crash';
     public const CLOSING_TURN = 'bye';
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input !== self::CLOSING_TURN) {
-            return parent::run($input, $ctx);
+            parent::run($input, $ctx);
+
+            return;
         }
         $this->release($input, $ctx);
         $ctx->complete(count($ctx->state['items']));
-
-        return null;
     }
 
     protected function gated(mixed $input): bool
@@ -87,18 +87,16 @@ final class ChatTurn extends DurableStep
 #[Task(name: 'chat_reply')]
 final class ChatReply extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit("reply:$input");
-
-        return null;
     }
 }
 
 #[Task(name: 'chat_reply_undoable')]
 final class ChatReplyUndoable extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['said' => []];
     }
@@ -113,12 +111,10 @@ final class ChatReplyUndoable extends Tasklet
         array_pop($state['said']);
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['said' => $input]);
         $ctx->emit("reply:$input");
-
-        return null;
     }
 
     public function compensate(array $outputs, Ctx $ctx): void
@@ -165,10 +161,10 @@ final class StatelessLoopBounded extends BoundedOperator
 // emits `<symbol>:<count>`: the shape a partition group of bounded operator members
 // takes.
 
-#[Task(name: 'keyed_loop_count', dynamicCells: true)]
+#[Task(name: 'keyed_loop_count')]
 final class KeyedLoopCount extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['value' => 0];
     }
@@ -178,13 +174,11 @@ final class KeyedLoopCount extends Tasklet
         $state['value'] += $change['delta'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $symbol = Wire::prefix($input);
         $ctx->change(['delta' => 1]);
         $ctx->emit($symbol . ':' . $ctx->state['value']);
-
-        return null;
     }
 }
 
@@ -220,14 +214,12 @@ final class BlockingReply extends Tasklet
 {
     public const REPLY_CRASH_TURN = 'reply-crash';
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === self::REPLY_CRASH_TURN) {
             BoundedGate::blockUntilReleased();
         }
         $ctx->emit("reply:$input");
-
-        return null;
     }
 }
 
@@ -255,7 +247,7 @@ final class ReplyBlockLoopBounded extends BoundedOperator
 #[Task(name: 'spawn_requester')]
 final class SpawnRequester extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $handles = [
             'unnamed' => $ctx->spawnBounded('stateless_loop_bounded', (string) $input),
@@ -264,8 +256,6 @@ final class SpawnRequester extends Tasklet
         foreach ($handles as $label => $handle) {
             self::report($label, $handle);
         }
-
-        return null;
     }
 
     /** A spawn handle's answer on stdout, as `spawn_result <label> <id> <outcome>`. */
@@ -301,12 +291,10 @@ final class SpawnRequesterOperator extends UnboundedOperator
 #[Task(name: 'spawn_hold_requester')]
 final class SpawnHoldRequester extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         SpawnRequester::report('hold', $ctx->spawnBounded('stateless_loop_bounded', (string) $input));
         BoundedGate::blockUntilReleased();
-
-        return null;
     }
 }
 
@@ -331,11 +319,9 @@ final class SpawnHoldRequesterOperator extends UnboundedOperator
 #[Task(name: 'spawn_once_requester')]
 final class SpawnOnceRequester extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         SpawnRequester::report('once', $ctx->spawnBounded('typed_once_bounded', ['text' => (string) $input]));
-
-        return null;
     }
 }
 
@@ -497,7 +483,7 @@ final class BenchChainOptout4 extends BenchChain
 #[Task(name: 'bench_turn')]
 final class BenchTurn extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['turns' => 0, 'last' => ''];
     }
@@ -508,7 +494,7 @@ final class BenchTurn extends Tasklet
         $state['last'] = $change['turn'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['turn' => $input]);
         $after = getenv('FLEZHA_BENCH_WAKE_AFTER_MS');
@@ -516,8 +502,6 @@ final class BenchTurn extends Tasklet
             $ctx->timerAfter((int) $after);
         }
         $ctx->emit($input);
-
-        return null;
     }
 
     public function onTimer(Timer $timer, Ctx $ctx): void
@@ -554,11 +538,9 @@ final class StaticCellStep extends Tasklet
         return ['a', 'b'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit("{$ctx->cellKey}:$input");
-
-        return null;
     }
 }
 

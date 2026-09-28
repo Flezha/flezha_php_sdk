@@ -257,9 +257,9 @@ final class BindingTest extends TestCase
 #[Task(name: 'checkpoint_tasklet')]
 final class CheckpointTasklet extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 

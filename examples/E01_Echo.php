@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 /**
  * The smallest operator: one entry channel, one stateless tasklet, one
- * plugin sink. What a handler returns is emitted, so a pass-through is a
- * `return`.
+ * plugin sink. A value leaves through `$ctx->emit()`, so a pass-through is
+ * one call.
  *
  *     php examples/E01_Echo.php default
  */
@@ -23,12 +23,12 @@ use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 use Flezha\UnboundedOperator;
 
-#[Task]
+#[Task(name: 'echoer')]
 final class Echoer extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
-        return $input;
+        $ctx->emit($input);
     }
 }
 

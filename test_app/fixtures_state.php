@@ -29,7 +29,7 @@ use Flezha\UnboundedOperator;
 #[Task]
 abstract class KeyedUpsert extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['values' => []];
     }
@@ -59,7 +59,7 @@ abstract class KeyedUpsert extends Tasklet
 #[Task(name: 'tier_store_tasklet')]
 final class TierStore extends KeyedUpsert
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // Dead-letter e2e: a "poison" value fails every attempt, exhausting
         // the retry budget so the tier-on atomic park advances the cell
@@ -68,8 +68,6 @@ final class TierStore extends KeyedUpsert
             throw new \RuntimeException('poison value');
         }
         $this->upsert($input, $ctx);
-
-        return null;
     }
 }
 
@@ -77,16 +75,14 @@ final class TierStore extends KeyedUpsert
 #[Task(name: 'checkpoint_store_tasklet')]
 final class CheckpointStore extends KeyedUpsert
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         if (self::split($input)[0] === 'commit') {
             $ctx->checkpoint();
 
-            return null;
+            return;
         }
         $this->upsert($input, $ctx);
-
-        return null;
     }
 }
 
@@ -94,11 +90,9 @@ final class CheckpointStore extends KeyedUpsert
 #[Task(name: 'bench_checkpoint_tasklet')]
 final class BenchCheckpoint extends KeyedUpsert
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $this->upsert($input, $ctx);
-
-        return null;
     }
 }
 
@@ -160,7 +154,7 @@ final class TierStoreOperator extends UnboundedOperator
 #[Task]
 abstract class Counting extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['value' => 0];
     }
@@ -174,19 +168,17 @@ abstract class Counting extends Tasklet
 #[Task(name: 'tier_relay')]
 final class TierRelay extends Counting
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['delta' => 1]);
         $ctx->emit($input);
-
-        return null;
     }
 }
 
 #[Task(name: 'tier_tally')]
 final class TierTally extends Counting
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         [$key, $value] = explode(':', (string) $input, 2) + [1 => ''];
         if ($value === 'hold' && !BoundedGate::released()) {
@@ -194,8 +186,6 @@ final class TierTally extends Counting
         }
         $ctx->change(['delta' => 1]);
         $ctx->emitKeyed($key, "{$key}={$ctx->state['value']}");
-
-        return null;
     }
 }
 
@@ -272,7 +262,7 @@ final class BenchCheckpointOperator extends UnboundedOperator
 #[Task(name: 'store_input_tasklet')]
 final class StoreInput extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['binary_inputs' => [], 'text_inputs' => []];
     }
@@ -282,11 +272,11 @@ final class StoreInput extends Tasklet
         $state['text_inputs'][] = $change['push_text'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push_text' => $input]);
 
-        return $input;
+        $ctx->emit($input);
     }
 }
 
@@ -306,18 +296,16 @@ final class StoreInputOperator extends UnboundedOperator
 #[Task(name: 'counter_entry_tasklet')]
 final class CounterEntry extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->emit(Wire::int($input));
-
-        return null;
     }
 }
 
 #[Task(name: 'counter_tasklet')]
 final class Counter extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['value' => 0];
     }
@@ -327,11 +315,9 @@ final class Counter extends Tasklet
         $state['value'] += $change['delta'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['delta' => $input]);
-
-        return null;
     }
 }
 
@@ -371,7 +357,7 @@ final class PersistenceOffCounterOperator extends UnboundedOperator
 #[Task(name: 'sleeping_counter_tasklet')]
 final class SleepingCounter extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['value' => 0];
     }
@@ -381,12 +367,12 @@ final class SleepingCounter extends Tasklet
         $state['value'] += $change['delta'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         [$key, $delta] = explode(':', (string) $input, 2) + [1 => ''];
         $ctx->change(['delta' => Wire::int($delta)]);
 
-        return "{$key}={$ctx->state['value']}";
+        $ctx->emit("{$key}={$ctx->state['value']}");
     }
 }
 
@@ -408,11 +394,11 @@ final class SleepingCounterOperator extends UnboundedOperator
 #[Task(name: 'tick_entry_tasklet')]
 final class TickEntry extends Tasklet
 {
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         [$interval, $ts, $delta] = array_pad(explode(':', (string) $input, 3), 3, '');
 
-        return ['interval' => Wire::int($interval), 'ts' => Wire::int($ts), 'delta' => Wire::int($delta)];
+        $ctx->emit(['interval' => Wire::int($interval), 'ts' => Wire::int($ts), 'delta' => Wire::int($delta)]);
     }
 }
 
@@ -426,7 +412,7 @@ final class TickEntry extends Tasklet
 #[Task(name: 'tick_tasklet')]
 final class Tick extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['last' => 0];
     }
@@ -436,11 +422,9 @@ final class Tick extends Tasklet
         $state['last'] = $change['delta'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change($input);
-
-        return null;
     }
 }
 
@@ -464,7 +448,7 @@ final class CoalescingCounterOperator extends UnboundedOperator
 #[Task(name: 'resume_probe_tasklet')]
 final class ResumeProbe extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['total' => 0];
     }
@@ -474,13 +458,13 @@ final class ResumeProbe extends Tasklet
         $state['total'] += $change['add'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $delta = Wire::int($input);
         $total = $ctx->state['total'] + $delta;
         $ctx->change(['add' => $delta]);
 
-        return (string) $total;
+        $ctx->emit((string) $total);
     }
 }
 
@@ -509,7 +493,7 @@ final class ResumeProbeOperator extends UnboundedOperator
 #[Task(name: 'evolving_cart')]
 final class EvolvingCartV1 extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['total' => 0];
     }
@@ -519,20 +503,20 @@ final class EvolvingCartV1 extends Tasklet
         $state['total'] += $change['add'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $delta = Wire::int($input);
         $total = $ctx->state['total'] + $delta;
         $ctx->change(['add' => $delta]);
 
-        return "$total:";
+        $ctx->emit("$total:");
     }
 }
 
 #[Task(name: 'evolving_cart', schemaVersion: 2, minReadableSchemaVersion: 1)]
 final class EvolvingCartV2 extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['total' => 0, 'currency' => ''];
     }
@@ -562,14 +546,14 @@ final class EvolvingCartV2 extends Tasklet
         return ['add' => $old['add'] ?? 0, 'note' => 'migrated'];
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $delta = Wire::int($input);
         $total = $ctx->state['total'] + $delta;
         $currency = $ctx->state['currency'] ?: 'EUR';
         $ctx->change(['add' => $delta, 'note' => 'live']);
 
-        return "$total:$currency";
+        $ctx->emit("$total:$currency");
     }
 }
 

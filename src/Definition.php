@@ -67,8 +67,8 @@ final class Definition
         // A state that cannot be encoded cannot be restored, and the first
         // anyone would learn of it is a restart. Walk the declared starting
         // state now.
-        if ($this->declares('state') && $this->stateCodec === null) {
-            Json::assertRepresentable("$this->name.state", $this->instance->state(null));
+        if ($this->declares('initState') && $this->stateCodec === null) {
+            Json::assertRepresentable("$this->name.initState", $this->instance->initState(null));
         }
     }
 
@@ -83,14 +83,18 @@ final class Definition
         return self::$cache[$class] ??= new self($class);
     }
 
-    /** `single` | `static` | `dynamic`, as the core's declaration spells it. */
-    public function cellMode(): string
+    /**
+     * `event_time` | `logical` | `wall`, as the core's declaration spells it:
+     * read from what the class writes, an `eventTime` override or
+     * `logicalClock`.
+     */
+    public function clock(): string
     {
-        if ($this->decl->cellKeys !== null) {
-            return 'static';
-        }
-
-        return $this->decl->dynamicCells ? 'dynamic' : 'single';
+        return match (true) {
+            $this->declares('eventTime') => 'event_time',
+            $this->decl->logicalClock => 'logical',
+            default => 'wall',
+        };
     }
 
     /** Whether the tasklet overrides one of the base class's hooks. */
@@ -101,7 +105,7 @@ final class Definition
 
     public function initialState(?string $cellKey): mixed
     {
-        return $this->declares('state') ? $this->instance->state($cellKey) : null;
+        return $this->declares('initState') ? $this->instance->initState($cellKey) : null;
     }
 
     /**
@@ -377,10 +381,10 @@ final class Definition
     }
 
     /**
-     * The node identity: the written name or the class's own, and a short
-     * form's factory id verbatim, because a tasklet's name is part of every
-     * cell's durable path and a short form grown into its full form must
-     * keep it.
+     * The node identity: the written name, and a short form's factory id
+     * verbatim, because a tasklet's name is part of every cell's durable path.
+     * Never the class's own, so renaming a class never moves saved state, and
+     * a short form grown into its full form keeps it.
      *
      * @param ReflectionClass<Tasklet>|ReflectionClass<Operator> $reflection
      */
@@ -388,7 +392,15 @@ final class Definition
     {
         $class = $reflection->getName();
         if (!$reflection->isSubclassOf(Operator::class)) {
-            return $decl->name ?? self::defaultName($reflection->getShortName());
+            if (($decl->name ?? '') === '') {
+                throw new DeclarationException(
+                    $class,
+                    null,
+                    'names no tasklet; write #[Task(name: \'...\')], the name its cells are saved under',
+                );
+            }
+
+            return $decl->name;
         }
         if (!self::overrides($class, 'run')) {
             throw new DeclarationException(
@@ -415,11 +427,11 @@ final class Definition
      */
     private function refuseContradictions(): void
     {
-        if ($this->decl->cellKeys !== null && $this->decl->dynamicCells) {
+        if ($this->decl->logicalClock && $this->declares('eventTime')) {
             throw new DeclarationException(
                 $this->class,
                 $this->name,
-                'declares both a static key set and dynamic cells; the two modes are exclusive'
+                'overrides eventTime and carries logicalClock; a tasklet has one clock'
             );
         }
         if ($this->decl->cellKeys === []) {
@@ -432,22 +444,12 @@ final class Definition
         // State without a fold is legitimate: a value seeded at start and read
         // but never mutated has nothing to journal, and `Ctx::change()` already
         // refuses at the point of use. A fold with no state to fold into is not.
-        if (!$this->declares('state') && $this->declares('applyChange')) {
+        if (!$this->declares('initState') && $this->declares('applyChange')) {
             throw new DeclarationException(
                 $this->class,
                 $this->name,
-                'declares applyChange but no state; there is nothing for a change to fold into'
+                'declares applyChange but no initState; there is nothing for a change to fold into'
             );
         }
-    }
-
-    /** The class's short name in snake_case, which is what an author would type. */
-    private static function defaultName(string $shortName): string
-    {
-        return strtolower((string) preg_replace(
-            ['/([A-Z]+)([A-Z][a-z])/', '/([a-z\d])([A-Z])/'],
-            ['$1_$2', '$1_$2'],
-            $shortName,
-        ));
     }
 }

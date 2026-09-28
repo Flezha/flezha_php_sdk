@@ -25,12 +25,12 @@ use Flezha\Tasklet;
 use Flezha\UnboundedOperator;
 use Flezha\Timer;
 
-#[Task(dynamicCells: true, idleTtlMs: 3_600_000)]
+#[Task(name: 'session', idleTtlSeconds: 3_600)]
 final class Session extends Tasklet
 {
     private const QUIET_MS = 30_000;
 
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return ['events' => 0, 'deadline' => null];
     }
@@ -47,7 +47,7 @@ final class Session extends Tasklet
         $state['deadline'] = null;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         // Cancel the timer this cell is holding before arming the next one,
         // by the timestamp its registration answered.
@@ -55,8 +55,6 @@ final class Session extends Tasklet
             $ctx->cancelTimer('processing_time', (int) $ctx->state['deadline']);
         }
         $ctx->change(['kind' => 'event', 'deadline' => $ctx->timerAfter(self::QUIET_MS)]);
-
-        return null;
     }
 
     public function onTimer(Timer $timer, Ctx $ctx): void

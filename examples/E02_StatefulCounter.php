@@ -43,10 +43,10 @@ final class Totals implements Codable
     }
 }
 
-#[Task(dynamicCells: true, stateType: Totals::class)]
+#[Task(name: 'counter', stateType: Totals::class)]
 final class Counter extends Tasklet
 {
-    public function state(?string $cellKey): mixed
+    public function initState(?string $cellKey): mixed
     {
         return new Totals();
     }
@@ -57,11 +57,11 @@ final class Counter extends Tasklet
         $state->amount += (int) $change;
     }
 
-    public function run(mixed $input, Ctx $ctx): mixed
+    public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change((int) $input['amount']);
 
-        return ['customer' => $ctx->cellKey, 'total' => $ctx->state->amount];
+        $ctx->emit(['customer' => $ctx->cellKey, 'total' => $ctx->state->amount]);
     }
 }
 
