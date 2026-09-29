@@ -20,6 +20,7 @@ use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
+use Flezha\RollbackMode;
 use Flezha\Overflow;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
@@ -205,6 +206,105 @@ final class ChatRewindBounded extends BoundedOperator
             ->into(ChatReplyUndoable::class)
             ->sink('out');
     }
+}
+
+// failing_turn_loop_bounded: a session whose turn can fail after `note`
+// committed. `note` records each message and its undo moves the latest one to
+// `undone`; `answer` replies `re:<message>` on the sink `answer`, and fails on
+// `boom` always, on `boom-once` while the release env is unset (the first
+// runner of a crash drill), and on `boom-until-healed` until a `heal` turn set
+// its state. failing_turn_all_or_nothing_bounded is the same under
+// all-or-nothing.
+
+#[Task(name: 'note')]
+final class Note extends Tasklet
+{
+    public function initState(?string $cellKey): mixed
+    {
+        return ['notes' => [], 'undone' => []];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        if (array_key_exists('noted', $change)) {
+            $state['notes'][] = $change['noted'];
+
+            return;
+        }
+        if ($state['notes'] !== []) {
+            $state['undone'][] = array_pop($state['notes']);
+        }
+    }
+
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->change(['noted' => $input]);
+        $ctx->emit($input);
+    }
+
+    public function compensate(array $outputs, Ctx $ctx): void
+    {
+        $ctx->change(['undone' => true]);
+    }
+}
+
+#[Task(name: 'answer')]
+final class Answer extends Tasklet
+{
+    public function initState(?string $cellKey): mixed
+    {
+        return ['healed' => false];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['healed'] = true;
+    }
+
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $fails = $input === 'boom'
+            || ($input === 'boom-once' && !BoundedGate::released())
+            || ($input === 'boom-until-healed' && !$ctx->state['healed']);
+        if ($fails) {
+            throw new \RuntimeException("answer refused $input");
+        }
+        if ($input === 'heal') {
+            $ctx->change(['healed' => true]);
+        }
+        $ctx->emit("re:$input");
+    }
+}
+
+abstract class FailingTurnLoop extends BoundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(Note::class)->named('noted')
+            ->into(Answer::class)
+            ->sink('answer');
+    }
+}
+
+#[Operator(factoryId: 'failing_turn_loop_bounded')]
+#[Bounded(
+    loopMode: LoopMode::PerInput,
+    rollbackMode: RollbackMode::KeepProgress,
+    maxDurationMs: 600_000,
+)]
+final class FailingTurnLoopBounded extends FailingTurnLoop
+{
+}
+
+#[Operator(factoryId: 'failing_turn_all_or_nothing_bounded')]
+#[Bounded(
+    loopMode: LoopMode::PerInput,
+    rollbackMode: RollbackMode::AllOrNothing,
+    maxDurationMs: 600_000,
+)]
+final class FailingTurnAllOrNothingBounded extends FailingTurnLoop
+{
 }
 
 // The reply that blocks on the turn `reply-crash` while the release env is

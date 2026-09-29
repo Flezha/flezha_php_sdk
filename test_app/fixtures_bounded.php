@@ -896,6 +896,8 @@ final class BoundedFixtures
             StatelessLoopBounded::class,
             KeyedLoopBounded::class,
             ChatRewindBounded::class,
+            FailingTurnLoopBounded::class,
+            FailingTurnAllOrNothingBounded::class,
             ReplyBlockLoopBounded::class,
             RetryBounded::class,
             BranchBounded::class,
