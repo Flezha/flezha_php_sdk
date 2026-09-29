@@ -50,7 +50,7 @@ final class DispatchTest extends TestCase
                 BoundedEmitUnboundedOperator::class, JsonEntryOperator::class, MergeOperator::class,
                 RouteLatestOperator::class, FannedOperator::class, CompletingBounded::class,
                 CompletingUnbounded::class, FlakyEntryOperator::class, TimingBounded::class,
-                TimingUnbounded::class] as $class
+                TimingUnbounded::class, AnsweringOperator::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -71,6 +71,16 @@ final class DispatchTest extends TestCase
         // The CHANNEL's name, which the fixture sets with `named('out')`, not
         // the sink's — it is what rides the frame as `channel` metadata.
         self::assertSame('out', $result['effects'][0]['outputs'][0]['plugin_channel']);
+    }
+
+    public function testAnEmitOnAResponseChannelLeavesAsASinksPluginOutput(): void
+    {
+        $output = $this->work('answering_operator', 0, [self::input('"hello"')])['effects'][0]['outputs'][0];
+
+        self::assertSame(
+            ['plugin', 'echoer', 'hello'],
+            [$output['target'], $output['plugin_channel'], $output['payload']],
+        );
     }
 
     public function testARecordedChangeIsJournaledAndFoldedLive(): void

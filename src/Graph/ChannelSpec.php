@@ -47,7 +47,11 @@ final class ChannelSpec
         public ?int $retryMax = null,
         public ?int $retryBackoffMs = null,
         public bool $keyed = false,
-        /** The plugin sink attached to this channel; null means none. */
+        /**
+         * The channel's name once a plugin end, a sink or a response, is
+         * attached; null means none. The core's answer names no sink for a
+         * response.
+         */
         public ?string $sink = null,
         /**
          * The entry payload's decoder, which `input` always sets. A channel

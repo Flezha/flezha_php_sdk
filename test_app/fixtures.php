@@ -739,6 +739,92 @@ final class DynamicCellOperator extends UnboundedOperator
     }
 }
 
+// -- call_response -------------------------------------------------------------
+//
+// Operators an outside caller calls and whose graph answers it through
+// `response()`: from the first tasklet, from a downstream one, and from
+// whichever of two filtered paths the input took. `call_turn` is the bounded
+// one, in fixtures_bounded.php.
+
+#[Task(name: 'call_echo')]
+final class CallEchoStep extends PassThrough
+{
+}
+
+#[Operator(factoryId: 'call_echo')]
+final class CallEcho extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)->into(CallEchoStep::class)->response();
+    }
+}
+
+#[Task(name: 'call_parse')]
+final class CallParse extends PassThrough
+{
+}
+
+#[Task(name: 'call_answer')]
+final class CallAnswer extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit("re:$input");
+    }
+}
+
+#[Operator(factoryId: 'call_downstream')]
+final class CallDownstream extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(CallParse::class)
+            ->into(CallAnswer::class)
+            ->response();
+    }
+}
+
+// An input starting `no` takes the refused path, every other the accepted one.
+#[Task(name: 'call_admit')]
+final class CallAdmit extends PassThrough
+{
+}
+
+#[Task(name: 'call_accept')]
+final class CallAccept extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit("accepted:$input");
+    }
+}
+
+#[Task(name: 'call_refuse')]
+final class CallRefuse extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit("refused:$input");
+    }
+}
+
+#[Operator(factoryId: 'call_split')]
+final class CallSplit extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $admitted = $c->input('in', codec: ChannelCodec::Text)->into(CallAdmit::class);
+        $admitted->filter(static fn (mixed $input): bool => !str_starts_with($input, 'no'))
+            ->into(CallAccept::class)
+            ->response();
+        $admitted->filter(static fn (mixed $input): bool => str_starts_with($input, 'no'))
+            ->into(CallRefuse::class)
+            ->response();
+    }
+}
+
 /** Every operator this app registers, in declaration order. */
 final class Fixtures
 {
@@ -783,6 +869,9 @@ final class Fixtures
             SpawnRequesterOperator::class,
             SpawnHoldRequesterOperator::class,
             SpawnOnceRequesterOperator::class,
+            CallEcho::class,
+            CallDownstream::class,
+            CallSplit::class,
             // The §5 short forms.
             SugarDoNothing::class,
             SugarStoreInput::class,

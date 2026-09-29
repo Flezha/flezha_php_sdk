@@ -626,6 +626,38 @@ final class AuthoringTest extends RepositoryTestCase
         self::derived(OneSinkTwoChannels::spec());
     }
 
+    /** `response()` records its link and ends the channel as a sink would, keeping the name. */
+    public function testResponseRecordsItsLinkAndEndsTheChannelAsASinkWould(): void
+    {
+        self::assertSame(
+            [[['link' => 'response']]],
+            HostClassDecl::of(Answers::spec())['channels'][1]['chains'],
+        );
+        // A response is a plugin end but not a sink: the core names no sink for it.
+        self::assertSame(
+            [['in', 'entry', null, [0], null], ['echoer', 'plugin', 0, [], null]],
+            self::channelsOf(Answers::spec()),
+        );
+        self::assertSame(
+            [['in', 'entry', null, [0], null], ['echoer', 'inter_task', 0, [1], null]],
+            self::channelsOf(AnswersAndFeeds::spec()),
+        );
+    }
+
+    /** A sink beside a response on one channel is refused as ending twice. */
+    public function testASinkBesideAResponseOnOneChannelIsRefused(): void
+    {
+        try {
+            self::validate(static function (Builder $c): void {
+                $c->input('in')->into(Echoer::class)->sink('out')->response();
+            });
+            self::fail('a channel ending twice was accepted');
+        } catch (FlezhaException $e) {
+            self::assertSame(['topology.channel_ends_twice'], array_column($e->details['issues'], 'code'));
+            self::assertSame('out', $e->details['issues'][0]['details']['channel']);
+        }
+    }
+
     // -- one output channel per producing tasklet --------------------------
     //
     // The model Rust and Java carry: a tasklet node owns ONE output channel,
@@ -1529,6 +1561,24 @@ final class OneSinkTwoChannels extends UnboundedOperator
     {
         $c->input('in')->into(Echoer::class)->sink('shared')
             ->into(Counter::class)->sink('shared');
+    }
+}
+
+#[Operator(factoryId: 'answers')]
+final class Answers extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class)->response();
+    }
+}
+
+#[Operator(factoryId: 'answers_and_feeds')]
+final class AnswersAndFeeds extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(Echoer::class)->response()->into(Counter::class);
     }
 }
 

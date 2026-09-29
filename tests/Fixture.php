@@ -91,6 +91,15 @@ final class EchoOperator extends UnboundedOperator
     }
 }
 
+#[Operator(factoryId: 'answering_operator')]
+final class AnsweringOperator extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input')->into(Echoer::class)->response();
+    }
+}
+
 #[Operator(factoryId: 'counter_operator')]
 final class CounterOperator extends UnboundedOperator
 {

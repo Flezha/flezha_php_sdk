@@ -185,7 +185,38 @@ final class Edge
         // what keeps the serializer-only form from spelling `sink(null, $enc)`.
         $name = is_string($nameOrEncode) ? $nameOrEncode : null;
         $encode = is_callable($nameOrEncode) ? $nameOrEncode : $encode;
+        $link = ['link' => 'sink'];
+        if ($name !== null) {
+            $link['name'] = $name;
+        }
 
+        return $this->plugEnd($link, $name, $encode, $codec);
+    }
+
+    /**
+     * Terminate this edge's channel on the answer to the outside call its
+     * input carried, and answer the edge. Each value emitted on it answers
+     * that caller and reaches no plugin. It takes no name, so the channel
+     * keeps the one it would have without it, and consumers may follow it
+     * exactly as after `sink()`. A channel ends in one sink or one response.
+     * `$encode` and `$codec` are `sink()`'s.
+     *
+     * @param (callable(mixed):string)|null $encode
+     */
+    public function response(?callable $encode = null, ?ChannelCodec $codec = null): self
+    {
+        return $this->plugEnd(['link' => 'response'], null, $encode, $codec);
+    }
+
+    /**
+     * Attach a plugin end, a sink or a response: both leave as a plugin
+     * output encoded the same way, and the core refuses a second end.
+     *
+     * @param array{link: string, name?: string} $link
+     * @param (callable(mixed):string)|null      $encode
+     */
+    private function plugEnd(array $link, ?string $name, ?callable $encode, ?ChannelCodec $codec): self
+    {
         if ($this->from[0] !== 'tasklet') {
             throw new FlezhaException('topology.sink_on_entry', ['channel' => $name ?? '<derived>']);
         }
@@ -193,15 +224,13 @@ final class Edge
         $channel = $this->channel();
         // The name written here IS the channel's name; `sink()` with none
         // leaves it derived as it would be without a sink at all.
-        $link = ['link' => 'sink'];
         if ($name !== null) {
-            $link['name'] = $name;
             $channel->name = $name;
         }
         $this->builder->refuseCodecBesideCallable($channel, $codec, $encode);
         $this->builder->linkChain($this->from, $this->pending['chain'] ?? null, $link);
         // First call wins on the builder's own side, as the reference does; a
-        // second `sink` link is what the core refuses the class for.
+        // second end is what the core refuses the class for.
         if ($channel->sink === null) {
             $channel->sink = $channel->name;
             $channel->sinkEncode = $encode ?? $codec?->encoder($channel) ?? ChannelCodec::defaultEncoder($channel);

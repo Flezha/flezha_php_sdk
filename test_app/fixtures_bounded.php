@@ -872,6 +872,23 @@ final class EventTimerBounded extends BoundedOperator
     }
 }
 
+// call_turn: a durable per-input loop whose turn answers the outside call
+// through `response()`.
+#[Task(name: 'call_turn')]
+final class CallTurnStep extends PassThrough
+{
+}
+
+#[Operator(factoryId: 'call_turn')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class CallTurn extends BoundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)->into(CallTurnStep::class)->response();
+    }
+}
+
 // -- registration ------------------------------------------------------------
 
 final class BoundedFixtures
@@ -910,6 +927,7 @@ final class BoundedFixtures
             StaticCellBounded::class,
             TimerLoopBounded::class,
             EventTimerBounded::class,
+            CallTurn::class,
         ];
     }
 }
