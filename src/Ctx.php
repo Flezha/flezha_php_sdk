@@ -55,6 +55,10 @@ final class Ctx
         // worker the first run spawned.
         private readonly ?int $offset = null,
         private readonly bool $compensating = false,
+        // The index of the work item this invocation runs within its
+        // activation, which the core numbers and stamps a part by. A
+        // compensation has none.
+        private readonly ?int $item = null,
     ) {
     }
 
@@ -118,6 +122,34 @@ final class Ctx
         foreach ($targets as $target) {
             $this->release($target, $value, $key, $metadata);
         }
+    }
+
+    /**
+     * Send `$value` as a part: a preview of the output this invocation is
+     * producing, which leaves the runner now rather than when the handler
+     * returns. It previews the tasklet's own output channel and is encoded as
+     * an emit of the same value there would be. The operator's listeners
+     * receive it before the output; a sink never does, and it is never
+     * durable or replayed. Parts are numbered from 0 within each attempt, so
+     * a retry starts its preview again.
+     *
+     * It never waits: a part that cannot leave at once (no connection, a
+     * local run, a stream that would block, a frame over the size limit) is
+     * dropped, and a replayed input sends none.
+     *
+     * @throws FlezhaException `part.no_sink` when the output channel does not
+     *   end in a sink (it only feeds another tasklet, or ends in `response`),
+     *   `part.outside_invocation` through a context whose invocation returned
+     */
+    public function part(mixed $value): void
+    {
+        $channel = $this->outgoing[0] ?? null;
+        // A channel with no plugin end has no encoding; the core refuses its
+        // part before reading a byte.
+        $payload = $channel?->sink !== null ? $this->pluginPayload($channel, $value) : '';
+        // A compensation holds no work item, which the core answers as outside
+        // any invocation, whatever the index.
+        $this->bridge->part($this->token, $this->item ?? 0, $payload);
     }
 
     /**

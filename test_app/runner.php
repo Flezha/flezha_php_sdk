@@ -29,6 +29,7 @@ require __DIR__ . '/fixtures_state.php';
 require __DIR__ . '/fixtures_probe.php';
 require __DIR__ . '/fixtures_bounded.php';
 require __DIR__ . '/fixtures_bounded_loop.php';
+require __DIR__ . '/fixtures_parts.php';
 require __DIR__ . '/conformance.php';
 
 use Flezha\Exception\FlezhaException;
@@ -37,6 +38,7 @@ use Flezha\Logger;
 use Flezha\TestApp\Conformance;
 use Flezha\TestApp\Fixtures;
 use Flezha\TestApp\BoundedFixtures;
+use Flezha\TestApp\PartFixtures;
 
 // The conformance run answers a file and exits: no namespace, no controller.
 $report = getenv('FLEZHA_CONFORMANCE_REPORT');
@@ -61,6 +63,9 @@ try {
             $runner->registerFactory($operator);
         }
         foreach (BoundedFixtures::all() as $operator) {
+            $runner->registerFactory($operator);
+        }
+        foreach (PartFixtures::all() as $operator) {
             $runner->registerFactory($operator);
         }
     }

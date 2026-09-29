@@ -140,6 +140,7 @@ final class Dispatcher
         bool $replay,
         callable $body,
         ?int $offset = null,
+        ?int $item = null,
     ): Ctx {
         $ctx = new Ctx(
             spec: $registered->spec,
@@ -155,6 +156,7 @@ final class Dispatcher
             token: (int) $activation['token'],
             offset: $offset,
             compensating: ($activation['kind'] ?? null) === 'compensate_run',
+            item: $item,
         );
 
         try {
@@ -174,8 +176,8 @@ final class Dispatcher
     {
         $effects = [];
 
-        foreach ($activation['items'] as $item) {
-            $effect = $this->runItem($activation, $registered, $node, $item);
+        foreach (array_values($activation['items']) as $index => $item) {
+            $effect = $this->runItem($activation, $registered, $node, $item, $index);
             $effects[] = $effect;
 
             if ($effect['verdict'] !== 'ok') {
@@ -206,6 +208,7 @@ final class Dispatcher
         RegisteredClass $registered,
         TaskNode $node,
         array $item,
+        int $index,
     ): array {
         $now = (int) ($item['now'] ?? $item['scheduled_at'] ?? 0);
 
@@ -219,6 +222,7 @@ final class Dispatcher
                 (bool) ($item['replay'] ?? false),
                 fn (Ctx $ctx) => $this->serve($ctx, $registered, $node, $item, $now),
                 $item['consumed_offset'] ?? null,
+                $index,
             );
 
             return $ctx->effect($item['consumed_offset'] ?? null);

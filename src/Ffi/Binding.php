@@ -92,6 +92,7 @@ final class Binding
         void flz_core_watch_stdin_eof(uint32_t grace_ms);
         int32_t flz_core_spawn_request(uintptr_t ctx, uint64_t token, const char *factory_id, const char *id, const char *payload, size_t payload_len, const char *if_running, int32_t replay, int64_t offset, uint64_t *handle_out);
         int32_t flz_core_spawn_result(uintptr_t ctx, uint64_t handle, uint64_t timeout_ms, char **out, size_t *out_len);
+        int32_t flz_core_part(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len);
         int32_t flz_core_admin_call(uintptr_t ctx, const char *verb, const char *args, char **result_out, size_t *result_len_out);
         uint64_t flz_core_monotonic_nanos(void);
         void flz_core_buf_free(char *buf, size_t len);

@@ -320,6 +320,11 @@ final class Core implements SpawnBridge
         return (int) $handle->cdata;
     }
 
+    public function part(int $token, int $item, string $payload): void
+    {
+        $this->check($this->ffi->flz_core_part($this->live(), $token, $item, $payload, strlen($payload)));
+    }
+
     /**
      * The handle's answer as JSON, or null while it is pending. A spawn that
      * reached no instance throws its {@see FlezhaException}: the controller's

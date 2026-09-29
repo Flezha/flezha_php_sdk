@@ -103,6 +103,12 @@ final class ScriptedSpawns implements SpawnBridge
 
         return $answer instanceof FlezhaException ? throw $answer : $answer;
     }
+
+    /** A spawn test sends no part. */
+    public function part(int $token, int $item, string $payload): void
+    {
+        throw new \LogicException('a spawn test sent a part');
+    }
 }
 
 /**

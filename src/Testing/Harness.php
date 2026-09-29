@@ -216,6 +216,11 @@ final class Harness implements SpawnBridge
             ?? throw new FlezhaException('runtime.spawn_handle_released', ['handle' => $handle]);
     }
 
+    /** A harness has no controller and no listener, so the part, already encoded, goes nowhere. */
+    public function part(int $token, int $item, string $payload): void
+    {
+    }
+
     /**
      * Drive `tasklet_class` over `$inputs` and assert the replay agrees.
      *
