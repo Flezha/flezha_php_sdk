@@ -211,7 +211,7 @@ final class HarnessTest extends TestCase
 
         // As live: a handle is read inside the invocation that made it.
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionMessage('was released');
+        $this->expectExceptionCode('runtime.spawn_handle_released');
         SpawnsTwice::$handles[0]->tryResult();
     }
 

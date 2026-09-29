@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
 use PHPUnit\Framework\TestCase;
@@ -92,7 +91,7 @@ final class InstallTest extends TestCase
         try {
             Binding::obtain('plan9-x64', self::VERSION, static fn (string $url): string => self::fail("fetched {$url}"));
             self::fail('a platform no release publishes for was fetched for');
-        } catch (FlezhaException $e) {
+        } catch (\RuntimeException $e) {
             $unpublished = $e->getMessage();
         }
 
@@ -111,7 +110,7 @@ final class InstallTest extends TestCase
 
         $refusal = self::php(
             $project,
-            'try { Flezha\Ffi\Binding::libraryPath(); } catch (Flezha\Exception\FlezhaException $e) { echo $e->getMessage(); }',
+            'try { Flezha\Ffi\Binding::libraryPath(); } catch (RuntimeException $e) { echo $e->getMessage(); }',
         );
 
         $directory = sprintf('%s/vendor/flezha/sdk/lib/%s', $project, Binding::platform());

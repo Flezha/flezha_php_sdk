@@ -67,13 +67,28 @@ final class Core implements SpawnBridge
         $ffi = Binding::current();
         $ctx = (int) $ffi->flz_core_context_new(self::SCHEMA_VERSION);
         if ($ctx === 0) {
-            throw new FlezhaException(
+            throw FlezhaException::fromDocument(
                 self::cstring($ffi->flz_core_init_error())
-                    ?? 'flz_core refused this shim and reported no reason',
+                    ?? throw new \LogicException('flz_core refused this shim and reported no reason'),
             );
         }
 
         return new self($ffi, $ctx, true);
+    }
+
+    /**
+     * The JSON error document the catalogue renders for `$code` with its
+     * details filled from `$details`: a refusal this package makes itself,
+     * reading as the core's own.
+     *
+     * @param array<string, mixed> $details
+     */
+    public static function errorDocument(string $code, array $details): string
+    {
+        $json = json_encode((object) $details, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        return self::cstring(Binding::current()->flz_core_error_document($code, $json))
+            ?? throw new \LogicException("flz_core rendered no error document for '$code'");
     }
 
     /**
@@ -86,7 +101,7 @@ final class Core implements SpawnBridge
     public static function attach(int $address): self
     {
         if ($address === 0) {
-            throw new FlezhaException('cannot attach to a null context address');
+            throw new \LogicException('cannot attach to a null context address');
         }
 
         return new self(Binding::current(), $address, false);
@@ -126,14 +141,10 @@ final class Core implements SpawnBridge
      *
      * Read-only, so a caller asks for the verdict its author would get with
      * nothing registered and no runner. A refused record throws the core's
-     * rendered verdict, which {@see \Flezha\Graph\Validate} re-raises as
-     * the package's own declaration refusal — and leaves the verdict the core
-     * hands out on the same failing call in `$verdict`, as
-     * `{"issues":[{"name","text"}]}`, so nothing has to parse that prose.
-     *
-     * @param string|null $verdict the refusal as data, on the throwing arm
+     * {@see FlezhaException}: its code is the first issue's, and
+     * `details['issues']` lists every issue as `{code, message, details}`.
      */
-    public function checkClass(string $json, ?string &$verdict = null): string
+    public function checkClass(string $json): string
     {
         $answer = null;
         $status = $this->outBuffer(
@@ -146,9 +157,7 @@ final class Core implements SpawnBridge
             ),
             $answer,
         );
-        // `flz_core_check_class` answers FLZ_OK, not the poll status, and fills
-        // the buffer on both arms: the derived declaration, or the verdict.
-        $verdict = $status === Binding::OK ? null : $answer;
+        // `flz_core_check_class` answers FLZ_OK, not the poll status.
         $this->check($status);
 
         return (string) $answer;
@@ -312,8 +321,10 @@ final class Core implements SpawnBridge
     }
 
     /**
-     * A failure resolves the handle too, so it answers its JSON rather than
-     * throwing; what throws is a handle already released.
+     * The handle's answer as JSON, or null while it is pending. A spawn that
+     * reached no instance throws its {@see FlezhaException}: the controller's
+     * code, `spawn.timeout` or `spawn.unavailable`, or
+     * `runtime.spawn_handle_released` for a handle already released.
      */
     public function spawnResult(int $handle, int $timeoutMs): ?string
     {
@@ -383,8 +394,7 @@ final class Core implements SpawnBridge
      * writes through a `char **` / `size_t *` pair the caller must own.
      *
      * Taken whenever the core wrote one, never only on the status that usually
-     * carries it: `flz_core_check_class` hands out its verdict on the FAILING
-     * status, and a buffer a caller does not take is a buffer nobody frees.
+     * carries it: a buffer a caller does not take is a buffer nobody frees.
      *
      * @param callable(CData, CData): int $call  fills the pair; answers the status
      * @param string|null                 $bytes the buffer, when there was one
@@ -414,7 +424,7 @@ final class Core implements SpawnBridge
     private function live(): int
     {
         if ($this->ctx === null) {
-            throw new FlezhaException('the flezha core context has been freed; this call is a defect');
+            throw new \LogicException('the flezha core context has been freed; this call is a defect');
         }
 
         return $this->ctx;
@@ -426,9 +436,9 @@ final class Core implements SpawnBridge
         if ($status !== Binding::ERR) {
             return;
         }
-        throw new FlezhaException(
+        throw FlezhaException::fromDocument(
             self::cstring($this->ffi->flz_core_last_error($this->live()))
-                ?? 'the flezha core refused a call and recorded no reason',
+                ?? throw new \LogicException('the flezha core refused a call and recorded no reason'),
         );
     }
 

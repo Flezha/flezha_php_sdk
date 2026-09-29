@@ -270,11 +270,9 @@ final class Dispatcher
 
         if ($item['kind'] === 'timer') {
             if (!$definition->declares('onTimer')) {
-                throw new FlezhaException(sprintf(
-                    '%s registered a timer but declares no onTimer; registration is a runtime '
-                    . 'call, so this cannot be refused at declaration time',
-                    $node->name,
-                ));
+                // Registration is a runtime call, so this cannot be refused at
+                // declaration time.
+                throw new FlezhaException('runtime.timer_without_on_timer', ['tasklet' => $node->name]);
             }
             $definition->instance->onTimer(new Timer((string) $item['timer_kind'], $now), $ctx);
 
@@ -547,13 +545,16 @@ final class Dispatcher
     /**
      * What a failure says on the wire.
      *
-     * `Class: message`, in family with what the other SDKs send — this string
-     * is stored in a dead-letter entry and read by a user, and a
-     * multi-line backtrace there is noise the retry ladder multiplies.
+     * `Class: message`, and the code after a refusal's, in family with what
+     * the other SDKs send — this string is stored in a dead-letter entry and
+     * read by a user, and a multi-line backtrace there is noise the retry
+     * ladder multiplies.
      */
     private static function message(Throwable $e): string
     {
-        return $e::class . ': ' . $e->getMessage();
+        $code = $e instanceof FlezhaException ? " ({$e->getCode()})" : '';
+
+        return $e::class . ': ' . $e->getMessage() . $code;
     }
 
     /**

@@ -52,7 +52,8 @@ final class IdentityTest extends TestCase
 
     public function testAnOversizedComponentIsRefused(): void
     {
-        $this->expectExceptionMessage('tasklet id must be at most 255 bytes');
+        $this->expectException(\Flezha\Exception\FlezhaException::class);
+        $this->expectExceptionCode('runtime.identity_too_long');
 
         Identity::cell(str_repeat('x', 256), 'p', '');
     }

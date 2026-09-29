@@ -212,7 +212,8 @@ final class Harness implements SpawnBridge
 
     public function spawnResult(int $handle, int $timeoutMs): ?string
     {
-        return $this->spawns[$handle] ?? throw new FlezhaException("spawn handle $handle was released");
+        return $this->spawns[$handle]
+            ?? throw new FlezhaException('runtime.spawn_handle_released', ['handle' => $handle]);
     }
 
     /**

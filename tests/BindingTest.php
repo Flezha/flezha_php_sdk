@@ -72,6 +72,7 @@ final class BindingTest extends TestCase
                 $attached->declareClass('{"persistent":true}');
                 self::fail('the core accepted a declaration with no factory id');
             } catch (FlezhaException $e) {
+                self::assertSame('topology.declaration_unreadable', $e->getCode());
                 self::assertStringContainsString('factory_id', $e->getMessage());
             }
 
@@ -90,7 +91,7 @@ final class BindingTest extends TestCase
         $core = Core::create();
         $core->free();
 
-        $this->expectException(FlezhaException::class);
+        $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('has been freed');
 
         $core->declareClass('{}');
@@ -102,6 +103,7 @@ final class BindingTest extends TestCase
 
         try {
             $this->expectException(FlezhaException::class);
+            $this->expectExceptionCode('topology.declaration_unreadable');
             $this->expectExceptionMessage('factory_id');
 
             $core->declareClass('{"persistent":true}');
@@ -163,20 +165,17 @@ final class BindingTest extends TestCase
     public function testARefusedRecordAnswersTheVerdictAndRegistersNothing(): void
     {
         $core = Core::create();
-        $verdict = null;
 
         try {
-            $core->checkClass('{"factory_id":"x","channels":[],"tasklets":[]}', $verdict);
+            $core->checkClass('{"factory_id":"x","channels":[],"tasklets":[]}');
             self::fail('the core refuses a record it cannot honour');
         } catch (FlezhaException $e) {
-            self::assertStringContainsString('topology rejected [', $e->getMessage());
-            // The same verdict as DATA: the ABI fills the out-buffer on the
-            // refusal status too, so this veneer takes it — and frees it —
-            // there as well, and a reader never parses the rendered prose.
-            /** @var array{issues: list<array{name: string, text: string}>} $decoded */
-            $decoded = json_decode((string) $verdict, true, 512, JSON_THROW_ON_ERROR);
-            self::assertNotSame([], $decoded['issues']);
-            self::assertStringContainsString($decoded['issues'][0]['name'], $e->getMessage());
+            // Every issue as DATA, the first one's code and message the
+            // error's own, so a reader never parses the rendered prose.
+            /** @var list<array{code: string, message: string}> $issues */
+            $issues = $e->details['issues'];
+            self::assertNotSame([], $issues);
+            self::assertSame([$issues[0]['code'], $issues[0]['message']], [$e->getCode(), $e->getMessage()]);
         } finally {
             $core->free();
         }

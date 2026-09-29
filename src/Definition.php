@@ -8,7 +8,7 @@ use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
 use Flezha\Codec\ValueCodec;
-use Flezha\Exception\DeclarationException;
+use Flezha\Exception\FlezhaException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionIntersectionType;
@@ -196,12 +196,11 @@ final class Definition
         }
         foreach (['kind', 'sink', 'input', 'codec'] as $operatorArgument) {
             if (array_key_exists($operatorArgument, $arguments)) {
-                throw new DeclarationException($reflection->getName(), $arguments['name'] ?? null, sprintf(
-                    '#[Task] takes no `%s`: a tasklet is not an operator. A one-tasklet operator '
-                    . 'is a class extending UnboundedOperator or BoundedOperator that defines `run`, '
-                    . 'with `sink`, `input` and `codec` on its #[Operator]',
-                    $operatorArgument,
-                ));
+                throw new FlezhaException('topology.operator_field_on_tasklet', [
+                    'tasklet' => $arguments['name'] ?? $reflection->getName(),
+                    'fields' => ["`$operatorArgument` on #[Task]"],
+                    'instead' => '#[Operator] on a class extending UnboundedOperator or BoundedOperator that defines `run`',
+                ]);
             }
         }
 
@@ -253,7 +252,7 @@ final class Definition
                 ? self::incompatibility(new ReflectionMethod($class, $hook->name), $hook)
                 : null;
             if ($defect !== null) {
-                throw new DeclarationException($class, $name, sprintf(
+                self::refuse($name, sprintf(
                     '`%s` must be compatible with Tasklet::%s, as a tasklet\'s is: %s',
                     $hook->name,
                     $hook->name,
@@ -393,29 +392,20 @@ final class Definition
         $class = $reflection->getName();
         if (!$reflection->isSubclassOf(Operator::class)) {
             if (($decl->name ?? '') === '') {
-                throw new DeclarationException(
-                    $class,
-                    null,
-                    'names no tasklet; write #[Task(name: \'...\')], the name its cells are saved under',
-                );
+                throw new FlezhaException('topology.tasklet_name_missing', ['tasklet' => $class]);
             }
 
             return $decl->name;
         }
         if (!self::overrides($class, 'run')) {
-            throw new DeclarationException(
-                $class,
-                null,
-                'is an operator with no `run`, so it is no tasklet; wire the tasklets its '
-                . '`channels()` declares',
-            );
+            throw new FlezhaException('topology.missing_body', ['declaration' => "tasklet '$class'", 'body' => '`run`']);
         }
         if ($decl->name !== null) {
-            throw new DeclarationException(
-                $class,
-                $decl->name,
-                'a short form\'s tasklet is named after its factory id; drop `name` from its #[Task]',
-            );
+            throw new FlezhaException('topology.short_form_name_mismatch', [
+                'class' => $class,
+                'factory_id' => $class::declaration()->factoryId,
+                'name' => $decl->name,
+            ]);
         }
 
         return $class::declaration()->factoryId;
@@ -428,28 +418,21 @@ final class Definition
     private function refuseContradictions(): void
     {
         if ($this->decl->logicalClock && $this->declares('eventTime')) {
-            throw new DeclarationException(
-                $this->class,
-                $this->name,
-                'overrides eventTime and carries logicalClock; a tasklet has one clock'
-            );
+            throw new FlezhaException('topology.two_clocks', ['tasklet' => $this->name]);
         }
         if ($this->decl->cellKeys === []) {
-            throw new DeclarationException(
-                $this->class,
-                $this->name,
-                'declares an empty static key set; a static tasklet names its cells'
-            );
+            throw new FlezhaException('topology.static_tasklet_without_cell_keys', ['tasklet' => $this->name]);
         }
         // State without a fold is legitimate: a value seeded at start and read
         // but never mutated has nothing to journal, and `Ctx::change()` already
         // refuses at the point of use. A fold with no state to fold into is not.
         if (!$this->declares('initState') && $this->declares('applyChange')) {
-            throw new DeclarationException(
-                $this->class,
-                $this->name,
-                'declares applyChange but no initState; there is nothing for a change to fold into'
-            );
+            throw new FlezhaException('topology.change_without_state', ['tasklet' => $this->name]);
         }
+    }
+
+    private static function refuse(string $tasklet, string $reason): never
+    {
+        throw new FlezhaException('topology.invalid_tasklet', ['tasklet' => $tasklet, 'reason' => $reason]);
     }
 }

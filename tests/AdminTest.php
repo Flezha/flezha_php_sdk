@@ -37,10 +37,10 @@ final class AdminTest extends TestCase
         self::assertEquals(new StartResult('my_echo', StartOutcome::AlreadyRunning), $result);
     }
 
-    public function testAnAnswerOfAnotherShapeIsRefusedNamingIt(): void
+    public function testAnAnswerOfAnotherShapeIsRefused(): void
     {
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionMessage('"duplicate"');
+        $this->expectExceptionCode('admin.unreadable_answer');
 
         $this->answering('"duplicate"')->startOperator('echo', id: 'my_echo');
     }
@@ -52,7 +52,7 @@ final class AdminTest extends TestCase
 
         try {
             $this->expectException(FlezhaException::class);
-            $this->expectExceptionMessage('no control plane');
+            $this->expectExceptionCode('admin.no_control_plane');
 
             (new Admin($core->adminCall(...)))->startOperator('echo');
         } finally {

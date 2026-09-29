@@ -8,7 +8,7 @@ use Flezha\Ctx;
 use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\Registry;
 use Flezha\Codec\Json;
-use Flezha\Exception\NonRetryableException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Validate;
 use Flezha\Logger;
@@ -377,13 +377,13 @@ final class DispatchTest extends TestCase
                 static function (Ctx $ctx) use ($call, &$refused): void {
                     try {
                         $call($ctx);
-                    } catch (NonRetryableException $e) {
-                        $refused = $e->getMessage();
+                    } catch (FlezhaException $e) {
+                        $refused = $e->getCode();
                     }
                 },
             );
 
-            self::assertStringStartsWith('TimersUnavailable: timing runs compensate', (string) $refused, "$name was not refused");
+            self::assertSame('runtime.timers_unavailable', $refused, "$name was not refused");
             self::assertSame([], $ctx->timers, "$name armed a timer");
         }
     }
@@ -429,7 +429,7 @@ final class DispatchTest extends TestCase
             Logger::use(new Logger('warn'));
         }
 
-        self::assertStringContainsString('unknown activation token 42', implode("\n", $said));
+        self::assertStringContainsString('(runtime.unknown_activation_token)', implode("\n", $said));
         self::assertStringContainsString('abandoning activation 42 failed', implode("\n", $said));
     }
 

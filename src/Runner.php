@@ -115,14 +115,10 @@ final class Runner
     public function unregisterFactory(string $class): self
     {
         if ($this->core !== null) {
-            throw new FlezhaException(sprintf(
-                '`%s` cannot be unregistered: a running PHP runner cannot stop serving a started '
-                . 'declaration',
-                $class,
-            ));
+            throw new FlezhaException('runtime.factory_in_service', ['module' => $class]);
         }
         if (!in_array($class, $this->classes, true)) {
-            throw new FlezhaException(sprintf('`%s` is not registered on this runner', $class));
+            throw new FlezhaException('runtime.class_not_registered', ['factory' => $class::declaration()->factoryId]);
         }
         $this->classes = array_values(array_filter(
             $this->classes,
@@ -240,7 +236,7 @@ final class Runner
     /** Serve until shutdown, then drain and release the core. */
     public function awaitTermination(): void
     {
-        $executor = $this->executor ?? throw new FlezhaException('the runner was not started');
+        $executor = $this->executor ?? throw new FlezhaException('runtime.runner_not_started');
         try {
             $executor->run($this);
         } finally {
@@ -271,8 +267,8 @@ final class Runner
      */
     public function serve(LoopState $state): void
     {
-        $core = $this->core ?? throw new FlezhaException('the runner has no core to poll');
-        $dispatcher = $this->dispatcher ?? throw new FlezhaException('the runner has no dispatcher');
+        $core = $this->core ?? throw new \LogicException('the runner has no core to poll');
+        $dispatcher = $this->dispatcher ?? throw new \LogicException('the runner has no dispatcher');
 
         while (!$state->stopping()) {
             $bytes = null;
@@ -304,7 +300,7 @@ final class Runner
 
     public function core(): Core
     {
-        return $this->core ?? throw new FlezhaException('the runner has no core');
+        return $this->core ?? throw new \LogicException('the runner has no core');
     }
 
     /** The context address a worker thread attaches to. */
@@ -328,11 +324,12 @@ final class Runner
             }
         }
 
-        throw new FlezhaException(
-            'a threaded executor bootstraps each worker from Composer\'s autoloader and this '
-            . 'process was not started through one; install the package with composer, or use '
-            . 'the default SyncExecutor.',
-        );
+        throw new FlezhaException('runtime.executor_unavailable', [
+            'executor' => 'swoole',
+            'reason' => 'it bootstraps each worker from Composer\'s autoloader and this process was '
+                . 'not started through one; install the package with composer, or use the default '
+                . 'SyncExecutor',
+        ]);
     }
 
     /** The entry script a worker thread re-enters to rebuild the registry. */
@@ -342,7 +339,10 @@ final class Runner
 
         return is_string($script) && $script !== ''
             ? $script
-            : throw new FlezhaException('the runner cannot find its own entry script');
+            : throw new FlezhaException(
+                'runtime.executor_unavailable',
+                ['executor' => 'swoole', 'reason' => 'the runner cannot find its own entry script'],
+            );
     }
 
     /**

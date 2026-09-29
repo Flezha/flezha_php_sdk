@@ -51,10 +51,7 @@ final class Admin
         ));
         $outcome = StartOutcome::tryFrom((string) ($answer['outcome'] ?? ''));
         if ($outcome === null || !is_string($answer['id'] ?? null)) {
-            throw new FlezhaException(sprintf(
-                'the controller answered a start with %s, not an id and an outcome',
-                json_encode($answer),
-            ));
+            throw new FlezhaException('admin.unreadable_answer', ['verb' => 'Operator.start']);
         }
 
         return new StartResult($answer['id'], $outcome);

@@ -17,7 +17,7 @@ use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
-use Flezha\Exception\SpawnException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\LoopMode;
 use Flezha\Overflow;
@@ -264,8 +264,8 @@ final class SpawnRequester extends Tasklet
         try {
             $result = $handle->wait();
             echo "spawn_result $label {$result->id} {$result->outcome->value}\n";
-        } catch (SpawnException $e) {
-            echo "spawn_result $label error {$e->getMessage()}\n";
+        } catch (FlezhaException $e) {
+            echo "spawn_result $label error {$e->getCode()}\n";
         }
     }
 }

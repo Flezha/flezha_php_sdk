@@ -8,7 +8,7 @@ use Flezha\BeyondWindow;
 use Flezha\ChannelCodec;
 use Flezha\CheckpointOutputs;
 use Flezha\Definition;
-use Flezha\Exception\DeclarationException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Operator;
 use Flezha\Overflow;
 use Flezha\Tasklet;
@@ -198,11 +198,7 @@ final class Builder
     public function refuseCodecBesideCallable(ChannelSpec $channel, ?ChannelCodec $codec, ?callable $callable): void
     {
         if ($codec !== null && $callable !== null) {
-            throw new DeclarationException(
-                $this->factoryId,
-                $channel->name,
-                'names both a codec and its own callable; give one',
-            );
+            throw new FlezhaException('topology.codec_with_callable', ['channel' => $channel->name]);
         }
     }
 
@@ -227,14 +223,8 @@ final class Builder
             }
             // The node table is keyed by identity and physically cannot hold
             // two, so the record the core would judge is unwritable. The
-            // refusal answers under the core's own name all the same.
-            throw new DeclarationException(
-                $this->factoryId,
-                $identity,
-                'two different tasklets claim this node identity; name one of them on the '
-                . '`into(...)` so each node has its own',
-                ['NodeIdentityCollision']
-            );
+            // refusal answers under the core's own code all the same.
+            throw new FlezhaException('topology.node_identity_collision', ['name' => $identity]);
         }
 
         $node = new TaskNode(count($this->tasklets), $identity, $class, $definition);

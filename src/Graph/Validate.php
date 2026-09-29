@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Flezha\Graph;
 
 use Flezha\Codec\Json;
-use Flezha\Exception\DeclarationException;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 
@@ -13,8 +12,8 @@ use Flezha\Ffi\Core;
  * The verdict on one declaration, and the defect a record cannot carry.
  *
  * The topology is judged in ONE place, `flz_core::host::register::check`: this
- * class builds the record, submits it through `flz_core_check_class`, and
- * renders the core's verdict as this package's own refusal. What is refused
+ * class builds the record, submits it through `flz_core_check_class`, and the
+ * core's refusal reaches the author as the {@see FlezhaException} it throws. What is refused
  * here instead is what the record cannot state: whether a PHP class supplies
  * the migration a schema floor needs. The core cannot see it.
  */
@@ -37,7 +36,7 @@ final class Validate
     public static function spec(ClassSpec $spec, Core $core): array
     {
         foreach ($spec->tasklets as $node) {
-            self::schema($spec, $node);
+            self::schema($node);
         }
 
         return self::submit($spec, $core);
@@ -50,38 +49,11 @@ final class Validate
      */
     private static function submit(ClassSpec $spec, Core $core): array
     {
-        $verdict = null;
-        try {
-            $derived = $core->checkClass(Json::encode(HostClassDecl::of($spec)), $verdict);
-        } catch (FlezhaException $e) {
-            throw new DeclarationException($spec->factoryId, null, $e->getMessage(), self::refusals($verdict));
-        }
-
         /** @var array<string, mixed> $decoded */
-        $decoded = Json::decode($derived);
+        $decoded = Json::decode($core->checkClass(Json::encode(HostClassDecl::of($spec))));
         self::bindEdges($spec, $decoded);
 
         return $decoded;
-    }
-
-    /**
-     * The core's own names for what it refused, read off the verdict it hands
-     * back as data beside the rendered message. Empty when the failing call
-     * carried no verdict — a refusal about the context rather than a judgement
-     * on the record.
-     *
-     * @return list<string>
-     */
-    private static function refusals(?string $verdict): array
-    {
-        if ($verdict === null) {
-            return [];
-        }
-
-        /** @var array{issues?: list<array{name: string, text: string}>} $decoded */
-        $decoded = Json::decode($verdict);
-
-        return array_map(static fn (array $issue): string => $issue['name'], $decoded['issues'] ?? []);
     }
 
     /**
@@ -106,16 +78,11 @@ final class Validate
         }
     }
 
-    private static function refuse(ClassSpec $spec, ?string $handler, string $defect): never
-    {
-        throw new DeclarationException($spec->factoryId, $handler, $defect);
-    }
-
     /**
      * A schema floor promises a migration, and the migration is a method: the
      * record carries the versions and this package carries the class.
      */
-    private static function schema(ClassSpec $spec, TaskNode $node): void
+    private static function schema(TaskNode $node): void
     {
         $definition = $node->definition;
         $decl = $definition->decl;
@@ -125,20 +92,18 @@ final class Validate
         }
 
         if ($floor > $decl->schemaVersion) {
-            self::refuse($spec, $node->name, sprintf(
-                'declares minReadableSchemaVersion %d above its schemaVersion %d',
-                $floor,
-                $decl->schemaVersion,
-            ));
+            throw new FlezhaException(
+                'topology.schema_floor_above_version',
+                ['tasklet' => $node->name, 'floor' => $floor, 'version' => $decl->schemaVersion],
+            );
         }
         if ($floor < $decl->schemaVersion
             && !$definition->declares('migrateState')
             && !$definition->declares('migrateChange')) {
-            self::refuse($spec, $node->name, sprintf(
-                'declares it reads back to schema version %d but supplies no migration; a '
-                . 'floor without one fails at the first old record instead of at startup',
-                $floor,
-            ));
+            throw new FlezhaException(
+                'topology.schema_floor_without_migration',
+                ['tasklet' => $node->name, 'floor' => $floor],
+            );
         }
     }
 }

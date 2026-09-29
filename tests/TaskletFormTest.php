@@ -10,7 +10,7 @@ use Flezha\BoundedOperator;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
-use Flezha\Exception\DeclarationException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
@@ -312,8 +312,9 @@ final class TaskletFormTest extends TestCase
      */
     public function testATaskletWithoutANameIsRefusedNamingTheClass(string $class): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage("$class: names no tasklet; write #[Task(name: '...')]");
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.tasklet_name_missing');
+        $this->expectExceptionMessage("tasklet class '$class' declares no name");
 
         Definition::of($class);
     }
@@ -399,8 +400,9 @@ final class TaskletFormTest extends TestCase
 
     public function testEventTimeAndTheLogicalClockTogetherAreRefused(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('two_clocks: overrides eventTime and carries logicalClock');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.two_clocks');
+        $this->expectExceptionMessage("tasklet 'two_clocks'");
 
         Definition::of(TwoClocks::class);
     }
@@ -410,8 +412,8 @@ final class TaskletFormTest extends TestCase
         try {
             self::validate(StatelessLogicalOperator::class);
             self::fail('a logical clock over no state is refused');
-        } catch (DeclarationException $e) {
-            self::assertSame(['UnservableClock'], $e->refusals);
+        } catch (FlezhaException $e) {
+            self::assertSame(['topology.unservable_clock'], array_column($e->details['issues'], 'code'));
         }
     }
 
@@ -420,8 +422,8 @@ final class TaskletFormTest extends TestCase
         try {
             self::validate(KeyedStaticOperator::class);
             self::fail('a keyed edge into a static key set is refused');
-        } catch (DeclarationException $e) {
-            self::assertSame(['KeyByOnUnkeyableTarget'], $e->refusals);
+        } catch (FlezhaException $e) {
+            self::assertSame(['topology.key_by_on_unkeyable_target'], array_column($e->details['issues'], 'code'));
             self::assertStringContainsString('routed', $e->getMessage());
         }
     }

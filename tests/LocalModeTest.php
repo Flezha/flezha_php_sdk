@@ -95,6 +95,7 @@ final class LocalModeTest extends RepositoryTestCase
 
         try {
             $this->expectException(FlezhaException::class);
+            $this->expectExceptionCode('runtime.channel_undeclared');
             $this->expectExceptionMessageMatches('/nope.*lines/s');
             $run->feed('nope', '1');
         } finally {

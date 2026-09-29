@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Codec\Json;
-use Flezha\Exception\EmitException;
-use Flezha\Exception\NonRetryableException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\ChannelSpec;
 use Flezha\Graph\ConsumerEdge;
 use Flezha\Graph\ClassSpec;
@@ -89,11 +88,7 @@ final class Ctx
     {
         $definition = $this->node->definition;
         if (!$definition->declares('applyChange')) {
-            throw new EmitException(sprintf(
-                '%s: recorded a change but declares no applyChange; a change that cannot be '
-                . 'folded cannot rebuild the state it describes',
-                $this->node->name,
-            ));
+            throw new FlezhaException('runtime.change_without_apply_change', ['tasklet' => $this->node->name]);
         }
 
         $this->changes[] = $definition->encode('change', $change);
@@ -115,17 +110,9 @@ final class Ctx
             ));
 
         if ($targets === []) {
-            throw new EmitException($channel === null
-                ? sprintf(
-                    '%s: emits but declares no output channel; wire its edge with into(...) or '
-                    . 'sink(...)',
-                    $this->node->name,
-                )
-                : sprintf(
-                    '%s: emits on channel `%s`, which it does not produce on',
-                    $this->node->name,
-                    $channel,
-                ));
+            throw $channel === null
+                ? new FlezhaException('runtime.no_output_channel', ['tasklet' => $this->node->name])
+                : new FlezhaException('runtime.channel_not_produced', ['tasklet' => $this->node->name, 'channel' => $channel]);
         }
 
         foreach ($targets as $target) {
@@ -146,8 +133,8 @@ final class Ctx
     /**
      * Register a processing-time timer `$milliseconds` from `now`. Answers its time.
      *
-     * Inside a `compensate` hook each of the three timer calls throws naming
-     * `TimersUnavailable`.
+     * Inside a `compensate` hook each of the three timer calls throws
+     * `runtime.timers_unavailable`.
      */
     public function timerAfter(int $milliseconds): int
     {
@@ -192,7 +179,7 @@ final class Ctx
      */
     public function complete(mixed $result = null): void
     {
-        $this->completion = $result === null ? '' : ChannelCodec::plain($result, $this->node->name);
+        $this->completion = $result === null ? '' : ChannelCodec::plain($result, "tasklet '{$this->node->name}'");
     }
 
     /**
@@ -235,7 +222,7 @@ final class Ctx
             $this->token,
             $factoryId,
             $id ?? '',
-            ChannelCodec::plain($payload, $this->node->name),
+            ChannelCodec::plain($payload, "tasklet '{$this->node->name}'"),
             $ifRunning ?? 'deliver',
             $this->replay,
             $this->offset,
@@ -261,15 +248,11 @@ final class Ctx
         ];
     }
 
-    /** Non-retryable: a rollback is no place to arm a deadline, and a retry would fail the same way. */
+    /** A rollback is no place to arm a deadline. */
     private function refuseTimersInCompensate(): void
     {
         if ($this->compensating) {
-            throw new NonRetryableException(sprintf(
-                'TimersUnavailable: %s runs compensate, where a tasklet cannot register or cancel '
-                . 'a timer',
-                $this->node->name,
-            ));
+            throw new FlezhaException('runtime.timers_unavailable');
         }
     }
 
@@ -356,12 +339,7 @@ final class Ctx
     {
         $resolved = $key ?? $this->cellKey;
         if ($channel->keyed && $resolved === null) {
-            throw new EmitException(sprintf(
-                '%s: emits on keyed channel `%s` with no key, and has no cell key of its '
-                . 'own to fall back on; pass a key on the emit',
-                $this->node->name,
-                $channel->name,
-            ));
+            throw new FlezhaException('runtime.key_required_on_keyed_channel', ['channel' => $channel->name]);
         }
 
         $pairs = $this->metadata($metadata);
@@ -435,14 +413,7 @@ final class Ctx
         $pairs = [];
         foreach ($metadata as $key => $value) {
             if (str_starts_with((string) $key, self::RESERVED_PREFIX)) {
-                throw new EmitException(sprintf(
-                    '%s: metadata key `%s` is inside the reserved `%s` namespace, which the '
-                    . 'runtime stamps itself (cell identity, sequence, key and offset); choose '
-                    . 'a key outside it',
-                    $this->node->name,
-                    $key,
-                    self::RESERVED_PREFIX,
-                ));
+                throw new FlezhaException('runtime.reserved_metadata_key', ['key' => (string) $key]);
             }
             $pairs[(string) $key] = (string) $value;
         }

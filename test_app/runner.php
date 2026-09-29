@@ -31,6 +31,7 @@ require __DIR__ . '/fixtures_bounded.php';
 require __DIR__ . '/fixtures_bounded_loop.php';
 require __DIR__ . '/conformance.php';
 
+use Flezha\Exception\FlezhaException;
 use Flezha\Flezha;
 use Flezha\Logger;
 use Flezha\TestApp\Conformance;
@@ -49,27 +50,42 @@ $namespace = $argv[1] ?? 'default';
 $runner = Flezha::createRunner($namespace)
     ->logger(new Logger((string) (getenv('FLEZHA_LOG_LEVEL') ?: 'info')));
 
-$topology = getenv('FLEZHA_REFUSAL_FIXTURE');
-if ($topology !== false && $topology !== '') {
-    // One row of the refusal table instead of the fixture set: a refused
-    // topology dies at declaration, before the core is started.
-    Conformance::registerOnly($runner, $topology);
-} else {
-    foreach (Fixtures::all() as $operator) {
-        $runner->registerFactory($operator);
+try {
+    $topology = getenv('FLEZHA_REFUSAL_FIXTURE');
+    if ($topology !== false && $topology !== '') {
+        // One row of the refusal table instead of the fixture set: a refused
+        // topology dies at declaration, before the core is started.
+        Conformance::registerOnly($runner, $topology);
+    } else {
+        foreach (Fixtures::all() as $operator) {
+            $runner->registerFactory($operator);
+        }
+        foreach (BoundedFixtures::all() as $operator) {
+            $runner->registerFactory($operator);
+        }
     }
-    foreach (BoundedFixtures::all() as $operator) {
-        $runner->registerFactory($operator);
+
+    // The configuration this run is under, before it starts: readiness is the
+    // SDK's own startup line, which reports the executor.
+    fwrite(STDERR, sprintf(
+        "[php_runner] namespace=%s transport=%s executor=%s\n",
+        $namespace,
+        getenv('FLEZHA_TRANSPORT') ?: 'uds',
+        getenv('FLEZHA_PHP_EXECUTOR') ?: 'sync',
+    ));
+
+    $runner->run();
+} catch (FlezhaException $refusal) {
+    $code = (string) $refusal->getCode();
+    if (!str_starts_with($code, 'topology.')) {
+        throw $refusal;
     }
+    // A refused declaration names itself: its codes ride the error as data,
+    // and the drill reads them off this process's output.
+    fwrite(STDERR, sprintf(
+        "[php_runner] declaration refused: %s\n%s\n",
+        implode(', ', Conformance::codesOf($refusal)),
+        $refusal->getMessage(),
+    ));
+    exit(1);
 }
-
-// The configuration this run is under, before it starts: readiness is the
-// SDK's own startup line, which reports the executor.
-fwrite(STDERR, sprintf(
-    "[php_runner] namespace=%s transport=%s executor=%s\n",
-    $namespace,
-    getenv('FLEZHA_TRANSPORT') ?: 'uds',
-    getenv('FLEZHA_PHP_EXECUTOR') ?: 'sync',
-));
-
-$runner->run();

@@ -37,11 +37,14 @@ final class Identity
      */
     public static function cell(string $instanceId, string $taskletName, string $cellKey): string
     {
-        if (strlen($instanceId) > 255 || strlen($taskletName) > 255) {
-            throw new FlezhaException('operator class / tasklet id must be at most 255 bytes');
-        }
-        if (strlen($cellKey) > 0xFFFF) {
-            throw new FlezhaException('cell key must be at most 65535 bytes');
+        $parts = [['operator id', $instanceId, 255], ['tasklet name', $taskletName, 255], ['cell key', $cellKey, 0xFFFF]];
+        foreach ($parts as [$part, $value, $limit]) {
+            if (strlen($value) > $limit) {
+                throw new FlezhaException(
+                    'runtime.identity_too_long',
+                    ['part' => $part, 'value' => $value, 'limit' => $limit],
+                );
+            }
         }
 
         return pack('C', strlen($instanceId)) . $instanceId

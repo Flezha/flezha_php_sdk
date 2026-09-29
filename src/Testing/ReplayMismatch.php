@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Flezha\Testing;
 
-use Flezha\Exception\FlezhaException;
-
-/** The recorded change log and the live state disagree. */
-final class ReplayMismatch extends FlezhaException
+/**
+ * The recorded change log and the live state disagree: the harness's own
+ * assertion about the tasklet under test, not a refusal.
+ */
+final class ReplayMismatch extends \LogicException
 {
     public function __construct(string $tasklet, mixed $live, mixed $replayed)
     {

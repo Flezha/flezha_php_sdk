@@ -7,7 +7,7 @@ namespace Flezha;
 use Closure;
 use Flezha\Codec\Json;
 use Flezha\Exception\DecodeException;
-use Flezha\Exception\EmitException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\ChannelSpec;
 
 /**
@@ -48,10 +48,7 @@ enum ChannelCodec: string
             self::Text => fn (mixed $value): string => is_string($value) && Json::isUtf8($value)
                 ? $value
                 : $this->refuse($channel, $value),
-            self::Json => static fn (mixed $value): string => Json::guard(
-                $channel->name,
-                static fn (): string => Json::encode($value),
-            ),
+            self::Json => static fn (mixed $value): string => Json::sent("channel '{$channel->name}'", $value),
         };
     }
 
@@ -63,7 +60,7 @@ enum ChannelCodec: string
      */
     public static function defaultEncoder(ChannelSpec $channel): Closure
     {
-        return static fn (mixed $value): string => self::plain($value, $channel->name);
+        return static fn (mixed $value): string => self::plain($value, "channel '{$channel->name}'");
     }
 
     /**
@@ -75,16 +72,15 @@ enum ChannelCodec: string
     {
         return is_string($value)
             ? $value
-            : Json::guard($owner, static fn (): string => Json::encode($value));
+            : Json::sent($owner, $value);
     }
 
     private function refuse(ChannelSpec $channel, mixed $value): never
     {
-        throw new EmitException(sprintf(
-            'channel `%s` names the %s codec and cannot send %s',
-            $channel->name,
-            $this->value,
-            is_string($value) ? 'a string that is not valid UTF-8' : 'a ' . get_debug_type($value),
-        ));
+        throw new FlezhaException('runtime.value_wrong_for_codec', [
+            'channel' => $channel->name,
+            'codec' => $this->value,
+            'type' => is_string($value) ? 'string that is not valid UTF-8' : get_debug_type($value),
+        ]);
     }
 }

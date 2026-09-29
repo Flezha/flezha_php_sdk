@@ -34,7 +34,6 @@ use Flezha\Attribute\Bounded;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Dispatch\Registry;
-use Flezha\Exception\DeclarationException;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
@@ -571,23 +570,24 @@ final class Conformance
             foreach ($classes as $class) {
                 $registry->add(Operator::specFor($class));
             }
-        } catch (DeclarationException $e) {
-            return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => $e->refusals];
         } catch (FlezhaException $e) {
-            return [
-                'topology' => $row['topology'],
-                'outcome' => 'refused',
-                'names' => [self::refusalName($e->getMessage())],
-            ];
+            return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => self::codesOf($e)];
         }
 
         return ['topology' => $row['topology'], 'outcome' => 'accepted'];
     }
 
-    /** The leading refusal name of a message the contract requires to begin with one. */
-    private static function refusalName(string $message): string
+    /**
+     * Every code a refusal carries: each issue's, or its own.
+     *
+     * @return list<string>
+     */
+    public static function codesOf(FlezhaException $e): array
     {
-        return trim(explode(':', $message, 2)[0]);
+        /** @var list<array{code: string}> $issues */
+        $issues = $e->details['issues'] ?? [];
+
+        return $issues === [] ? [(string) $e->getCode()] : array_map(static fn (array $i): string => $i['code'], $issues);
     }
 
     /**
@@ -638,8 +638,8 @@ final class Conformance
         try {
             $class = self::classFor($row);
             $derived = Validate::spec($class::spec(), $core);
-        } catch (DeclarationException $e) {
-            return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => $e->refusals];
+        } catch (FlezhaException $e) {
+            return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => self::codesOf($e)];
         }
 
         return [

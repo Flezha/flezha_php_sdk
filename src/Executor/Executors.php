@@ -57,12 +57,11 @@ final class Executors
         return match ($name) {
             '', 'sync' => self::sync($maxActivations),
             'swoole' => self::swoole(null, $maxActivations),
-            default => throw new FlezhaException(sprintf(
-                '%s=%s names no executor; this SDK ships `sync` (the default) and `swoole`, and '
-                . 'a host may pass one of its own to Runner::executor()',
-                self::ENV,
-                $name,
-            )),
+            // A host may also pass an executor of its own to Runner::executor().
+            default => throw new FlezhaException(
+                'usage.unknown_word',
+                ['noun' => self::ENV . ' executor', 'value' => $name, 'allowed' => ['sync', 'swoole']],
+            ),
         };
     }
 }

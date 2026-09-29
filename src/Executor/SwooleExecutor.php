@@ -73,7 +73,7 @@ final class SwooleExecutor implements Executor
         );
 
         if ($refusal !== null) {
-            throw new FlezhaException($refusal);
+            throw new FlezhaException('runtime.executor_unavailable', ['executor' => 'swoole', 'reason' => $refusal]);
         }
     }
 
@@ -200,7 +200,7 @@ final class SwooleExecutor implements Executor
 
     private function spawn(): void
     {
-        $runner = $this->runner ?? throw new FlezhaException('the pool has no runner to serve');
+        $runner = $this->runner ?? throw new \LogicException('the pool has no runner to serve');
         $this->threads[] = new Thread(
             __DIR__ . '/swoole_worker.php',
             $runner->autoloadPath(),

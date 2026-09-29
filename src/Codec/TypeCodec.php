@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Flezha\Codec;
 
 use Flezha\Codable;
-use Flezha\Exception\DeclarationException;
 
 /**
  * The codec for an author-declared State or Change class: `toArray()` on the
@@ -21,8 +20,8 @@ final class TypeCodec implements ValueCodec
     public function __construct(private readonly string $type, string $which)
     {
         if (!is_subclass_of($type, Codable::class)) {
-            throw new DeclarationException($type, $which, sprintf(
-                'is declared as the durable %s type but does not implement %s; a durable value '
+            throw Json::unrepresentable($type, $which, sprintf(
+                'it is declared as the durable %s type but does not implement %s; a durable value '
                 . 'is encoded as the array it answers and rebuilt from it',
                 $which,
                 Codable::class,

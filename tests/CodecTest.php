@@ -7,8 +7,7 @@ namespace Flezha\Tests;
 use Flezha\Codable;
 use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
-use Flezha\Exception\DeclarationException;
-use Flezha\Exception\UnrepresentableValueException;
+use Flezha\Exception\FlezhaException;
 use PHPUnit\Framework\TestCase;
 
 final class Totals implements Codable
@@ -58,7 +57,8 @@ final class CodecTest extends TestCase
 
     public function testATypeWithoutTheInterfaceIsRefusedAtDeclarationTime(): void
     {
-        $this->expectException(DeclarationException::class);
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.state_unrepresentable');
         $this->expectExceptionMessage('does not implement Flezha\Codable');
 
         new TypeCodec(NotCodable::class, 'change');
@@ -94,7 +94,8 @@ final class CodecTest extends TestCase
      */
     public function testAnUnrepresentableStateIsNamedByItsPath(mixed $sample, string $path): void
     {
-        $this->expectException(UnrepresentableValueException::class);
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.state_unrepresentable');
         $this->expectExceptionMessage("Demo.$path cannot be encoded");
 
         Json::assertRepresentable('Demo', $sample);

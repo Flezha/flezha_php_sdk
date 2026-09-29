@@ -6,9 +6,9 @@ namespace Flezha\Graph;
 
 use Flezha\ChannelCodec;
 use Flezha\Dropped;
+use Flezha\Exception\FlezhaException;
 use Flezha\Fanned;
 use Flezha\Overflow;
-use Flezha\Exception\DeclarationException;
 use Flezha\Operator;
 use Flezha\Tasklet;
 
@@ -187,11 +187,7 @@ final class Edge
         $encode = is_callable($nameOrEncode) ? $nameOrEncode : $encode;
 
         if ($this->from[0] !== 'tasklet') {
-            throw new DeclarationException(
-                $this->builder->factoryId,
-                $name ?? '<derived>',
-                'a plugin sink is fed by a tasklet; wire the entry channel into one first'
-            );
+            throw new FlezhaException('topology.sink_on_entry', ['channel' => $name ?? '<derived>']);
         }
 
         $channel = $this->channel();

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Codec;
 
 use Flezha\Codable;
-use Flezha\Exception\UnrepresentableValueException;
+use Flezha\Exception\FlezhaException;
 use JsonException;
 
 /**
@@ -99,7 +99,7 @@ final class Json
             return;
         }
         if (is_object($value)) {
-            throw new UnrepresentableValueException($typeName, $where, sprintf(
+            throw self::unrepresentable($typeName, $where, sprintf(
                 'an instance of %s has no durable form; implement %s on it, or hold a plain '
                 . 'array instead',
                 $value::class,
@@ -107,14 +107,14 @@ final class Json
             ));
         }
         if (is_resource($value)) {
-            throw new UnrepresentableValueException(
+            throw self::unrepresentable(
                 $typeName,
                 $where,
                 'a resource has no durable form; hold what it names instead',
             );
         }
         if (is_string($value) && !self::isUtf8($value)) {
-            throw new UnrepresentableValueException(
+            throw self::unrepresentable(
                 $typeName,
                 $where,
                 'the string is not valid UTF-8, and JSON carries no byte string; base64 it, or '
@@ -122,7 +122,7 @@ final class Json
             );
         }
         if (is_float($value) && !is_finite($value)) {
-            throw new UnrepresentableValueException(
+            throw self::unrepresentable(
                 $typeName,
                 $where,
                 'JSON has no representation for NAN or INF',
@@ -136,13 +136,32 @@ final class Json
         return mb_check_encoding($value, 'UTF-8');
     }
 
+    /** A value the durable codec cannot represent, named by the declaring type and the path to it. */
+    public static function unrepresentable(string $typeName, string $path, string $reason): FlezhaException
+    {
+        return new FlezhaException('topology.state_unrepresentable', ['path' => "$typeName.$path", 'reason' => $reason]);
+    }
+
+    /** A value sent as JSON, refused naming its sender when it has no JSON form. */
+    public static function sent(string $owner, mixed $value): string
+    {
+        try {
+            return self::encode($value);
+        } catch (JsonException $e) {
+            throw new FlezhaException(
+                'runtime.value_not_json',
+                ['owner' => $owner, 'type' => get_debug_type($value), 'reason' => $e->getMessage()],
+            );
+        }
+    }
+
     /** Re-raise an encoding failure naming the type that could not be carried. */
     public static function guard(string $typeName, callable $encode): string
     {
         try {
             return $encode();
         } catch (JsonException $e) {
-            throw new UnrepresentableValueException($typeName, '<root>', $e->getMessage());
+            throw self::unrepresentable($typeName, '<root>', $e->getMessage());
         }
     }
 }

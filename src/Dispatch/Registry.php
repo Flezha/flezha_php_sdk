@@ -16,11 +16,7 @@ final class Registry
     public function add(ClassSpec $spec): void
     {
         if (isset($this->classes[$spec->factoryId])) {
-            throw new FlezhaException(sprintf(
-                'DuplicateFactoryId: `%s` is already declared on this runner; a runner declares '
-                . 'each factory id once',
-                $spec->factoryId,
-            ));
+            throw new FlezhaException('topology.duplicate_factory_id', ['factory_id' => $spec->factoryId]);
         }
 
         $this->classes[$spec->factoryId] = new RegisteredClass($spec);

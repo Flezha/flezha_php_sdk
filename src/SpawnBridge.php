@@ -33,8 +33,8 @@ interface SpawnBridge
 
     /**
      * Read a handle, waiting up to `$timeoutMs`: null while no answer has
-     * arrived, else the answer as JSON, `{"id","outcome"}` or
-     * `{"id","error","message"}`.
+     * arrived, else the answer as JSON, `{"id","outcome"}`. A spawn that
+     * reached no instance throws its {@see Exception\FlezhaException}.
      */
     public function spawnResult(int $handle, int $timeoutMs): ?string;
 }

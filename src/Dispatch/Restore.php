@@ -42,11 +42,7 @@ final class Restore
 
         foreach ($payload['changes'] ?? [] as $body) {
             if (!$definition->declares('applyChange')) {
-                throw new FlezhaException(sprintf(
-                    '%s was handed a change log but declares no applyChange; a tasklet that '
-                    . 'records no changes should have no durable records to fold',
-                    $tasklet,
-                ));
+                throw new FlezhaException('runtime.change_without_apply_change', ['tasklet' => $tasklet]);
             }
             $definition->foldChange($state, self::body($definition, 'change', $body, $tasklet));
         }
@@ -69,15 +65,11 @@ final class Restore
         if ($fromVersion !== null) {
             $hook = $which === 'state' ? 'migrateState' : 'migrateChange';
             if (!$definition->declares($hook)) {
-                throw new FlezhaException(sprintf(
-                    '%s was handed a %s record written at schema version %d and declares no %s; '
-                    . 'declare one, or raise minReadableSchemaVersion so the record is refused '
-                    . 'rather than misread',
-                    $tasklet,
-                    $which,
-                    $fromVersion,
-                    $hook,
-                ));
+                throw new FlezhaException('runtime.hook_missing', [
+                    'tasklet' => $tasklet,
+                    'action' => "was handed a $which record written at schema version $fromVersion",
+                    'hook' => $hook,
+                ]);
             }
 
             return $definition->instance->{$hook}($fromVersion, $bytes);

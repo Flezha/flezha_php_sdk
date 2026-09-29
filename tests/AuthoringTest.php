@@ -12,11 +12,8 @@ use Flezha\CheckpointOutputs;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Dispatch\Registry;
-use Flezha\Exception\DeclarationException;
 use Flezha\Exception\DecodeException;
-use Flezha\Exception\EmitException;
 use Flezha\Exception\FlezhaException;
-use Flezha\Exception\UnrepresentableValueException;
 use Flezha\Ffi\Core;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
@@ -334,12 +331,13 @@ final class FoldWithoutState extends Tasklet
  */
 final class AuthoringTest extends RepositoryTestCase
 {
-    /** @return iterable<string, array{callable, string}> */
+    /** @return iterable<string, array{callable, string, string}> */
     public static function refusals(): iterable
     {
         yield 'a fold with nothing to fold into' => [
             static fn (): mixed => Definition::of(FoldWithoutState::class),
-            'declares applyChange but no initState',
+            'topology.change_without_state',
+            'declares applyChange but no initial state',
         ];
         // The other refusal the builder keeps: a channel with no producer has
         // no value to serialize, and the core reads a sink as the terminal of
@@ -348,17 +346,18 @@ final class AuthoringTest extends RepositoryTestCase
             static fn (): mixed => self::validate(static function (Builder $c): void {
                 $c->input('in')->sink();
             }),
-            'a plugin sink is fed by a tasklet',
+            'topology.sink_on_entry',
+            'a sink is fed by a tasklet',
         ];
-        // The one refusal the builder raises under the core's vocabulary reads
-        // the way the core's own verdicts do.
+        // The one refusal the builder raises under a code of the core's.
         yield 'two tasklets claiming one node identity' => [
             static fn (): mixed => self::validate(static function (Builder $c): void {
                 $in = $c->input('in');
                 $in->into(Echoer::class, 'twin');
                 $in->into(Keyed::class, 'twin');
             }),
-            'topology rejected [NodeIdentityCollision]',
+            'topology.node_identity_collision',
+            "node identity 'twin'",
         ];
         // `Validate::spec` IS the submission: the record crosses the ABI and
         // the core's verdict comes back as this package's own refusal, in the
@@ -370,7 +369,8 @@ final class AuthoringTest extends RepositoryTestCase
                     ->keyBy(static fn (mixed $v): string => 'b')
                     ->into(Keyed::class);
             }),
-            'topology rejected [DuplicateKeyBy]',
+            'topology.duplicate_key_by',
+            "channel 'in' declares key_by twice before one into",
         ];
     }
 
@@ -378,19 +378,19 @@ final class AuthoringTest extends RepositoryTestCase
      * @dataProvider refusals
      * @dataProvider shortFormRefusals
      */
-    public function testTheDeclarationIsRefusedWithItsDefectNamed(callable $declare, string $defect): void
+    public function testTheDeclarationIsRefusedWithItsDefectNamed(callable $declare, string $code, string $defect): void
     {
-        $this->expectException(DeclarationException::class);
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode($code);
         $this->expectExceptionMessage($defect);
 
         $declare();
     }
 
     /**
-     * And the same verdict as data: the core hands its refusal names out
-     * beside the rendered message, so nothing here reads them out of prose.
+     * And every issue as data, so nothing here reads them out of prose.
      */
-    public function testARefusedDeclarationCarriesTheCoresOwnNames(): void
+    public function testARefusedDeclarationCarriesTheCoresOwnCodes(): void
     {
         try {
             self::validate(static function (Builder $c): void {
@@ -400,24 +400,24 @@ final class AuthoringTest extends RepositoryTestCase
                     ->into(Keyed::class);
             });
             self::fail('the core refuses two keys before one into');
-        } catch (DeclarationException $e) {
-            self::assertSame(['DuplicateKeyBy'], $e->refusals);
-            self::assertStringStartsWith("under_test: topology rejected [DuplicateKeyBy]:\n  - ", $e->getMessage());
+        } catch (FlezhaException $e) {
+            self::assertSame(['topology.duplicate_key_by'], array_column($e->details['issues'], 'code'));
         }
     }
 
     public function testAnOperatorWithoutTheAttributeIsRefused(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('declares no #[Flezha\Attribute\Operator(factoryId: ...)]');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.missing_factory_id');
+        $this->expectExceptionMessage('declares no factory id');
 
         Unattributed::spec();
     }
 
     public function testABoundedDeclaringNoTaskletsIsRefused(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('declares no tasklets; a bounded operator runs a graph of tasklets');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.no_bounded_body');
 
         EmptyBounded::spec();
     }
@@ -598,8 +598,8 @@ final class AuthoringTest extends RepositoryTestCase
     /** A channel both `named()` and `sink()` name is refused, naming both. */
     public function testAChannelNamedTwiceIsRefusedNamingBoth(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('ChannelNamedTwice');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.channel_named_twice');
 
         self::derived(NamedTwice::spec());
     }
@@ -611,8 +611,8 @@ final class AuthoringTest extends RepositoryTestCase
             ['in', 'renamed'],
             array_column(self::derived(TrailingNamed::spec())['channels'], 'name'),
         );
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('KeyedChannelWithoutPluginWire');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.keyed_channel_without_plugin_wire');
 
         self::derived(TrailingKeyed::spec());
     }
@@ -620,8 +620,8 @@ final class AuthoringTest extends RepositoryTestCase
     /** Two channels naming one sink is a duplicate channel name. */
     public function testTwoChannelsNamingOneSinkIsRefused(): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage('DuplicateSinkName');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.duplicate_sink_name');
 
         self::derived(OneSinkTwoChannels::spec());
     }
@@ -725,7 +725,7 @@ final class AuthoringTest extends RepositoryTestCase
             static function (Builder $c) use ($same): void {
                 $c->merge()->from($c->input('in'), $same)->into(Echoer::class);
             },
-            'MergeTooFewSources',
+            'topology.merge_too_few_sources',
         ];
         yield 'one source twice' => [
             static function (Builder $c) use ($same): void {
@@ -733,7 +733,7 @@ final class AuthoringTest extends RepositoryTestCase
                 $c->input('other');
                 $c->merge()->from($in, $same)->from($in, $same)->into(Echoer::class);
             },
-            'DuplicateMergeSource',
+            'topology.duplicate_merge_source',
         ];
         yield 'a source already mapped into the node' => [
             static function (Builder $c) use ($same): void {
@@ -741,7 +741,7 @@ final class AuthoringTest extends RepositoryTestCase
                 $in->map($same)->into(Echoer::class);
                 $c->merge()->from($in, $same)->from($c->input('other'), $same)->into(Echoer::class);
             },
-            'EdgeAlreadyWired',
+            'topology.edge_already_wired',
         ];
     }
 
@@ -751,8 +751,8 @@ final class AuthoringTest extends RepositoryTestCase
         try {
             self::validate($declare);
             self::fail("the core refuses the merge with $name");
-        } catch (DeclarationException $e) {
-            self::assertContains($name, $e->refusals);
+        } catch (FlezhaException $e) {
+            self::assertContains($name, array_column($e->details['issues'], 'code'));
         }
     }
 
@@ -826,9 +826,9 @@ final class AuthoringTest extends RepositoryTestCase
     /** @return iterable<string, array{class-string<OperatorBase>, string}> */
     public static function unboundedSettingsOnABounded(): iterable
     {
-        yield 'the effectively-once tier' => [TierBounded::class, 'EffectivelyOnceOnBounded'];
-        yield 'a checkpoint interval' => [CheckpointBounded::class, 'CheckpointOnBounded'];
-        yield 'a correction window' => [CorrectionBounded::class, 'CorrectionWindowOnBounded'];
+        yield 'the effectively-once tier' => [TierBounded::class, 'topology.effectively_once_on_bounded'];
+        yield 'a checkpoint interval' => [CheckpointBounded::class, 'topology.checkpoint_on_bounded'];
+        yield 'a correction window' => [CorrectionBounded::class, 'topology.correction_window_on_bounded'];
     }
 
     /**
@@ -843,8 +843,8 @@ final class AuthoringTest extends RepositoryTestCase
         try {
             self::derived($class::spec());
             self::fail("a bounded writing what $name names was accepted");
-        } catch (DeclarationException $e) {
-            self::assertSame([$name], $e->refusals);
+        } catch (FlezhaException $e) {
+            self::assertSame([$name], array_column($e->details['issues'], 'code'));
         }
     }
 
@@ -883,32 +883,30 @@ final class AuthoringTest extends RepositoryTestCase
         try {
             self::derived($class::spec());
             self::fail("$class sleeps with persistence off and was accepted");
-        } catch (DeclarationException $e) {
-            self::assertStringContainsString('SleepWithoutPersistence', $e->getMessage());
+        } catch (FlezhaException $e) {
+            self::assertSame(['topology.sleep_without_persistence'], array_column($e->details['issues'], 'code'));
         }
     }
 
-    /** @return iterable<string, array{class-string<OperatorBase>, list<string>}> */
-    public static function boundedAttributesOnAnUnbounded(): iterable
-    {
-        yield 'a loop mode' => [PerInputStream::class, []];
-        yield 'synchronous durability' => [SyncDurableUnbounded::class, ['SyncDurabilityOnUnbounded']];
-    }
-
-    /**
-     * @dataProvider boundedAttributesOnAnUnbounded
-     * @param class-string<OperatorBase> $class
-     * @param list<string> $names
-     */
-    public function testABoundedAttributeOnAnUnboundedIsRefusedAtRegistration(string $class, array $names): void
+    public function testABoundedAttributeOnAnUnboundedIsRefusedAtRegistrationNamingIt(): void
     {
         try {
-            Flezha::createRunner('test')->registerFactory($class);
+            Flezha::createRunner('test')->registerFactory(PerInputStream::class);
             self::fail('an unbounded operator carrying #[Bounded] was registered');
-        } catch (DeclarationException $e) {
-            self::assertSame($names, $e->refusals);
-            self::assertStringContainsString("$class extends UnboundedOperator and carries #[Bounded]", $e->getMessage());
+        } catch (FlezhaException $e) {
+            self::assertSame(
+                ['topology.bounded_setting_on_unbounded', ['#[Bounded] on ' . PerInputStream::class]],
+                [$e->getCode(), $e->details['settings']],
+            );
         }
+    }
+
+    public function testSynchronousDurabilityOnAnUnboundedIsRefusedByTheCoresCode(): void
+    {
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.sync_durability_on_unbounded');
+
+        Flezha::createRunner('test')->registerFactory(SyncDurableUnbounded::class);
     }
 
     // -- channel codecs --------------------------------------------------------
@@ -998,8 +996,9 @@ final class AuthoringTest extends RepositoryTestCase
 
     public function testAJsonFailureNamesTheChannel(): void
     {
-        $this->expectException(UnrepresentableValueException::class);
-        $this->expectExceptionMessage('out.<root>');
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('runtime.value_not_json');
+        $this->expectExceptionMessage("channel 'out' sends a float that has no JSON form");
 
         self::codecSlots()[1](NAN);
     }
@@ -1023,8 +1022,9 @@ final class AuthoringTest extends RepositoryTestCase
     /** @dataProvider unsendable */
     public function testASinkRefusesAValueItsCodecCannotCarryNamingTheChannel(ChannelCodec $codec, mixed $value): void
     {
-        $this->expectException(EmitException::class);
-        $this->expectExceptionMessage("channel `out` names the {$codec->value} codec");
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('runtime.value_wrong_for_codec');
+        $this->expectExceptionMessageMatches("/^channel 'out' names the {$codec->value} codec and cannot send a /");
 
         self::codecSlots([], ['codec' => $codec])[1]($value);
     }
@@ -1050,8 +1050,9 @@ final class AuthoringTest extends RepositoryTestCase
      */
     public function testACodecAndACallableTogetherAreRefused(array $input, array $sink, string $channel): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessage("codecs: $channel: names both a codec");
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.codec_with_callable');
+        $this->expectExceptionMessage("channel '$channel' names both a codec");
 
         self::codecSlots($input, $sink);
     }
@@ -1145,47 +1146,55 @@ final class AuthoringTest extends RepositoryTestCase
      * The shapes a short form, or a class mistaken for one, is refused for:
      * fed to {@see testTheDeclarationIsRefusedWithItsDefectNamed()}.
      *
-     * @return iterable<string, array{callable, string}>
+     * @return iterable<string, array{callable, string, string}>
      */
     public static function shortFormRefusals(): iterable
     {
         yield 'a short form with neither body' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(ShortNoBody::class),
-            'defines neither `run` nor `channels()`',
+            'topology.missing_body',
+            "declares no body; it needs `channels()`, or one tasklet's `run` as the short form",
         ];
         yield 'a short form whose factory id would be derived' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(ShortUnattributed::class),
-            'declares no #[Flezha\Attribute\Operator(factoryId: ...)]',
+            'topology.missing_factory_id',
+            'declares no factory id',
         ];
         yield 'a short form naming its tasklet' => [
             static fn (): mixed => ShortRenamed::spec(),
-            'a short form\'s tasklet is named after its factory id',
+            'topology.short_form_name_mismatch',
+            'a short form\'s tasklet is named after its id',
         ];
         // A class-level setting but the loop mode is the full form's to write.
         yield 'a short form with persistence off' => [
             static fn (): mixed => ShortUnpersisted::spec(),
-            'and this one writes `persistent: false` on #[Operator]; write the full form',
+            'topology.setting_on_short_form',
+            'declares `persistent: false` on #[Operator], which a short form does not carry',
         ];
         yield 'a short form with a bounded setting beside its loop mode' => [
             static fn (): mixed => ShortPerInputTimeLimited::spec(),
-            'and this one writes `maxDurationMs` on #[Bounded]; write the full form',
+            'topology.setting_on_short_form',
+            'declares `maxDurationMs` on #[Bounded], which a short form does not carry',
         ];
         yield 'a short-form argument beside a topology body' => [
             static fn (): mixed => ShortCodecOnTopology::spec(),
-            '`codec` names a channel a short form generates',
+            'topology.short_form_field_on_full_form',
+            'declares `codec` beside its channels body',
         ];
         yield 'a tasklet setting beside a topology body' => [
             static fn (): mixed => ShortTaskOnTopology::spec(),
-            '#[Task] carries a tasklet\'s settings, and this class wires its tasklets in '
-            . '`channels()`; a full form\'s tasklet settings go on its tasklet classes',
+            'topology.short_form_field_on_full_form',
+            'declares #[Task] beside its channels body',
         ];
         yield 'an operator with no run wired as a tasklet' => [
             static fn (): mixed => Definition::of(ShortUpcaseTwinOperator::class),
-            'is an operator with no `run`',
+            'topology.missing_body',
+            'declares no body; it needs `run`',
         ];
         yield 'a tasklet registered as an operator' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(Echoer::class),
-            'is a tasklet, which declares no operator',
+            'topology.unknown_operator_kind',
+            'declares neither an unbounded nor a bounded operator',
         ];
     }
 
@@ -1194,9 +1203,9 @@ final class AuthoringTest extends RepositoryTestCase
         try {
             Flezha::createRunner('test')->registerFactory(ShortWithTopology::class);
             self::fail('a class carrying both bodies declares two operators in one');
-        } catch (DeclarationException $e) {
-            self::assertSame(['ShortFormWithTopology'], $e->refusals);
-            self::assertStringContainsString("\n  - ShortFormWithTopology: ", $e->getMessage());
+        } catch (FlezhaException $e) {
+            self::assertSame('topology.short_form_with_topology', $e->getCode());
+            self::assertSame(['factory_id' => 'sf_both'], $e->details);
         }
     }
 
@@ -1241,7 +1250,8 @@ final class AuthoringTest extends RepositoryTestCase
      */
     public function testAShortFormsHookKeepsATaskletsSignature(string $class, string $hook, string $defect): void
     {
-        $this->expectException(DeclarationException::class);
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.invalid_tasklet');
         $this->expectExceptionMessage("`$hook` must be compatible with Tasklet::$hook, as a tasklet's is: $defect");
 
         $class::spec();
@@ -1271,8 +1281,9 @@ final class AuthoringTest extends RepositoryTestCase
      */
     public function testATaskletCarryingAnOperatorArgumentIsRefusedNamingIt(string $class, string $argument): void
     {
-        $this->expectException(DeclarationException::class);
-        $this->expectExceptionMessageMatches("/#\\[Task\\] takes no `$argument`.*#\\[Operator\\]/");
+        $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('topology.operator_field_on_tasklet');
+        $this->expectExceptionMessageMatches("/declares `$argument` on #\\[Task\\].*#\\[Operator\\]/");
 
         Flezha::createRunner('test')->registerFactory($class);
     }
@@ -1283,7 +1294,8 @@ final class AuthoringTest extends RepositoryTestCase
         $registry->add(ShortUpcase::spec());
 
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionMessageMatches('/^DuplicateFactoryId: `sf_upcase`/');
+        $this->expectExceptionCode('topology.duplicate_factory_id');
+        $this->expectExceptionMessage("factory 'sf_upcase'");
 
         $registry->add(ShortUpcaseBounded::spec());
     }
@@ -1292,7 +1304,7 @@ final class AuthoringTest extends RepositoryTestCase
      * fails when: either `run` a body can override stops being declared
      * `: void`, which is what holds every body to emitting through its
      * context. No body declares an output type, so this SDK owes no
-     * `SinkWithoutOutput`.
+     * `topology.sink_without_output`.
      */
     public function testEveryBodyIsVoid(): void
     {

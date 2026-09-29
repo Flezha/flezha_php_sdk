@@ -7,7 +7,7 @@ namespace Flezha;
 use Flezha\Attribute\Operator as OperatorAttribute;
 use Flezha\Attribute\Task;
 use Flezha\Attribute\Bounded as BoundedAttribute;
-use Flezha\Exception\DeclarationException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use LogicException;
@@ -57,10 +57,7 @@ abstract class Operator
         // and PHP attributes are per class, which is the behaviour this wants.
         $attributes = (new ReflectionClass(static::class))->getAttributes(OperatorAttribute::class);
         if ($attributes === []) {
-            throw new DeclarationException(static::class, null, sprintf(
-                'declares no #[%s(factoryId: ...)]',
-                OperatorAttribute::class,
-            ));
+            throw new FlezhaException('topology.missing_factory_id', ['operator' => static::class]);
         }
 
         return $attributes[0]->newInstance();
@@ -137,13 +134,8 @@ abstract class Operator
             // refused naming it.
             Definition::of($class);
 
-            throw new DeclarationException(
-                $class,
-                null,
-                'is a tasklet, which declares no operator; register the operator that wires '
-                . 'it, or write it as one: a class extending UnboundedOperator or BoundedOperator '
-                . 'that defines `run`',
-            );
+            // A tasklet is registered by the operator that wires it.
+            throw new FlezhaException('topology.unknown_operator_kind', ['module' => $class]);
         }
 
         return $class::spec();
@@ -158,22 +150,13 @@ abstract class Operator
         $body = Definition::overrides(static::class, 'run');
         $topology = Definition::overrides(static::class, 'channels');
         if ($body && $topology) {
-            throw new DeclarationException(
-                $declaration->factoryId,
-                null,
-                'ShortFormWithTopology: this class defines both `run` and `channels()`; a short '
-                . 'form is its one tasklet\'s `run`, and a topology wires tasklets of its own '
-                . 'in `channels()`, so define one of them',
-                ['ShortFormWithTopology'],
-            );
+            throw new FlezhaException('topology.short_form_with_topology', ['factory_id' => $declaration->factoryId]);
         }
         if (!$body && !$topology) {
-            throw new DeclarationException(
-                $declaration->factoryId,
-                null,
-                'defines neither `run` nor `channels()`; define `run` for a one-tasklet short '
-                . 'form, or `channels()` to wire a topology',
-            );
+            throw new FlezhaException('topology.missing_body', [
+                'declaration' => "operator '{$declaration->factoryId}'",
+                'body' => "`channels()`, or one tasklet's `run` as the short form",
+            ]);
         }
         if ($topology) {
             $shortFormArguments = [
@@ -183,20 +166,11 @@ abstract class Operator
             ];
             foreach ($shortFormArguments as $argument => $value) {
                 if ($value !== null) {
-                    throw new DeclarationException($declaration->factoryId, null, sprintf(
-                        '`%s` names a channel a short form generates, and this class declares its '
-                        . 'own in `channels()`; drop it from #[Operator]',
-                        $argument,
-                    ));
+                    self::refuseFields('topology.short_form_field_on_full_form', $declaration, ["`$argument`"]);
                 }
             }
             if ((new ReflectionClass(static::class))->getAttributes(Task::class) !== []) {
-                throw new DeclarationException(
-                    $declaration->factoryId,
-                    null,
-                    '#[Task] carries a tasklet\'s settings, and this class wires its tasklets in '
-                    . '`channels()`; a full form\'s tasklet settings go on its tasklet classes',
-                );
+                self::refuseFields('topology.short_form_field_on_full_form', $declaration, ['#[Task]']);
             }
 
             return false;
@@ -216,14 +190,16 @@ abstract class Operator
             }
         }
         if ($written !== []) {
-            throw new DeclarationException($declaration->factoryId, null, sprintf(
-                'a short form keeps every class-level setting but a bounded operator\'s `loopMode` at its '
-                . 'default, and this one writes %s; write the full form, with `channels()`, to set it',
-                implode(', ', $written),
-            ));
+            self::refuseFields('topology.setting_on_short_form', $declaration, $written);
         }
 
         return true;
+    }
+
+    /** @param list<string> $fields */
+    private static function refuseFields(string $code, OperatorAttribute $declaration, array $fields): never
+    {
+        throw new FlezhaException($code, ['factory_id' => $declaration->factoryId, 'fields' => $fields]);
     }
 
     abstract protected static function buildSpec(OperatorAttribute $declaration): ClassSpec;

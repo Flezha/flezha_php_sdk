@@ -123,7 +123,7 @@ final class LocalOperator
     public function runUntilIdle(int $budgetMs): void
     {
         $deadline = hrtime(true) + $budgetMs * 1_000_000;
-        $why = 'the graph did not settle';
+        $last = null;
         while (hrtime(true) < $deadline) {
             $bytes = null;
             $status = $this->core->poll(self::POLL_MS, $bytes);
@@ -143,11 +143,15 @@ final class LocalOperator
 
                 return;
             } catch (FlezhaException $notYet) {
-                $why = $notYet->getMessage();
+                $last = $notYet;
             }
         }
 
-        throw new FlezhaException(sprintf('local mode ran for %dms and %s', $budgetMs, $why));
+        throw new FlezhaException(
+            'runtime.local_run_unanswered',
+            ['budget_ms' => $budgetMs],
+            $last,
+        );
     }
 
     /** End the run and release its Cells. Idempotent. */
@@ -186,7 +190,7 @@ final class LocalOperator
         if ($output['target'] !== 'plugin') {
             // The core queues what a sink released and nothing else; an edge
             // output is an in-process mailbox push that never leaves.
-            throw new FlezhaException('local mode released a ' . (string) $output['target'] . ' output');
+            throw new \LogicException('local mode released a ' . (string) $output['target'] . ' output');
         }
         $channel = (string) $output['plugin_channel'];
         $callback = $this->sinks[$channel] ?? null;

@@ -6,7 +6,7 @@ namespace Flezha\Ffi;
 
 use Composer\InstalledVersions;
 use FFI;
-use Flezha\Exception\FlezhaException;
+use RuntimeException;
 
 /**
  * The `flz_core_ffi` C ABI, as this interpreter sees it.
@@ -74,6 +74,7 @@ final class Binding
         uintptr_t flz_core_context_new(uint32_t shim_schema_version);
         const char *flz_core_init_error(void);
         const char *flz_core_last_error(uintptr_t ctx);
+        const char *flz_core_error_document(const char *code, const char *details_json);
         int32_t flz_core_declare_class(uintptr_t ctx, const char *json, size_t json_len);
         int32_t flz_core_check_class(uintptr_t ctx, const char *json, size_t json_len, char **buf_out, size_t *len_out);
         int32_t flz_core_start(uintptr_t ctx, const char *ns);
@@ -145,7 +146,7 @@ final class Binding
     public static function assertAvailable(): void
     {
         if (!class_exists(FFI::class)) {
-            throw new FlezhaException(
+            throw new RuntimeException(
                 'the flezha SDK calls flz_core through ext-ffi, and this PHP build has no FFI '
                 . 'class. Install the extension (it ships with PHP 8.0+; on Debian and Ubuntu it '
                 . 'is in php-common, and the official Docker images need '
@@ -155,7 +156,7 @@ final class Binding
 
         $enable = (string) ini_get('ffi.enable');
         if ($enable === '' || $enable === '0' || strtolower($enable) === 'false') {
-            throw new FlezhaException(
+            throw new RuntimeException(
                 'ext-ffi is present but ffi.enable is ' . var_export($enable, true)
                 . ', which forbids the call. Set ffi.enable=preload (which permits FFI from the '
                 . 'CLI SAPI, where a runner runs) or ffi.enable=true in your php.ini.',
@@ -216,7 +217,7 @@ final class Binding
             $manifest = $get($manifestUrl);
             $body = $get($url);
         } catch (\Throwable $e) {
-            throw new FlezhaException(sprintf(
+            throw new RuntimeException(sprintf(
                 'could not fetch libflz_core_ffi for %s: %s. Nothing was installed. Retry, or %s',
                 $platform,
                 $e->getMessage(),
@@ -229,7 +230,7 @@ final class Binding
             : null;
         $actual = hash('sha256', $body);
         if ($expected !== $actual) {
-            throw new FlezhaException(sprintf(
+            throw new RuntimeException(sprintf(
                 'refused %s: its SHA-256 is %s and %s %s. Nothing was installed.',
                 $url,
                 $actual,
@@ -241,14 +242,14 @@ final class Binding
         $target = self::packaged($platform);
         $directory = dirname($target);
         if (!is_dir($directory) && !mkdir($directory, 0o755, true) && !is_dir($directory)) {
-            throw new FlezhaException(sprintf('could not create %s for libflz_core_ffi', $directory));
+            throw new RuntimeException(sprintf('could not create %s for libflz_core_ffi', $directory));
         }
         // Written beside the target and renamed over it, so an interrupted
         // write never leaves a truncated library where the loader looks.
         $partial = $target . '.part';
         if (file_put_contents($partial, $body) !== strlen($body) || !chmod($partial, 0o644) || !rename($partial, $target)) {
             @unlink($partial);
-            throw new FlezhaException(sprintf('could not write libflz_core_ffi to %s', $target));
+            throw new RuntimeException(sprintf('could not write libflz_core_ffi to %s', $target));
         }
 
         return $target;
@@ -349,9 +350,9 @@ final class Binding
         ];
     }
 
-    private static function refusal(string $platform, string $remedy): FlezhaException
+    private static function refusal(string $platform, string $remedy): RuntimeException
     {
-        return new FlezhaException(sprintf(
+        return new RuntimeException(sprintf(
             'libflz_core_ffi for %s is not installed; looked at %s. %s',
             $platform,
             implode(', ', self::candidates($platform)),

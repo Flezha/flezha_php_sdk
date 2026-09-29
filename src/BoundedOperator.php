@@ -6,7 +6,7 @@ namespace Flezha;
 
 use Flezha\Attribute\Operator as OperatorAttribute;
 use Flezha\Attribute\Bounded as BoundedAttribute;
-use Flezha\Exception\DeclarationException;
+use Flezha\Exception\FlezhaException;
 use Flezha\Graph\ClassSpec;
 
 /**
@@ -19,11 +19,7 @@ abstract class BoundedOperator extends Operator
     {
         $builder = static::builder($declaration);
         if ($builder->tasklets === []) {
-            throw new DeclarationException(
-                $declaration->factoryId,
-                null,
-                'declares no tasklets; a bounded operator runs a graph of tasklets, declared in channels()'
-            );
+            throw new FlezhaException('topology.no_bounded_body', ['factory_id' => $declaration->factoryId]);
         }
 
         $bounded = static::boundedDeclaration() ?? new BoundedAttribute();

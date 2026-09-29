@@ -14,13 +14,6 @@ use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\RegisteredClass;
 use Flezha\Dispatch\Registry;
 use Flezha\Exception\FlezhaException;
-use Flezha\Exception\SpawnAlreadyRunningException;
-use Flezha\Exception\SpawnException;
-use Flezha\Exception\SpawnFactoryNotBoundedException;
-use Flezha\Exception\SpawnFactoryUnknownException;
-use Flezha\Exception\SpawnRefusedException;
-use Flezha\Exception\SpawnTimeoutException;
-use Flezha\Exception\SpawnUnavailableException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
@@ -38,7 +31,7 @@ use PHPUnit\Framework\TestCase;
 #[Task(name: 'spawner')]
 final class Spawner extends Tasklet
 {
-    /** @var list<SpawnResult|SpawnException> what each read answered, in order */
+    /** @var list<SpawnResult|FlezhaException> what each read answered, in order */
     public static array $read = [];
 
     public function run(mixed $input, Ctx $ctx): void
@@ -50,7 +43,7 @@ final class Spawner extends Tasklet
         foreach ($handles as $handle) {
             try {
                 self::$read[] = $handle->wait();
-            } catch (SpawnException $e) {
+            } catch (FlezhaException $e) {
                 self::$read[] = $e;
             }
         }
@@ -81,10 +74,10 @@ final class ScriptedSpawns implements SpawnBridge
     /** @var list<int> the timeout each read was given */
     public array $reads = [];
 
-    /** @var array<int, string|null> */
+    /** @var array<int, string|FlezhaException|null> */
     private array $resolved = [];
 
-    /** @param list<string|null> $answers */
+    /** @param list<string|FlezhaException|null> $answers a refused read throws its FlezhaException */
     public function __construct(private array $answers)
     {
     }
@@ -106,8 +99,9 @@ final class ScriptedSpawns implements SpawnBridge
     public function spawnResult(int $handle, int $timeoutMs): ?string
     {
         $this->reads[] = $timeoutMs;
+        $answer = $this->resolved[$handle] ??= array_shift($this->answers);
 
-        return $this->resolved[$handle] ??= array_shift($this->answers);
+        return $answer instanceof FlezhaException ? throw $answer : $answer;
     }
 }
 
@@ -180,26 +174,32 @@ final class SpawnTest extends TestCase
         self::assertSame([], $bridge->requests);
     }
 
-    /** @return iterable<string, array{string, class-string<SpawnException>}> */
+    /** @return iterable<string, array{string, array<string, mixed>}> */
     public static function failures(): iterable
     {
-        yield 'the error policy' => ['already_running', SpawnAlreadyRunningException::class];
-        yield 'an unknown factory' => ['factory_unknown', SpawnFactoryUnknownException::class];
-        yield 'an unbounded factory' => ['factory_not_bounded', SpawnFactoryNotBoundedException::class];
-        yield 'a refusal' => ['refused', SpawnRefusedException::class];
-        yield 'a timeout' => ['timeout', SpawnTimeoutException::class];
-        yield 'no control plane' => ['unavailable', SpawnUnavailableException::class];
+        yield 'the error policy' => ['operator.already_running', ['operator' => 'w1']];
+        yield 'an unknown factory' => ['operator.factory_unknown', ['namespace' => 'default', 'factory' => 'worker']];
+        yield 'an unbounded factory' => ['operator.factory_not_bounded', ['factory' => 'worker', 'namespace' => 'default']];
+        yield 'a refusal' => ['authz.no_role_binding', []];
+        yield 'a timeout' => ['spawn.timeout', ['seconds' => 30]];
+        yield 'no control plane' => ['spawn.unavailable', []];
     }
 
     /**
      * @dataProvider failures
      *
-     * @param class-string<SpawnException> $class
+     * @param array<string, mixed> $details
      */
-    public function testAFailureIsThrownOnlyByAReadAsTheClassOfItsKind(string $error, string $class): void
+    public function testAFailureIsThrownOnlyByAReadAsTheOneErrorWithItsCode(string $code, array $details): void
     {
-        $message = "the core's sentence for $error";
-        $bridge = new ScriptedSpawns([Json::encode(['id' => 'w1', 'error' => $error, 'message' => $message])]);
+        $refusal = FlezhaException::fromDocument(Json::encode(['error' => [
+            'code' => $code,
+            'class' => 'invalid',
+            'message' => "the core's sentence for $code",
+            'details' => $details,
+            'hint' => null,
+        ]]));
+        $bridge = new ScriptedSpawns([$refusal]);
         $handle = self::spawn(
             $bridge,
             static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p', id: 'w1', ifRunning: 'error'),
@@ -208,18 +208,16 @@ final class SpawnTest extends TestCase
 
         try {
             $handle->wait();
-            self::fail("a read of a spawn that failed with $error answered a result");
-        } catch (SpawnException $failure) {
-            self::assertInstanceOf($class, $failure);
-            self::assertSame('w1', $failure->id);
-            self::assertSame($message, $failure->getMessage());
+            self::fail("a read of a spawn that failed with $code answered a result");
+        } catch (FlezhaException $failure) {
+            self::assertSame([$code, $details], [$failure->getCode(), $failure->details]);
         }
 
         try {
             $handle->tryResult();
             self::fail('a later read of a failed spawn answered a result');
-        } catch (SpawnException $again) {
-            self::assertSame([$class, 'w1', $message], [$again::class, $again->id, $again->getMessage()]);
+        } catch (FlezhaException $again) {
+            self::assertSame($code, $again->getCode());
         }
     }
 
@@ -237,10 +235,10 @@ final class SpawnTest extends TestCase
         });
 
         self::assertCount(2, Spawner::$read);
-        self::assertInstanceOf(SpawnUnavailableException::class, Spawner::$read[0]);
-        self::assertSame('', Spawner::$read[0]->id);
-        self::assertInstanceOf(SpawnUnavailableException::class, Spawner::$read[1]);
-        self::assertSame('w1', Spawner::$read[1]->id);
+        foreach (Spawner::$read as $read) {
+            self::assertInstanceOf(FlezhaException::class, $read);
+            self::assertSame(['spawn.unavailable', 'unavailable'], [$read->getCode(), $read->errorClass]);
+        }
     }
 
     /**
@@ -287,11 +285,11 @@ final class SpawnTest extends TestCase
                     try {
                         $read();
                         self::fail('a spawn with no control plane answered a result');
-                    } catch (SpawnUnavailableException $e) {
-                        $reads[] = [$e->id, $e->getMessage()];
+                    } catch (FlezhaException $e) {
+                        $reads[] = [$e->getCode(), $e->getMessage()];
                     }
                 }
-                self::assertSame('w1', $reads[0][0]);
+                self::assertSame('spawn.unavailable', $reads[0][0]);
                 self::assertSame($reads[0], $reads[1]);
             },
             static function () use (&$handle): void {
@@ -299,7 +297,7 @@ final class SpawnTest extends TestCase
                     $handle->tryResult();
                     self::fail('a handle answered after its activation ended');
                 } catch (FlezhaException $e) {
-                    self::assertStringContainsString('was released', $e->getMessage());
+                    self::assertSame('runtime.spawn_handle_released', $e->getCode());
                 }
             },
         );

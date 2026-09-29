@@ -34,7 +34,8 @@ final class ExecutorTest extends TestCase
         putenv(Executors::ENV . '=fibers');
 
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionMessage('this SDK ships `sync` (the default) and `swoole`');
+        $this->expectExceptionCode('usage.unknown_word');
+        $this->expectExceptionMessage("'fibers'; use one of sync, swoole");
 
         Executors::fromEnvironment();
     }
@@ -50,6 +51,7 @@ final class ExecutorTest extends TestCase
         }
 
         $this->expectException(FlezhaException::class);
+        $this->expectExceptionCode('runtime.executor_unavailable');
         $this->expectExceptionMessageMatches('/thread-safe \(ZTS\) PHP build|Swoole\\\\Thread/');
 
         Executors::swoole();
