@@ -50,7 +50,7 @@ final class DispatchTest extends TestCase
                 BoundedEmitUnboundedOperator::class, JsonEntryOperator::class, MergeOperator::class,
                 RouteLatestOperator::class, FannedOperator::class, CompletingBounded::class,
                 CompletingUnbounded::class, FlakyEntryOperator::class, TimingBounded::class,
-                TimingUnbounded::class, AnsweringOperator::class] as $class
+                TimingUnbounded::class, AnsweringOperator::class, SplitKeyedOperator::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -244,6 +244,14 @@ final class DispatchTest extends TestCase
     public function testAFilteredPayloadAnswersNoKey(): void
     {
         self::assertSame([['keys' => []]], $this->prepare(['"drop"']));
+    }
+
+    /** The keys answer the keyed consumer, whatever an unkeyed consumer declared before it filters. */
+    public function testThePrepareCrossingAnswersTheKeyedConsumersKeys(): void
+    {
+        $prepared = $this->prepare(['"a:1"', '"drop"'], 'split_keyed_operator');
+
+        self::assertSame([['keys' => ['a'], 'event_time' => null], ['keys' => []]], $prepared);
     }
 
     /** One payload's refusal is isolated to that payload. */

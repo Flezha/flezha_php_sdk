@@ -346,11 +346,18 @@ final class Dispatcher
     {
         $request = $activation['key_request'];
         $channel = $registered->spec->channels[$request['channel']] ?? null;
-        // The crossing answers one key set for the whole payload, so it reads
-        // the first consumer edge — the one the core routes the answer to.
-        $edge = $channel?->consumers[0] ?? null;
-        $node = $edge === null ? null : ($registered->spec->tasklets[$edge->tasklet] ?? null);
-        $definition = $node?->definition;
+        // The crossing answers one key set for the whole payload, which the
+        // core hands every keyed consumer, so it reads the first keyed
+        // consumer's edge: an unkeyed one's filter must not drop the key.
+        $edges = $channel?->consumers ?? [];
+        $definitionOf = static fn (ConsumerEdge $edge): ?Definition
+            => ($registered->spec->tasklets[$edge->tasklet] ?? null)?->definition;
+        $edge = array_find(
+            $edges,
+            static fn (ConsumerEdge $edge): bool
+                => $edge->keyBy !== null || $definitionOf($edge)?->declares('cellsFor') === true,
+        ) ?? $edges[0] ?? null;
+        $definition = $edge === null ? null : $definitionOf($edge);
 
         $answers = [];
         foreach ($request['payloads'] as $payload) {

@@ -145,6 +145,26 @@ final class KeyedOperator extends UnboundedOperator
 }
 
 /**
+ * One entry feeding an unkeyed consumer first and a keyed one after it, each
+ * behind its own filter: the crossing's keys are the keyed consumer's.
+ */
+#[Operator(factoryId: 'split_keyed_operator')]
+final class SplitKeyedOperator extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $input = $c->input('input');
+        $input->filter(static fn (mixed $v): bool => $v === 'drop')
+            ->into(Echoer::class)
+            ->sink('dropped');
+        $input->filter(static fn (mixed $v): bool => $v !== 'drop')
+            ->keyBy(static fn (mixed $v): string => explode(':', (string) $v)[0])
+            ->into(Keyed::class)
+            ->sink('out');
+    }
+}
+
+/**
  * The keyed plugin emitter: one output channel, carrying the identity stamps.
  */
 #[Task(name: 'stamp_emitter')]
