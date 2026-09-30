@@ -6,6 +6,7 @@ namespace Flezha;
 
 use Flezha\Codec\Json;
 use Flezha\Exception\FlezhaException;
+use Flezha\Graph\CallEnd;
 use Flezha\Graph\ChannelSpec;
 use Flezha\Graph\ConsumerEdge;
 use Flezha\Graph\ClassSpec;
@@ -138,7 +139,8 @@ final class Ctx
      * dropped, and a replayed input sends none.
      *
      * @throws FlezhaException `part.no_sink` when the output channel does not
-     *   end in a sink (it only feeds another tasklet, or ends in `response`),
+     *   end in a sink (it only feeds another tasklet, or ends in `response`
+     *   or `call`),
      *   `part.outside_invocation` through a context whose invocation returned
      */
     public function part(mixed $value): void
@@ -319,6 +321,37 @@ final class Ctx
         if ($channel->sink !== null) {
             $this->outputs[] = $this->pluginOutput($channel, $value, $key, $metadata);
         }
+        if ($channel->call !== null) {
+            foreach ($this->callOutputs($channel, $channel->call, $value, $metadata) as $output) {
+                $this->outputs[] = $output;
+            }
+        }
+    }
+
+    /**
+     * The requests a call end sends, with the call chain's transforms and key
+     * applied here as an edge's are; the core stamps the call onto each.
+     *
+     * @param array<string, string>|null $metadata
+     * @return list<array<string, mixed>>
+     */
+    private function callOutputs(ChannelSpec $channel, CallEnd $call, mixed $value, ?array $metadata): array
+    {
+        $outputs = [];
+        foreach (Transforms::apply($call->transforms, $value) as $request) {
+            $outputs[] = [
+                'target' => 'plugin',
+                'channel' => null,
+                'consumer' => null,
+                'plugin_channel' => $channel->name,
+                'key' => $call->keyBy !== null ? (string) ($call->keyBy)($request) : null,
+                'event_time' => null,
+                'metadata' => $this->metadata($metadata),
+                'payload' => ($call->encode)($request),
+            ];
+        }
+
+        return $outputs;
     }
 
     /**

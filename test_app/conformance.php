@@ -231,13 +231,16 @@ final class RowInterpreter
 
         $edge = $this->handle($head);
         foreach (explode('.', $rest) as $link) {
-            $edge = $this->applyLink($edge, $link);
+            $edge = $this->applyLink($edge, $link, $head);
         }
     }
 
-    private function applyLink(Edge $edge, string $link): Edge
+    private function applyLink(Edge $edge, string $link, string $role): Edge
     {
         [$verb, $arg] = self::splitCall($link);
+        if (str_starts_with($verb, 'call')) {
+            return $this->call($edge, $verb, $arg, $role);
+        }
 
         return match ($verb) {
             'map' => $edge->map(static fn (mixed $value): mixed => $value),
@@ -258,6 +261,26 @@ final class RowInterpreter
                 "the fixture spells a link this interpreter does not map: $verb"
             ),
         };
+    }
+
+    /**
+     * `<x>.call…(<arg>)`: a 500 ms call whose Response channel feeds the role
+     * that produces x, unless the step leaves it unread.
+     */
+    private function call(Edge $edge, string $verb, string $arg, string $role): Edge
+    {
+        $response = match ($verb) {
+            'call_factory' => $edge->call(factory: $arg, deadlineMs: 500),
+            'call_factory_nocreate' => $edge->call(factory: $arg, deadlineMs: 500, create: false),
+            'call_deadline' => $edge->call('pricing', deadlineMs: (int) $arg),
+            'call', 'call_unread' => $edge->call($arg, deadlineMs: 500),
+            default => throw new \RuntimeException("the fixture spells a call this interpreter does not map: $verb"),
+        };
+        if ($verb !== 'call_unread') {
+            $response->into($this->taskletClass($role));
+        }
+
+        return $edge;
     }
 
     /**
@@ -467,6 +490,7 @@ final class Conformance
         'sync_durability',
         'shorthand',
         'response',
+        'call',
     ];
 
     /**

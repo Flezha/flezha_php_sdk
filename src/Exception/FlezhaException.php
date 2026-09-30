@@ -37,7 +37,7 @@ final class FlezhaException extends RuntimeException
     public function __construct(string $code, array $details = [], ?Throwable $previous = null)
     {
         parent::__construct('', 0, $previous);
-        $this->fill(Core::errorDocument($code, $details));
+        $this->fill(self::errorOf(Core::errorDocument($code, $details)));
     }
 
     /**
@@ -46,17 +46,37 @@ final class FlezhaException extends RuntimeException
      */
     public static function fromDocument(string $document): self
     {
+        return self::fromObject(self::errorOf($document));
+    }
+
+    /**
+     * The error a decoded error object (`code`, `class`, `message`,
+     * `details`, `hint`) carries, as a controller writes one into a call's
+     * outcome.
+     *
+     * @param array<string, mixed> $error
+     */
+    public static function fromObject(array $error): self
+    {
         $self = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
-        $self->fill($document);
+        $self->fill($error);
 
         return $self;
     }
 
-    private function fill(string $document): void
+    /** @return array<string, mixed> */
+    private static function errorOf(string $document): array
     {
-        /** @var array{error: array{code: string, class: string, message: string, details?: array<string, mixed>|null, hint?: string|null}} $decoded */
+        /** @var array{error: array<string, mixed>} $decoded */
         $decoded = json_decode($document, true, 512, JSON_THROW_ON_ERROR);
-        $error = $decoded['error'];
+
+        return $decoded['error'];
+    }
+
+    /** @param array<string, mixed> $error */
+    private function fill(array $error): void
+    {
+        /** @var array{code: string, class: string, message: string, details?: array<string, mixed>|null, hint?: string|null} $error */
         $this->message = $error['message'];
         $this->code = $error['code'];
         $this->errorClass = $error['class'];

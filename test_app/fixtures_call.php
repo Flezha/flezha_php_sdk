@@ -1,0 +1,274 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Twins of the reference's operator call fixtures
+ * (sdk/rust/test_app/src/operator_call.rs), under the same factory ids,
+ * tasklet names, channel names and payloads: operators that call another
+ * operator from their graph and read the outcome as a `Flezha\Response`.
+ *
+ * - `call_pricing`: an unbounded callee answering `price:<input>`; an input
+ *   starting `silent` is never answered.
+ * - `call_orders`: an unbounded caller calling the instance `pricing`.
+ * - `call_agent`: a durable per-input keep-progress session answering
+ *   `answer:<turn>`; `boom` fails the turn, `slow` answers after 2 s.
+ * - `call_gateway`: an effectively-once caller calling `call_agent` by the
+ *   session key of each `<session>:<text>` turn, and without creating it for a
+ *   `resume:<session>:<text>` turn, both Response channels wired back into
+ *   its calling tasklet.
+ * - `call_tool_session`: a durable per-input session calling `pricing` from a
+ *   turn and reading the outcome as its next turn.
+ *
+ * Every outcome is written to a sink as one line,
+ * `<request>=ok:<answer>@<target>/<created>` or
+ * `<request>=error:<code>@<target>/<created>`.
+ */
+
+namespace Flezha\TestApp;
+
+use Flezha\Attribute\Bounded;
+use Flezha\Attribute\Operator;
+use Flezha\Attribute\Task;
+use Flezha\BoundedOperator;
+use Flezha\ChannelCodec;
+use Flezha\Ctx;
+use Flezha\Exception\NonRetryableException;
+use Flezha\Graph\Builder;
+use Flezha\LoopMode;
+use Flezha\Response;
+use Flezha\RollbackMode;
+use Flezha\Tasklet;
+use Flezha\UnboundedOperator;
+
+final class OperatorCall
+{
+    public const DEADLINE_MS = 30_000;
+
+    /**
+     * The prefix a caller's tasklet puts on an outcome line, which no request
+     * carries, so one output channel can feed both the call and the sink.
+     */
+    public const OUTCOME = 'response ';
+
+    /**
+     * The prefix of a turn resuming a session that must already run: its call
+     * may not create the callee.
+     */
+    public const RESUME = 'resume:';
+
+    public static function render(Response $response): string
+    {
+        $outcome = $response->ok() ? "ok:{$response->value}" : "error:{$response->error?->getCode()}";
+        $created = $response->created ? 'true' : 'false';
+
+        return "{$response->request}={$outcome}@{$response->target}/{$created}";
+    }
+
+    /** What a caller's tasklet emits: a turn as it came, an outcome as its line. */
+    public static function relay(mixed $input): string
+    {
+        return $input instanceof Response ? self::OUTCOME . self::render($input) : (string) $input;
+    }
+
+    public static function isOutcome(mixed $line): bool
+    {
+        return str_starts_with((string) $line, self::OUTCOME);
+    }
+
+    public static function isResume(mixed $line): bool
+    {
+        return str_starts_with((string) $line, self::RESUME);
+    }
+
+    public static function isTurn(mixed $line): bool
+    {
+        return !self::isOutcome($line) && !self::isResume($line);
+    }
+
+    public static function unprefixed(mixed $line): string
+    {
+        return substr((string) $line, strlen(self::OUTCOME));
+    }
+
+    /** The session a turn or an outcome line belongs to: what precedes its `:`. */
+    public static function session(mixed $line): string
+    {
+        $line = (string) $line;
+        $line = self::isOutcome($line) ? self::unprefixed($line) : $line;
+
+        return explode(':', $line, 2)[0];
+    }
+}
+
+#[Task(name: 'pricing_quote')]
+final class PricingQuote extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        if (!str_starts_with($input, 'silent')) {
+            $ctx->emit("price:$input");
+        }
+    }
+}
+
+#[Operator(factoryId: 'call_pricing')]
+final class CallPricing extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)->into(PricingQuote::class)->response();
+    }
+}
+
+#[Task(name: 'order_ask')]
+final class OrderAsk extends PassThrough
+{
+}
+
+#[Task(name: 'order_priced')]
+final class OrderPriced extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(OperatorCall::render($input));
+    }
+}
+
+#[Operator(factoryId: 'call_orders')]
+final class CallOrders extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(OrderAsk::class)
+            ->named('order')
+            ->call('pricing', deadlineMs: OperatorCall::DEADLINE_MS, codec: ChannelCodec::Text)
+            ->into(OrderPriced::class)
+            ->sink('priced');
+    }
+}
+
+#[Task(name: 'agent_turn')]
+final class AgentTurn extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $text = str_contains($input, ':') ? explode(':', $input, 2)[1] : $input;
+        if ($text === 'boom') {
+            throw new NonRetryableException('the turn failed');
+        }
+        if ($text === 'slow') {
+            sleep(2);
+        }
+        $ctx->emit("answer:$input");
+    }
+}
+
+#[Operator(factoryId: 'call_agent')]
+#[Bounded(loopMode: LoopMode::PerInput, rollbackMode: RollbackMode::KeepProgress, maxDurationMs: 600_000)]
+final class CallAgent extends BoundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('turn', codec: ChannelCodec::Text)->into(AgentTurn::class)->response();
+    }
+}
+
+#[Task(name: 'gateway_account')]
+final class GatewayAccount extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(OperatorCall::relay($input));
+    }
+}
+
+#[Task(name: 'gateway_resume')]
+final class GatewayResume extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(substr((string) $input, strlen(OperatorCall::RESUME)));
+    }
+}
+
+#[Task(name: 'gateway_log')]
+final class GatewayLog extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(OperatorCall::unprefixed($input));
+    }
+}
+
+#[Operator(factoryId: 'call_gateway')]
+final class CallGateway extends UnboundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->effectivelyOnce();
+        $account = $c->input('in', codec: ChannelCodec::Text)->into(GatewayAccount::class)->named('gateway');
+        $account->filter(OperatorCall::isTurn(...))
+            ->keyBy(OperatorCall::session(...))
+            ->call(factory: 'call_agent', deadlineMs: OperatorCall::DEADLINE_MS, codec: ChannelCodec::Text)
+            ->into(GatewayAccount::class);
+        $account->filter(OperatorCall::isResume(...))
+            ->into(GatewayResume::class)
+            ->named('resume')
+            ->keyBy(OperatorCall::session(...))
+            ->call(
+                factory: 'call_agent',
+                deadlineMs: OperatorCall::DEADLINE_MS,
+                create: false,
+                codec: ChannelCodec::Text,
+            )
+            ->into(GatewayAccount::class);
+        $account->filter(OperatorCall::isOutcome(...))
+            ->keyBy(OperatorCall::session(...))
+            ->into(GatewayLog::class)
+            ->keyed()
+            ->sink('gateway_out');
+    }
+}
+
+#[Task(name: 'tool_turn')]
+final class ToolTurn extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(OperatorCall::relay($input));
+    }
+}
+
+#[Task(name: 'tool_log')]
+final class ToolLog extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(OperatorCall::unprefixed($input));
+    }
+}
+
+#[Operator(factoryId: 'call_tool_session')]
+#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
+final class CallToolSession extends BoundedOperator
+{
+    public static function channels(Builder $c): void
+    {
+        $turn = $c->input('turn', codec: ChannelCodec::Text)->into(ToolTurn::class)->named('tool');
+        $turn->filter(static fn (mixed $line): bool => !OperatorCall::isOutcome($line))
+            ->call('pricing', deadlineMs: OperatorCall::DEADLINE_MS, codec: ChannelCodec::Text)
+            ->into(ToolTurn::class);
+        $turn->filter(OperatorCall::isOutcome(...))->into(ToolLog::class)->sink('tool_out');
+    }
+}
+
+final class CallFixtures
+{
+    /** @return list<class-string<\Flezha\Operator>> */
+    public static function all(): array
+    {
+        return [CallPricing::class, CallOrders::class, CallAgent::class, CallGateway::class, CallToolSession::class];
+    }
+}

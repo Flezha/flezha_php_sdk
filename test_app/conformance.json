@@ -37,7 +37,8 @@
     "bounded",
     "sync_durability",
     "shorthand",
-    "response"
+    "response",
+    "call"
   ],
   "deferred": [],
   "fixtures": {
@@ -106,6 +107,13 @@
       "call_downstream",
       "call_split",
       "call_turn"
+    ],
+    "operator_call": [
+      "call_pricing",
+      "call_orders",
+      "call_agent",
+      "call_gateway",
+      "call_tool_session"
     ],
     "parts": [
       "part_echo",

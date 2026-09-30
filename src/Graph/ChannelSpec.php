@@ -69,6 +69,8 @@ final class ChannelSpec
          * @var (callable(mixed):string)|null
          */
         public $sinkEncode = null,
+        /** The channel's call end, when a chain closes on one. */
+        public ?CallEnd $call = null,
     ) {
     }
 }

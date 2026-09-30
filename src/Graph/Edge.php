@@ -10,6 +10,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Fanned;
 use Flezha\Overflow;
 use Flezha\Operator;
+use Flezha\Response;
 use Flezha\Tasklet;
 
 /**
@@ -206,6 +207,70 @@ final class Edge
     public function response(?callable $encode = null, ?ChannelCodec $codec = null): self
     {
         return $this->plugEnd(['link' => 'response'], null, $encode, $codec);
+    }
+
+    /**
+     * End this edge's chain in a call to another operator, and answer the
+     * edge of its Response channel: the entry channel `<channel>.response`,
+     * whose values are {@see Response}s. Every value reaching the call, after
+     * this chain's transforms and key, is one request. `$target` names an
+     * instance, or a partition group whose member the key chooses; `$factory`
+     * instead names a factory whose instance the key names, started when
+     * absent unless `$create` is false. `$deadlineMs` is required; `$channel`
+     * names the callee's entry channel, and `$codec` the format of both the
+     * request and the answer, JSON by default. A call is not an edge, so the
+     * Response channel may feed this tasklet.
+     */
+    public function call(
+        ?string $target = null,
+        ?string $factory = null,
+        ?int $deadlineMs = null,
+        bool $create = true,
+        ?string $channel = null,
+        ?ChannelCodec $codec = null,
+    ): self {
+        if ($deadlineMs === null) {
+            throw new \ArgumentCountError('call() takes deadlineMs');
+        }
+        if ($this->from[0] !== 'tasklet') {
+            throw new FlezhaException('topology.sink_on_entry', ['channel' => $this->from[1]->name]);
+        }
+
+        $source = $this->channel();
+        $codec ??= ChannelCodec::Json;
+        $response = "{$source->name}.response";
+        $this->builder->linkChain(
+            $this->from,
+            $this->pending['chain'] ?? null,
+            self::callLink($target, $factory, $deadlineMs, $create, $channel, $response),
+        );
+        // First call wins, as for a sink; a second end is the core's to refuse.
+        $source->call ??= new CallEnd($this->transforms(), $this->pending['keyBy'] ?? null, $codec->encoder($source));
+        $decode = $codec->decoder($source);
+
+        return $this->builder->input($response, static fn (string $bytes): Response => Response::decode($bytes, $decode));
+    }
+
+    /**
+     * The `call` link as the record carries it; which of `$target` and
+     * `$factory` is named, and whether exactly one is, is the core's to judge.
+     *
+     * @return array<string, mixed>
+     */
+    private static function callLink(
+        ?string $target,
+        ?string $factory,
+        int $deadlineMs,
+        bool $create,
+        ?string $channel,
+        string $response,
+    ): array {
+        return ['link' => 'call']
+            + ($target !== null ? ['target' => $target] : [])
+            + ($factory !== null ? ['factory' => $factory] : [])
+            + ['deadline_ms' => $deadlineMs, 'create' => $create]
+            + ($channel !== null ? ['channel' => $channel] : [])
+            + ['response' => $response];
     }
 
     /**
