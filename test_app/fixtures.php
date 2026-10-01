@@ -879,6 +879,7 @@ final class Fixtures
             SchemaEvolutionV1Operator::class,
             SchemaEvolutionV2Operator::class,
             TierStoreOperator::class,
+            RemoteTierStoreOperator::class,
             TierChainOperator::class,
             CheckpointStoreOperator::class,
             CheckpointBatchedOperator::class,

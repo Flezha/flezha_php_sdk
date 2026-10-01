@@ -141,6 +141,16 @@ final class TierStoreOperator extends \Flezha\Operator
     }
 }
 
+/** `tier_store` kept `durable: remote`: an input is acknowledged only once the backend holds its records. */
+#[Operator(factoryId: 'remote_tier_store', run: ['flow' => ['exactly' => 'effectively_once']], durable: 'remote')]
+final class RemoteTierStoreOperator extends \Flezha\Operator
+{
+    public static function channels(Builder $c): void
+    {
+        TierStoreOperator::channels($c);
+    }
+}
+
 // -- tier_chain --------------------------------------------------------------
 //
 // An effectively-once stream of two tasklets. `tier_relay` counts what it

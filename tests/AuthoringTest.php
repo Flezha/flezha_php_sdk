@@ -869,14 +869,11 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
-    public function testARemoteFlowClassIsRefusedByName(): void
+    public function testAFlowClassMayKeepItsWorkRemote(): void
     {
-        try {
-            self::validate(static fn (Builder $c) => $c->input('in')->into(Echoer::class), durable: 'remote');
-            self::fail('a remote flow class was accepted');
-        } catch (FlezhaException $e) {
-            self::assertSame(['topology.remote_on_flow'], array_column($e->details['issues'], 'code'));
-        }
+        $channels = static fn (Builder $c) => $c->input('in')->into(Echoer::class);
+        self::validate($channels, durable: 'remote');
+        self::assertSame('remote', HostClassDecl::of(self::spec($channels, durable: 'remote'))['durable']);
     }
 
     /** @return iterable<string, array{string|array<string, mixed>, string}> */
