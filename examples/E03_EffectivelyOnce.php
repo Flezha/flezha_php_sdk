@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * The tier IS durable state, so it needs persistence; every plugin-bound
  * channel must be `keyed()`, because deduplication is by output identity. With
- * `checkpointEvery`, changes stage without advancing the watermark until the
+ * a checkpoint `every`, changes stage without advancing the watermark until the
  * interval closes — every four inputs here, or on an explicit
  * `$ctx->checkpoint()`.
  */
@@ -22,7 +22,6 @@ use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 #[Task(name: 'ledger')]
 final class Ledger extends Tasklet
@@ -52,13 +51,14 @@ final class Ledger extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'ledger')]
-final class LedgerOperator extends UnboundedOperator
+#[Operator(
+    factoryId: 'ledger',
+    run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => ['checkpoint' => ['every' => 4]]]]]],
+)]
+final class LedgerOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
-        $c->checkpointEvery(4);
         $c->input('entries')
             ->keyBy(static fn (array $e): string => (string) $e['account'])
             ->into(Ledger::class)->keyed()

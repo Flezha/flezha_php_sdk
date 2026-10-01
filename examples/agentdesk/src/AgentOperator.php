@@ -4,24 +4,23 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Agentdesk;
 
-use Flezha\Attribute\Bounded;
 use Flezha\Attribute\Operator;
-use Flezha\BoundedOperator;
 use Flezha\ChannelCodec;
 use Flezha\Graph\Builder;
-use Flezha\LoopMode;
-use Flezha\RollbackMode;
 
 /**
- * One conversation: a bounded operator that runs one turn per message it is sent, for as long as
- * the session lasts. Every session is an instance of its own, with its own state.
+ * One conversation: an operator that runs in steps, one turn per message it is sent, for as long
+ * as the session lasts. Every session is an instance of its own, with its own state.
  */
-#[Operator(factoryId: 'agent')]
-#[Bounded(
-    loopMode: LoopMode::PerInput,                    // one turn per message
-    rollbackMode: RollbackMode::KeepProgress,        // a failed turn fails alone
+#[Operator(
+    factoryId: 'agent',
+    run: ['steps' => [
+        'each' => 'per_input',                       // one turn per message
+        'on_failure' => 'keep_progress',             // a failed turn fails alone
+    ]],
+    durable: ['local' => ['sleep_after' => 10_000]], // an idle session sleeps after 10 s
 )]
-final class AgentOperator extends BoundedOperator
+final class AgentOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

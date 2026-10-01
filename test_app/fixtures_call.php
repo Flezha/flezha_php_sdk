@@ -8,9 +8,9 @@ declare(strict_types=1);
  * tasklet names, channel names and payloads: operators that call another
  * operator from their graph and read the outcome as a `Flezha\Response`.
  *
- * - `call_pricing`: an unbounded callee answering `price:<input>`; an input
+ * - `call_pricing`: a flow callee answering `price:<input>`; an input
  *   starting `silent` is never answered.
- * - `call_orders`: an unbounded caller calling the instance `pricing`.
+ * - `call_orders`: a flow caller calling the instance `pricing`.
  * - `call_agent`: a durable per-input keep-progress session answering
  *   `answer:<turn>`; `boom` fails the turn, `slow` answers after 2 s.
  * - `call_gateway`: an effectively-once caller calling `call_agent` by the
@@ -27,19 +27,14 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Bounded;
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\BoundedOperator;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
-use Flezha\LoopMode;
 use Flezha\Response;
-use Flezha\RollbackMode;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 final class OperatorCall
 {
@@ -113,7 +108,7 @@ final class PricingQuote extends Tasklet
 }
 
 #[Operator(factoryId: 'call_pricing')]
-final class CallPricing extends UnboundedOperator
+final class CallPricing extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -136,7 +131,7 @@ final class OrderPriced extends Tasklet
 }
 
 #[Operator(factoryId: 'call_orders')]
-final class CallOrders extends UnboundedOperator
+final class CallOrders extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -165,9 +160,13 @@ final class AgentTurn extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_agent')]
-#[Bounded(loopMode: LoopMode::PerInput, rollbackMode: RollbackMode::KeepProgress, maxDurationMs: 600_000)]
-final class CallAgent extends BoundedOperator
+#[Operator(
+    factoryId: 'call_agent',
+    run: ['steps' => ['each' => 'per_input', 'on_failure' => 'keep_progress']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class CallAgent extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -202,12 +201,11 @@ final class GatewayLog extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_gateway')]
-final class CallGateway extends UnboundedOperator
+#[Operator(factoryId: 'call_gateway', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class CallGateway extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
         $account = $c->input('in', codec: ChannelCodec::Text)->into(GatewayAccount::class)->named('gateway');
         $account->filter(OperatorCall::isTurn(...))
             ->keyBy(OperatorCall::session(...))
@@ -250,9 +248,13 @@ final class ToolLog extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_tool_session')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class CallToolSession extends BoundedOperator
+#[Operator(
+    factoryId: 'call_tool_session',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class CallToolSession extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

@@ -6,7 +6,6 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\BoundedOperator;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
@@ -17,7 +16,6 @@ use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Tasklet;
 use Flezha\Testing\Harness;
-use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 #[Task(cellKeys: ['a'])]
@@ -222,8 +220,8 @@ final class Routed extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'form_place', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
-final class ShortPlaceOrder extends BoundedOperator
+#[Operator(factoryId: 'form_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+final class ShortPlaceOrder extends \Flezha\Operator
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -232,7 +230,7 @@ final class ShortPlaceOrder extends BoundedOperator
 }
 
 #[Operator(factoryId: 'form_emits')]
-final class EmitsOperator extends UnboundedOperator
+final class EmitsOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -241,7 +239,7 @@ final class EmitsOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'form_sessions')]
-final class SessionsOperator extends UnboundedOperator
+final class SessionsOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -250,7 +248,7 @@ final class SessionsOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'form_unkeyed')]
-final class UnkeyedSessionsOperator extends UnboundedOperator
+final class UnkeyedSessionsOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -259,7 +257,7 @@ final class UnkeyedSessionsOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'form_clocks')]
-final class ClocksOperator extends UnboundedOperator
+final class ClocksOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -271,7 +269,7 @@ final class ClocksOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'form_stateless_logical')]
-final class StatelessLogicalOperator extends UnboundedOperator
+final class StatelessLogicalOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -280,7 +278,7 @@ final class StatelessLogicalOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'form_keyed_static')]
-final class KeyedStaticOperator extends UnboundedOperator
+final class KeyedStaticOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -471,7 +469,7 @@ final class TaskletFormTest extends TestCase
         self::assertSame([], $result['effects'][1]['outputs']);
     }
 
-    /** A bounded short form's `run` emits as a tasklet's does, and the value reaches its sink. */
+    /** A steps short form's `run` emits as a tasklet's does, and the value reaches its sink. */
     public function testABoundedShortFormsEmittedValueReachesItsSink(): void
     {
         [$dispatcher, $core] = self::dispatcherFor(ShortPlaceOrder::class);
@@ -533,7 +531,7 @@ final class TaskletFormTest extends TestCase
     }
 
     /**
-     * @param class-string<UnboundedOperator> $operator
+     * @param class-string<\Flezha\Operator> $operator
      * @return array<string, mixed>
      */
     private static function record(string $operator, string $tasklet): array
@@ -547,7 +545,7 @@ final class TaskletFormTest extends TestCase
         self::fail("$operator declares no tasklet `$tasklet`");
     }
 
-    /** @param class-string<UnboundedOperator> $operator */
+    /** @param class-string<\Flezha\Operator> $operator */
     private static function validate(string $operator): void
     {
         $core = Core::create();

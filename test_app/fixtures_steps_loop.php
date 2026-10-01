@@ -3,35 +3,30 @@
 declare(strict_types=1);
 
 /**
- * The durable-loop bounded twins — the chat loop with suspension, its
+ * The durable-loop steps twins — the chat loop with suspension, its
  * stateless twin and the rewindable variant — and the chains and loop
- * `mix bench.bounded` drives. The reference's own partition
- * (test/apps/rust_runner/src/bounded_loop.rs); loaded after
- * fixtures_bounded.php, whose gate and bases these share.
+ * `mix bench.steps` drives. The reference's own partition
+ * (test/apps/rust_runner/src/steps_loop.rs); loaded after
+ * fixtures_steps.php, whose gate and bases these share.
  */
 
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
-use Flezha\LoopMode;
-use Flezha\RollbackMode;
 use Flezha\Overflow;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
 use Flezha\Timer;
-use Flezha\UnboundedOperator;
-use Flezha\BoundedOperator;
 
 // -- the durable loop family -------------------------------------------------
 //
-// chat_loop_bounded is the durable-loop + suspension shape
-// (bounded_loop.rs:8). One iteration per inbox item: TURN commits the turn to
+// chat_loop_steps is the durable-loop + suspension shape
+// (steps_loop.rs:8). One iteration per inbox item: TURN commits the turn to
 // Cell state, so a resumed iteration is visible in the WAL, and REPLY emits
 // the answer to the sink. Between turns the loop finds an empty inbox at a
 // committed boundary and PARKS — the instance is evicted and rehydrated by the
@@ -43,12 +38,12 @@ use Flezha\BoundedOperator;
 // passes on like any turn, and completes the instance with the number of turns
 // recorded, as decimal text.
 //
-// stateless_loop_bounded is the same loop MINUS its stateful first tasklet:
+// stateless_loop_steps is the same loop MINUS its stateful first tasklet:
 // ChatReply alone holds no per-Cell state, so nothing writes a Cell WAL
 // and the instance's task-journal reaches the driver only if it rides the bind
 // itself.
 //
-// chat_rewind_bounded is the loop whose replying tasklet can be undone. The
+// chat_rewind_steps is the loop whose replying tasklet can be undone. The
 // undo handle lives in Cell state, because a rewind's compensation is rebuilt
 // from the journal and is handed NO retained outputs, so the hook reads the
 // last thing it said, retracts it and pops it.
@@ -130,11 +125,15 @@ final class ChatReplyUndoable extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'chat_loop_bounded')]
+#[Operator(
+    factoryId: 'chat_loop_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
 // A chat session ends on the turn `bye`; the duration backstop keeps a stray
 // instance from outliving the test run.
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class ChatLoopBounded extends BoundedOperator
+final class ChatLoopSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -145,9 +144,13 @@ final class ChatLoopBounded extends BoundedOperator
     }
 }
 
-#[Operator(factoryId: 'stateless_loop_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class StatelessLoopBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'stateless_loop_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class StatelessLoopSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -157,9 +160,9 @@ final class StatelessLoopBounded extends BoundedOperator
     }
 }
 
-// keyed_loop_bounded is a durable per-input loop keyed on its entry edge by
+// keyed_loop_steps is a durable per-input loop keyed on its entry edge by
 // the text before the first `:`, so one Cell counts one symbol's messages and
-// emits `<symbol>:<count>`: the shape a partition group of bounded operator members
+// emits `<symbol>:<count>`: the shape a partition group of steps operator members
 // takes.
 
 #[Task(name: 'keyed_loop_count')]
@@ -183,21 +186,29 @@ final class KeyedLoopCount extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'keyed_loop_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class KeyedLoopBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'keyed_loop_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class KeyedLoopSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
         $c->input('trades', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
             ->into(KeyedLoopCount::class)
-            ->sink('keyed_loop_bounded_out');
+            ->sink('keyed_loop_steps_out');
     }
 }
 
-#[Operator(factoryId: 'chat_rewind_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class ChatRewindBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'chat_rewind_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class ChatRewindSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -208,12 +219,12 @@ final class ChatRewindBounded extends BoundedOperator
     }
 }
 
-// failing_turn_loop_bounded: a session whose turn can fail after `note`
+// failing_turn_loop_steps: a session whose turn can fail after `note`
 // committed. `note` records each message and its undo moves the latest one to
 // `undone`; `answer` replies `re:<message>` on the sink `answer`, and fails on
 // `boom` always, on `boom-once` while the release env is unset (the first
 // runner of a crash drill), and on `boom-until-healed` until a `heal` turn set
-// its state. failing_turn_all_or_nothing_bounded is the same under
+// its state. failing_turn_undo_all_steps is the same under
 // all-or-nothing.
 
 #[Task(name: 'note')]
@@ -264,7 +275,7 @@ final class Answer extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $fails = $input === 'boom'
-            || ($input === 'boom-once' && !BoundedGate::released())
+            || ($input === 'boom-once' && !StepsGate::released())
             || ($input === 'boom-until-healed' && !$ctx->state['healed']);
         if ($fails) {
             throw new \RuntimeException("answer refused $input");
@@ -276,7 +287,7 @@ final class Answer extends Tasklet
     }
 }
 
-abstract class FailingTurnLoop extends BoundedOperator
+abstract class FailingTurnLoop extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -287,23 +298,23 @@ abstract class FailingTurnLoop extends BoundedOperator
     }
 }
 
-#[Operator(factoryId: 'failing_turn_loop_bounded')]
-#[Bounded(
-    loopMode: LoopMode::PerInput,
-    rollbackMode: RollbackMode::KeepProgress,
+#[Operator(
+    factoryId: 'failing_turn_loop_steps',
+    run: ['steps' => ['each' => 'per_input', 'on_failure' => 'keep_progress']],
+    durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class FailingTurnLoopBounded extends FailingTurnLoop
+final class FailingTurnLoopSteps extends FailingTurnLoop
 {
 }
 
-#[Operator(factoryId: 'failing_turn_all_or_nothing_bounded')]
-#[Bounded(
-    loopMode: LoopMode::PerInput,
-    rollbackMode: RollbackMode::AllOrNothing,
+#[Operator(
+    factoryId: 'failing_turn_undo_all_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class FailingTurnAllOrNothingBounded extends FailingTurnLoop
+final class FailingTurnUndoAllSteps extends FailingTurnLoop
 {
 }
 
@@ -317,7 +328,7 @@ final class BlockingReply extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         if ($input === self::REPLY_CRASH_TURN) {
-            BoundedGate::blockUntilReleased();
+            StepsGate::blockUntilReleased();
         }
         $ctx->emit("reply:$input");
     }
@@ -325,9 +336,13 @@ final class BlockingReply extends Tasklet
 
 // The chat loop with the block moved AFTER the root's commit, so a SIGKILL
 // lands between a root's `task_committed` and the pass's `iter_committed`.
-#[Operator(factoryId: 'reply_block_loop_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class ReplyBlockLoopBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'reply_block_loop_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class ReplyBlockLoopSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -340,7 +355,7 @@ final class ReplyBlockLoopBounded extends BoundedOperator
 
 // -- spawn_requester ---------------------------------------------------------
 //
-// On each input it spawns stateless_loop_bounded once with no id and once under
+// On each input it spawns stateless_loop_steps once with no id and once under
 // the input as its id, and prints both results, because a handle's answer is
 // observable nowhere but in the tasklet that read it.
 
@@ -350,8 +365,8 @@ final class SpawnRequester extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $handles = [
-            'unnamed' => $ctx->spawnBounded('stateless_loop_bounded', (string) $input),
-            'named' => $ctx->spawnBounded('stateless_loop_bounded', (string) $input, id: (string) $input),
+            'unnamed' => $ctx->spawnSteps('stateless_loop_steps', (string) $input),
+            'named' => $ctx->spawnSteps('stateless_loop_steps', (string) $input, id: (string) $input),
         ];
         foreach ($handles as $label => $handle) {
             self::report($label, $handle);
@@ -371,7 +386,7 @@ final class SpawnRequester extends Tasklet
 }
 
 #[Operator(factoryId: 'spawn_requester')]
-final class SpawnRequesterOperator extends UnboundedOperator
+final class SpawnRequesterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -383,7 +398,7 @@ final class SpawnRequesterOperator extends UnboundedOperator
 
 // -- spawn_hold_requester ----------------------------------------------------
 //
-// An effectively-once stream whose tasklet spawns stateless_loop_bounded with
+// An effectively-once stream whose tasklet spawns stateless_loop_steps with
 // no id, prints the answer as `spawn_result hold <id> <outcome>`, then blocks
 // until the release env is set, so a runner killed there dies with the spawn
 // answered and its input not durably consumed.
@@ -393,17 +408,16 @@ final class SpawnHoldRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        SpawnRequester::report('hold', $ctx->spawnBounded('stateless_loop_bounded', (string) $input));
-        BoundedGate::blockUntilReleased();
+        SpawnRequester::report('hold', $ctx->spawnSteps('stateless_loop_steps', (string) $input));
+        StepsGate::blockUntilReleased();
     }
 }
 
-#[Operator(factoryId: 'spawn_hold_requester')]
-final class SpawnHoldRequesterOperator extends UnboundedOperator
+#[Operator(factoryId: 'spawn_hold_requester', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class SpawnHoldRequesterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
         $c->input('in', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(SpawnHoldRequester::class)->keyed()
             ->sink('out');
@@ -412,7 +426,7 @@ final class SpawnHoldRequesterOperator extends UnboundedOperator
 
 // -- spawn_once_requester ----------------------------------------------------
 //
-// On each input it spawns `typed_once_bounded` with no id, the input inside a
+// On each input it spawns `typed_once_steps` with no id, the input inside a
 // JSON object its entry channel decodes, and prints the result as
 // spawn_requester does.
 
@@ -421,12 +435,12 @@ final class SpawnOnceRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        SpawnRequester::report('once', $ctx->spawnBounded('typed_once_bounded', ['text' => (string) $input]));
+        SpawnRequester::report('once', $ctx->spawnSteps('typed_once_steps', ['text' => (string) $input]));
     }
 }
 
 #[Operator(factoryId: 'spawn_once_requester')]
-final class SpawnOnceRequesterOperator extends UnboundedOperator
+final class SpawnOnceRequesterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -438,7 +452,7 @@ final class SpawnOnceRequesterOperator extends UnboundedOperator
 
 // -- the bench chains --------------------------------------------------------
 //
-// What `mix bench.bounded --scenario chain` drives (bounded_loop.rs:232): K
+// What `mix bench.steps --scenario chain` drives (steps_loop.rs:232): K
 // durable pass-through steps in a line, the payload unchanged, so the sink
 // receives the seed input and the bench reads its own seq and send timestamp
 // back. Each chain position needs its own tasklet and a PHP tasklet is a
@@ -526,7 +540,7 @@ final class BenchS15 extends DurableStep
 }
 
 /** A linear chain `in → BenchS0 → … → bench_sink`, STEPS positions long. */
-abstract class BenchChain extends BoundedOperator
+abstract class BenchChain extends \Flezha\Operator
 {
     /** @var list<class-string<DurableStep>> */
     public const STEP_CLASSES = [
@@ -548,33 +562,33 @@ abstract class BenchChain extends BoundedOperator
     }
 }
 
-#[Operator(factoryId: 'bench_chain_1')]
+#[Operator(factoryId: 'bench_chain_1', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BenchChain1 extends BenchChain
 {
     protected const STEPS = 1;
 }
 
-#[Operator(factoryId: 'bench_chain_4')]
+#[Operator(factoryId: 'bench_chain_4', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BenchChain4 extends BenchChain
 {
     protected const STEPS = 4;
 }
 
-#[Operator(factoryId: 'bench_chain_16')]
+#[Operator(factoryId: 'bench_chain_16', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BenchChain16 extends BenchChain
 {
     protected const STEPS = 16;
 }
 
-#[Operator(factoryId: 'bench_chain_optout_4', persistent: false)]
+#[Operator(factoryId: 'bench_chain_optout_4', run: 'steps', durable: false)]
 final class BenchChainOptout4 extends BenchChain
 {
     protected const STEPS = 4;
 }
 
-// -- bench_loop_bounded -----------------------------------------------------
+// -- bench_loop_steps -----------------------------------------------------
 //
-// The long-lived loop the `turns` scenario drives (bounded_loop.rs:359): the
+// The long-lived loop the `turns` scenario drives (steps_loop.rs:359): the
 // chat loop's shape with a BOUNDED per-turn state, so a million-turn soak
 // snapshots the same few bytes at every iteration. With
 // `FLEZHA_BENCH_WAKE_AFTER_MS` set each turn arms a timer that far out, whose
@@ -611,9 +625,13 @@ final class BenchTurn extends Tasklet
 }
 
 // A day, not the chat loop's ten minutes: a soak outlives 600 s.
-#[Operator(factoryId: 'bench_loop_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 24 * 3_600_000)]
-final class BenchLoopBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'bench_loop_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 24 * 3_600_000,
+)]
+final class BenchLoopSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -624,11 +642,11 @@ final class BenchLoopBounded extends BoundedOperator
     }
 }
 
-// -- static_cell_bounded ----------------------------------------------------
+// -- static_cell_steps ----------------------------------------------------
 //
 // A per-input loop whose one tasklet declares three static cells and routes
 // every message to two of them; each cell that runs emits `<cell key>:<message>`,
-// so one message yields exactly two outputs (bounded.rs).
+// so one message yields exactly two outputs (steps.rs).
 
 #[Task(name: 'static_cell_step', cellKeys: ['a', 'b', 'c'])]
 final class StaticCellStep extends Tasklet
@@ -644,14 +662,72 @@ final class StaticCellStep extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'static_cell_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class StaticCellBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'static_cell_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class StaticCellSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(StaticCellStep::class)
             ->sink('out');
+    }
+}
+
+// -- complete_flow / chained_steps -------------------------------------------
+
+/** Echoes each input and ends its instance on `bye`, the echo of `bye` included. */
+#[Task(name: 'complete_flow_tasklet')]
+final class CompleteFlow extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        if ($input === 'bye') {
+            $ctx->complete($input);
+        }
+        $ctx->emit($input);
+    }
+}
+
+#[Operator(factoryId: 'complete_flow')]
+final class CompleteFlowOperator extends \Flezha\Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input', codec: ChannelCodec::Text)
+            ->into(CompleteFlow::class)
+            ->sink('complete_flow_out');
+    }
+}
+
+/**
+ * Prints `chained_pass <n>` and hands the next pass `n - 1` on its own
+ * channel; the pass at zero hands nothing, and the empty batch ends the loop.
+ */
+#[Task(name: 'chained_countdown')]
+final class ChainedCountdown extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        echo "chained_pass $input\n";
+        $n = (int) $input;
+        if ($n > 0) {
+            $ctx->emit((string) ($n - 1));
+        }
+    }
+}
+
+#[Operator(factoryId: 'chained_steps', run: ['steps' => ['each' => 'chained']])]
+final class ChainedSteps extends \Flezha\Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)
+            ->into(ChainedCountdown::class)
+            ->named('carry');
     }
 }

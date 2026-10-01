@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Flezha\Graph;
 
 /**
- * The declaration the core deserializes.
+ * The declaration the core deserializes. The settings tree goes as the author
+ * wrote it: the core judges it and refuses a misplaced setting by name.
  *
  * Every key here is pinned by `test/fixtures/host_class_decl_keys.txt`, which
  * this package's own test reads: a key the core learns that PHP cannot spell
@@ -40,35 +41,23 @@ final class HostClassDecl
     /** @return array<string, mixed> */
     public static function of(ClassSpec $spec): array
     {
-        $bounded = $spec->bounded;
         $keyed = self::keyedTasklets($spec->channels);
 
         return self::compact([
             'factory_id' => $spec->factoryId,
-            'persistent' => $spec->persistent,
-            'sleep_when_idle' => $spec->sleepWhenIdle,
+            'description' => $spec->description,
+            'max_duration_ms' => $spec->maxDurationMs,
+            'run' => $spec->run,
+            'durable' => $spec->durable,
             'sdk_lang' => self::SDK_LANG_PHP,
             'sdk_version' => self::SDK_VERSION,
             'change_format_id' => self::FORMAT_ID_JSON,
-            'effectively_once' => $spec->effectivelyOnce,
-            'checkpoint_ack' => $spec->checkpointAck,
-            'checkpoint_every' => $spec->checkpointEvery,
-            'checkpoint_outputs' => $spec->checkpointOutputs->value,
-            'checkpoint_max_delay_ms' => $spec->checkpointMaxDelayMs,
-            'correction_window_ms' => $spec->correctionWindowMs,
-            'beyond_window_policy' => $spec->beyondWindowPolicy->value,
             'compact_after_bytes' => $spec->compactAfterBytes,
-            'sync_durability' => $bounded?->syncDurability ?? false,
             'channels' => array_map(self::channel(...), $spec->channels),
             'tasklets' => array_map(
                 static fn (TaskNode $node): array => self::tasklet($node, isset($keyed[$node->index])),
                 $spec->tasklets,
             ),
-            'bounded' => $bounded === null ? null : self::compact([
-                'loop_mode' => $bounded->loopMode->value,
-                'rollback_mode' => $bounded->rollbackMode->value,
-                'max_duration_ms' => $bounded->maxDurationMs,
-            ]),
         ]);
     }
 

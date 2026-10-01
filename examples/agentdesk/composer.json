@@ -1,6 +1,6 @@
 {
     "name": "flezha/agentdesk-example",
-    "description": "The chat sessions the Part 3 guides build: a bounded operator per conversation, behind an HTTP gateway.",
+    "description": "The chat sessions the Part 3 guides build: a steps operator per conversation, behind an HTTP gateway.",
     "type": "project",
     "license": "Apache-2.0",
     "require": {

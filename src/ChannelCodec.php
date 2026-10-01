@@ -64,7 +64,7 @@ enum ChannelCodec: string
     }
 
     /**
-     * What a sink naming no codec sends, and what a bounded completion
+     * What a sink naming no codec sends, and what a steps completion
      * carries: a string as it stands, any other value as JSON. `$owner` is
      * what a refusal names.
      */

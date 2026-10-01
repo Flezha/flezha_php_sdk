@@ -22,7 +22,6 @@ use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 use Flezha\Timer;
 
 #[Task(name: 'session', idleTtlSeconds: 3_600)]
@@ -66,7 +65,7 @@ final class Session extends Tasklet
 }
 
 #[Operator(factoryId: 'sessions')]
-final class SessionOperator extends UnboundedOperator
+final class SessionOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

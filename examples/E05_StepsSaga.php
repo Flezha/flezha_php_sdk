@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * A structured bounded chain, and the compensation an abort runs.
+ * A structured steps chain, and the compensation an abort runs.
  *
  * Each stage is a tasklet; the core's driver hands out one step activation
  * per stage and answers its barrier on completion. If a later stage fails, the
@@ -17,13 +17,10 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
 use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\RollbackMode;
-use Flezha\BoundedOperator;
 
 #[Task(name: 'reserve_stock')]
 final class ReserveStock extends Tasklet
@@ -57,9 +54,8 @@ final class ChargeCard extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'checkout')]
-#[Bounded(rollbackMode: RollbackMode::AllOrNothing)]
-final class CheckoutBounded extends BoundedOperator
+#[Operator(factoryId: 'checkout', run: 'steps')]
+final class CheckoutSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -71,5 +67,5 @@ final class CheckoutBounded extends BoundedOperator
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(CheckoutBounded::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(CheckoutSteps::class)->run();
 }

@@ -30,7 +30,6 @@ namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operator as OperatorAttribute;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Dispatch\Registry;
@@ -45,8 +44,6 @@ use Flezha\Operator;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 use Flezha\Runner;
-use Flezha\UnboundedOperator;
-use Flezha\BoundedOperator;
 
 /**
  * The palette. One fixture tasklet per role the fixture header names; the
@@ -143,14 +140,14 @@ final class RowInterpreter
         'plain/2000000' => PalettePlainMailboxHuge::class,
     ];
 
-    public readonly bool $persistent;
-
-    public readonly bool $bounded;
-
-    public readonly bool $syncDurability;
-
-    /** Unwritten, the row keeps the kind's default rather than declaring it off. */
-    public readonly ?bool $sleepWhenIdle;
+    /**
+     * The row's `class.run(<tree>)` and `class.durable(<tree>)`, decoded from
+     * the tree's JSON: what the attribute takes, a misplaced setting and all.
+     * Absent, the class keeps the default.
+     *
+     * @var array{run?: mixed, durable?: mixed}
+     */
+    public readonly array $settings;
 
     /** @var list<string> */
     private readonly array $steps;
@@ -175,10 +172,7 @@ final class RowInterpreter
             array_map(trim(...), explode(';', $steps)),
             static fn (string $step): bool => $step !== '',
         ));
-        $this->persistent = str_contains($steps, 'class.persistent');
-        $this->bounded = str_contains($steps, 'class.bounded');
-        $this->syncDurability = str_contains($steps, 'class.sync_durability');
-        $this->sleepWhenIdle = str_contains($steps, 'class.sleep_when_idle') ? true : null;
+        $this->settings = $this->classSettings();
         $this->mailbox = $this->mailboxCapacities();
     }
 
@@ -217,15 +211,13 @@ final class RowInterpreter
     }
 
     /**
-     * `<handle>.<link>…` — a chain declared off a handle, a channel knob, a
-     * tasklet knob, or a class flag.
+     * `<handle>.<link>…` — a chain declared off a handle, a channel knob or a
+     * tasklet knob. A class setting was read as the row was loaded.
      */
     private function dotted(Builder $c, string $step): void
     {
         [$head, $rest] = explode('.', $step, 2);
         if ($head === 'class') {
-            $this->classFlag($c, $rest);
-
             return;
         }
 
@@ -319,26 +311,24 @@ final class RowInterpreter
         );
     }
 
-    /**
-     * `class.<flag>[(<value>)]` — the facts the class declares on the builder.
-     * The four the builder does not hold were read as the row's class was
-     * chosen: `persistent` and `sleep_when_idle` are `#[Operator]`'s,
-     * `bounded` the class's kind, and `sync_durability` `#[Bounded operator]`'s.
-     */
-    private function classFlag(Builder $c, string $rest): void
+    /** @return array{run?: mixed, durable?: mixed} */
+    private function classSettings(): array
     {
-        [$flag, $value] = self::splitCall($rest);
-        match ($flag) {
-            'persistent', 'sleep_when_idle', 'bounded', 'sync_durability' => null,
-            'effectively_once' => $c->effectivelyOnce(),
-            'checkpoint_ack' => $c->checkpointAck(),
-            'checkpoint_every' => $c->checkpointEvery((int) $value),
-            'correction_window' => $c->correctionWindow((int) $value),
-            'outputs_at_checkpoint' => $c->outputsAtCheckpoint((int) $value),
-            default => throw new \RuntimeException(
-                "the fixture spells a class flag this interpreter does not map: $flag"
-            ),
-        };
+        $settings = [];
+        foreach ($this->steps as $step) {
+            if (!str_starts_with($step, 'class.')) {
+                continue;
+            }
+            [$setting, $tree] = self::splitCall(substr($step, strlen('class.')));
+            if ($setting !== 'run' && $setting !== 'durable') {
+                throw new \RuntimeException(
+                    "the fixture spells a class setting this interpreter does not map: $setting"
+                );
+            }
+            $settings[$setting] = json_decode($tree, true, flags: JSON_THROW_ON_ERROR);
+        }
+
+        return $settings;
     }
 
     private function handle(string $name): Edge
@@ -392,21 +382,21 @@ final class RowInterpreter
 
 /** Half of the duplicate row's pair. */
 #[OperatorAttribute(factoryId: 'plain', sink: 'out')]
-final class ShorthandDupUnbounded extends UnboundedOperator
+final class ShorthandDupFlow extends Operator
 {
     use PassesThrough;
 }
 
-/** The other half: a bounded operator claiming the id the stream holds. */
-#[OperatorAttribute(factoryId: 'plain', sink: 'twin_sink')]
-final class ShorthandDupBounded extends BoundedOperator
+/** The other half: a steps operator claiming the id the flow holds. */
+#[OperatorAttribute(factoryId: 'plain', run: 'steps', sink: 'twin_sink')]
+final class ShorthandDupSteps extends Operator
 {
     use PassesThrough;
 }
 
 /** A short form that also carries a topology body. */
 #[OperatorAttribute(factoryId: 'plain', sink: 'out')]
-final class ShorthandWithTopology extends UnboundedOperator
+final class ShorthandWithTopology extends Operator
 {
     use PassesThrough;
 
@@ -443,29 +433,13 @@ trait DeclaresTheLoadedRow
 
         return new OperatorAttribute(
             factoryId: $row->factoryId,
-            persistent: $row->persistent,
-            sleepWhenIdle: $row->sleepWhenIdle,
+            run: $row->settings['run'] ?? null,
+            durable: $row->settings['durable'] ?? null,
         );
     }
 }
 
-final class ConformanceRow extends UnboundedOperator
-{
-    use DeclaresTheLoadedRow;
-}
-
-/** A row writing `class.bounded`: the class is of the bounded kind. */
-final class ConformanceBoundedRow extends BoundedOperator
-{
-    use DeclaresTheLoadedRow;
-}
-
-/**
- * A stream row writing `class.sync_durability`, in the one spelling it has:
- * `#[Bounded operator]`, which an unbounded class is refused for carrying.
- */
-#[Bounded(syncDurability: true)]
-final class ConformanceSyncDurableRow extends UnboundedOperator
+final class ConformanceRow extends Operator
 {
     use DeclaresTheLoadedRow;
 }
@@ -479,18 +453,18 @@ final class Conformance
     /**
      * The authoring surfaces this builder carries — the same list the app's
      * `conformance.json` declares. A row needing anything else is skipped BY
-     * NAME, which is what makes the skip checkable. The class flag a typed
-     * builder cannot spell is `#[Bounded(syncDurability: true)]` here, on
-     * the unbounded class the row declares.
+     * NAME, which is what makes the skip checkable. The settings tree is an
+     * attribute argument written as data here, so a setting can sit under any
+     * parent.
      */
     private const SURFACES = [
         'branch',
         'merge',
-        'bounded',
-        'sync_durability',
+        'steps',
         'shorthand',
         'response',
         'call',
+        'untyped_tree',
     ];
 
     /**
@@ -499,15 +473,15 @@ final class Conformance
      * attribute, which is written where the class is, so the step selects the
      * class whose declaration is that shape rather than building one.
      *
-     * Keyed by `<kind> <id>|<sink>|<input>` with `-` for an unwritten field,
+     * Keyed by `<run> <id>|<sink>|<input>` with `-` for an unwritten field,
      * then the step's modifier: `.topology` for a declaration that also
-     * carries a topology body. A row's first step is an unbounded operator and its second
-     * a bounded operator, so a collision crosses kinds.
+     * carries a topology body. A row's first step is a flow operator and its
+     * second a steps operator, so a collision crosses runs.
      */
     private const SHORTHAND_PALETTE = [
-        'unbounded plain|out|-' => ShorthandDupUnbounded::class,
-        'bounded plain|twin_sink|-' => ShorthandDupBounded::class,
-        'unbounded plain|out|-.topology' => ShorthandWithTopology::class,
+        'flow plain|out|-' => ShorthandDupFlow::class,
+        'steps plain|twin_sink|-' => ShorthandDupSteps::class,
+        'flow plain|out|-.topology' => ShorthandWithTopology::class,
     ];
 
     /**
@@ -516,7 +490,7 @@ final class Conformance
      */
     private const CITED = [
         'hybrid_channel' => HybridChannelOperator::class,
-        'commit_block_chain' => TierCommitBlockBounded::class,
+        'commit_block_chain' => TierCommitBlockSteps::class,
     ];
 
     private function __construct()
@@ -567,8 +541,8 @@ final class Conformance
             if (count($fields) !== 3) {
                 throw new \RuntimeException("a shorthand step declares three fields: read `$step`");
             }
-            $kind = $classes === [] ? 'unbounded' : 'bounded';
-            $key = "$kind " . implode('|', $fields) . substr($step, $close + 1);
+            $run = $classes === [] ? 'flow' : 'steps';
+            $key = "$run " . implode('|', $fields) . substr($step, $close + 1);
             $classes[] = self::SHORTHAND_PALETTE[$key]
                 ?? throw new \RuntimeException("the palette has no class for `$step`");
         }
@@ -686,13 +660,9 @@ final class Conformance
             return $cited;
         }
 
-        $loaded = RowInterpreter::$row = new RowInterpreter($row['topology'], $row['steps']);
+        RowInterpreter::$row = new RowInterpreter($row['topology'], $row['steps']);
 
-        return match (true) {
-            $loaded->bounded => ConformanceBoundedRow::class,
-            $loaded->syncDurability => ConformanceSyncDurableRow::class,
-            default => ConformanceRow::class,
-        };
+        return ConformanceRow::class;
     }
 
     /**

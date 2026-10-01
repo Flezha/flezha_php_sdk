@@ -28,7 +28,6 @@ use Flezha\Graph\Builder;
 use Flezha\LocalOperator;
 use Flezha\Tasklet;
 use Flezha\SinkOutput;
-use Flezha\UnboundedOperator;
 
 /** One line into its words: the hop to `Tally` is the runtime's job. */
 #[Task(name: 'split')]
@@ -66,7 +65,7 @@ final class Tally extends Tasklet
 }
 
 #[Operator(factoryId: 'local_word_count_example')]
-final class WordCountOperator extends UnboundedOperator
+final class WordCountOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

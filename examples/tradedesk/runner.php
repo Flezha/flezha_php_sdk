@@ -11,7 +11,7 @@ declare(strict_types=1);
  *
  * Registering a factory starts nothing: it offers the controller operators of that type, which are
  * started from it later. `registerFactory` is the same call for both kinds, the stream that tracks
- * prices and the bounded operator that places one order.
+ * prices and the steps operator that places one order.
  */
 
 require __DIR__ . '/vendor/autoload.php';

@@ -6,9 +6,7 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
-use Flezha\CheckpointOutputs;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Dispatch\Registry;
@@ -21,28 +19,25 @@ use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
-use Flezha\LoopMode;
 use Flezha\Operator as OperatorBase;
 use Flezha\Tasklet;
 use Flezha\Runner;
-use Flezha\UnboundedOperator;
 use Flezha\Testing\Harness;
 use Flezha\Timer;
 use Flezha\Transforms;
-use Flezha\BoundedOperator;
 
 // ---------------------------------------------------------------------------
 // The §5 short form
 
 #[Operator(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
-final class ShortUpcase extends UnboundedOperator
+final class ShortUpcase extends OperatorBase
 {
     use Echoes;
 }
 
 /** `ShortUpcase` as its full form, the tasklet named after the factory id. */
 #[Operator(factoryId: 'sf_upcase')]
-final class ShortUpcaseTwinOperator extends UnboundedOperator
+final class ShortUpcaseTwinOperator extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -52,14 +47,14 @@ final class ShortUpcaseTwinOperator extends UnboundedOperator
     }
 }
 
-#[Operator(factoryId: 'sf_place', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
-final class ShortPlace extends BoundedOperator
+#[Operator(factoryId: 'sf_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+final class ShortPlace extends OperatorBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_place')]
-final class ShortPlaceTwinOperator extends BoundedOperator
+#[Operator(factoryId: 'sf_place', run: 'steps')]
+final class ShortPlaceTwinOperator extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -69,15 +64,15 @@ final class ShortPlaceTwinOperator extends BoundedOperator
     }
 }
 
-/** A bounded short form under the id `ShortUpcase` already holds. */
-#[Operator(factoryId: 'sf_upcase', sink: 'placed')]
-final class ShortUpcaseBounded extends BoundedOperator
+/** A steps short form under the id `ShortUpcase` already holds. */
+#[Operator(factoryId: 'sf_upcase', run: 'steps', sink: 'placed')]
+final class ShortUpcaseSteps extends OperatorBase
 {
     use Echoes;
 }
 
 #[Operator(factoryId: 'sf_both', sink: 'out')]
-final class ShortWithTopology extends UnboundedOperator
+final class ShortWithTopology extends OperatorBase
 {
     use Echoes;
 
@@ -88,44 +83,46 @@ final class ShortWithTopology extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_no_body')]
-final class ShortNoBody extends UnboundedOperator
+final class ShortNoBody extends OperatorBase
 {
 }
 
-final class ShortUnattributed extends UnboundedOperator
+final class ShortUnattributed extends OperatorBase
 {
     use Echoes;
 }
 
 #[Operator(factoryId: 'sf_renamed')]
 #[Task(name: 'elsewhere')]
-final class ShortRenamed extends UnboundedOperator
+final class ShortRenamed extends OperatorBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_unpersisted', persistent: false)]
-final class ShortUnpersisted extends UnboundedOperator
+#[Operator(factoryId: 'sf_unpersisted', durable: false)]
+final class ShortUnpersisted extends OperatorBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_per_input')]
-#[Bounded(loopMode: LoopMode::PerInput)]
-final class ShortPerInput extends BoundedOperator
+#[Operator(factoryId: 'sf_per_input', run: ['steps' => ['each' => 'per_input']])]
+final class ShortPerInput extends OperatorBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_per_input_time_limited')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 60_000)]
-final class ShortPerInputTimeLimited extends BoundedOperator
+#[Operator(
+    factoryId: 'sf_per_input_time_limited',
+    run: ['steps' => ['each' => 'per_input']],
+    maxDurationMs: 60_000,
+)]
+final class ShortPerInputTimeLimited extends OperatorBase
 {
     use Echoes;
 }
 
 #[Operator(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
-final class ShortCodecOnTopology extends UnboundedOperator
+final class ShortCodecOnTopology extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -135,7 +132,7 @@ final class ShortCodecOnTopology extends UnboundedOperator
 
 #[Operator(factoryId: 'sf_task_on_topology')]
 #[Task(mailboxCapacity: 8)]
-final class ShortTaskOnTopology extends UnboundedOperator
+final class ShortTaskOnTopology extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -145,7 +142,7 @@ final class ShortTaskOnTopology extends UnboundedOperator
 
 /** A fold taking the state by value, which would fold into a copy. */
 #[Operator(factoryId: 'sf_fold_by_value')]
-final class ShortFoldByValue extends UnboundedOperator
+final class ShortFoldByValue extends OperatorBase
 {
     use Echoes;
 
@@ -161,7 +158,7 @@ final class ShortFoldByValue extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_narrowed_key')]
-final class ShortNarrowedKey extends UnboundedOperator
+final class ShortNarrowedKey extends OperatorBase
 {
     use Echoes;
 
@@ -172,7 +169,7 @@ final class ShortNarrowedKey extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_wider_keys')]
-final class ShortWiderKeys extends UnboundedOperator
+final class ShortWiderKeys extends OperatorBase
 {
     use Echoes;
 
@@ -183,7 +180,7 @@ final class ShortWiderKeys extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_void_state')]
-final class ShortVoidState extends UnboundedOperator
+final class ShortVoidState extends OperatorBase
 {
     use Echoes;
 
@@ -192,8 +189,8 @@ final class ShortVoidState extends UnboundedOperator
     }
 }
 
-#[Operator(factoryId: 'sf_untyped_return')]
-final class ShortUntypedReturn extends BoundedOperator
+#[Operator(factoryId: 'sf_untyped_return', run: 'steps')]
+final class ShortUntypedReturn extends OperatorBase
 {
     use Echoes;
 
@@ -203,7 +200,7 @@ final class ShortUntypedReturn extends BoundedOperator
 }
 
 #[Operator(factoryId: 'sf_extra_argument')]
-final class ShortExtraArgument extends UnboundedOperator
+final class ShortExtraArgument extends OperatorBase
 {
     use Echoes;
 
@@ -213,7 +210,7 @@ final class ShortExtraArgument extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_dropped_argument')]
-final class ShortDroppedArgument extends UnboundedOperator
+final class ShortDroppedArgument extends OperatorBase
 {
     use Echoes;
 
@@ -223,7 +220,7 @@ final class ShortDroppedArgument extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_intersected_timer')]
-final class ShortIntersectedTimer extends UnboundedOperator
+final class ShortIntersectedTimer extends OperatorBase
 {
     use Echoes;
 
@@ -233,7 +230,7 @@ final class ShortIntersectedTimer extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'sf_static_hook')]
-final class ShortStaticHook extends UnboundedOperator
+final class ShortStaticHook extends OperatorBase
 {
     use Echoes;
 
@@ -243,8 +240,8 @@ final class ShortStaticHook extends UnboundedOperator
     }
 }
 
-#[Operator(factoryId: 'sf_hidden_hook')]
-final class ShortHiddenHook extends BoundedOperator
+#[Operator(factoryId: 'sf_hidden_hook', run: 'steps')]
+final class ShortHiddenHook extends OperatorBase
 {
     use Echoes;
 
@@ -254,8 +251,8 @@ final class ShortHiddenHook extends BoundedOperator
 }
 
 /** Every widening PHP lets an override of these hooks make. */
-#[Operator(factoryId: 'sf_widened_hooks')]
-final class ShortWidenedHooks extends BoundedOperator
+#[Operator(factoryId: 'sf_widened_hooks', run: 'steps')]
+final class ShortWidenedHooks extends OperatorBase
 {
     use Echoes;
 
@@ -282,8 +279,8 @@ final class ShortWidenedHooks extends BoundedOperator
     }
 }
 
-#[Task(name: 'sf_task_kind', kind: 'unbounded')]
-final class TaskWithKind extends Tasklet
+#[Task(name: 'sf_task_run', run: 'steps')]
+final class TaskWithRun extends Tasklet
 {
     use Echoes;
 }
@@ -414,12 +411,12 @@ final class AuthoringTest extends RepositoryTestCase
         Unattributed::spec();
     }
 
-    public function testABoundedDeclaringNoTaskletsIsRefused(): void
+    public function testAStepsClassDeclaringNoTaskletsIsRefused(): void
     {
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionCode('topology.no_bounded_body');
+        $this->expectExceptionCode('topology.no_steps_body');
 
-        EmptyBounded::spec();
+        EmptySteps::spec();
     }
 
     /**
@@ -510,24 +507,6 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /**
-     * The three checkpoint options each write their own raw flag now — the
-     * granularity is the core's to imply — so none may clear another.
-     */
-    public function testTheCheckpointOptionsComposeInAnyOrderAndNoneClearsAnother(): void
-    {
-        $builder = new Builder('compose');
-        $builder->effectivelyOnce();
-        $builder->outputsAtCheckpoint(250);
-        $builder->checkpointAck();
-        $builder->checkpointEvery(4);
-
-        self::assertTrue($builder->checkpointAck);
-        self::assertSame(4, $builder->checkpointEvery);
-        self::assertSame(CheckpointOutputs::AtCheckpoint, $builder->checkpointOutputs);
-        self::assertSame(250, $builder->checkpointMaxDelayMs);
-    }
-
-    /**
      * Submit a graph declared inline, and answer the core's derived
      * declaration.
      *
@@ -537,33 +516,34 @@ final class AuthoringTest extends RepositoryTestCase
      *
      * @return array<string, mixed>
      */
-    private static function validate(callable $channels): array
+    private static function validate(callable $channels, mixed $run = null, mixed $durable = null): array
+    {
+        $core = Core::create();
+
+        try {
+            return Validate::spec(self::spec($channels, $run, $durable), $core);
+        } finally {
+            $core->free();
+        }
+    }
+
+    /** A class declared inline, with the settings tree as written. */
+    private static function spec(callable $channels, mixed $run = null, mixed $durable = null): ClassSpec
     {
         $builder = new Builder('under_test');
         $channels($builder);
         $builder->seal();
 
-        $core = Core::create();
-
-        try {
-            return Validate::spec(new ClassSpec(
-                factoryId: 'under_test',
-                kind: 'unbounded',
-                persistent: true,
-                effectivelyOnce: $builder->effectivelyOnce,
-                checkpointAck: $builder->checkpointAck,
-                checkpointEvery: $builder->checkpointEvery,
-                checkpointOutputs: $builder->checkpointOutputs,
-                checkpointMaxDelayMs: $builder->checkpointMaxDelayMs,
-                correctionWindowMs: $builder->correctionWindowMs,
-                beyondWindowPolicy: $builder->beyondWindowPolicy,
-                compactAfterBytes: $builder->compactAfterBytes,
-                tasklets: $builder->tasklets,
-                channels: $builder->channels,
-            ), $core);
-        } finally {
-            $core->free();
-        }
+        return new ClassSpec(
+            factoryId: 'under_test',
+            description: null,
+            maxDurationMs: null,
+            run: $run,
+            durable: $durable,
+            compactAfterBytes: $builder->compactAfterBytes,
+            tasklets: $builder->tasklets,
+            channels: $builder->channels,
+        );
     }
 
     /**
@@ -855,90 +835,85 @@ final class AuthoringTest extends RepositoryTestCase
         );
     }
 
-    /** @return iterable<string, array{class-string<OperatorBase>, string}> */
-    public static function unboundedSettingsOnABounded(): iterable
+    /** @return iterable<string, array{string, array<string, mixed>, string, string}> */
+    public static function misplacedSettings(): iterable
     {
-        yield 'the effectively-once tier' => [TierBounded::class, 'topology.effectively_once_on_bounded'];
-        yield 'a checkpoint interval' => [CheckpointBounded::class, 'topology.checkpoint_on_bounded'];
-        yield 'a correction window' => [CorrectionBounded::class, 'topology.correction_window_on_bounded'];
+        yield 'each under flow' => ['run', ['flow' => ['each' => 'per_input']], 'each', 'flow'];
+        yield 'correction_ms under steps' => ['run', ['steps' => ['correction_ms' => 5_000]], 'correction_ms', 'steps'];
+        yield 'ack under at_least_once' => [
+            'run', ['flow' => ['exactly' => ['at_least_once' => ['ack' => 'checkpoint']]]], 'ack', 'at_least_once',
+        ];
+        yield 'sleep_after under false' => ['durable', ['false' => ['sleep_after' => 1_000]], 'sleep_after', 'false'];
     }
 
     /**
-     * What a bounded operator's builder wrote reaches the core, which refuses a
-     * unbounded-only setting under its own name.
+     * The tree reaches the core as written, and a setting under a parent that
+     * does not carry it is refused there by its own name and its parent's.
      *
-     * @dataProvider unboundedSettingsOnABounded
-     * @param class-string<OperatorBase> $class
+     * @dataProvider misplacedSettings
+     * @param array<string, mixed> $tree
      */
-    public function testAnUnboundedOnlySettingOnABoundedIsRefusedByTheCoresName(string $class, string $name): void
-    {
+    public function testAMisplacedSettingIsRefusedNamingItAndItsParent(
+        string $setting,
+        array $tree,
+        string $field,
+        string $parent,
+    ): void {
         try {
-            self::derived($class::spec());
-            self::fail("a bounded writing what $name names was accepted");
+            self::validate(static fn (Builder $c) => $c->input('in')->into(Echoer::class), ...[$setting => $tree]);
+            self::fail("$field under $parent was accepted");
         } catch (FlezhaException $e) {
-            self::assertSame([$name], array_column($e->details['issues'], 'code'));
+            self::assertSame(['topology.unknown_field'], array_column($e->details['issues'], 'code'));
+            self::assertStringContainsString($field, $e->getMessage());
+            self::assertStringContainsString("'$parent'", $e->getMessage());
         }
     }
 
-    /** @return iterable<string, array{class-string<OperatorBase>, bool}> */
-    public static function sleepDefaults(): iterable
+    public function testARemoteFlowClassIsRefusedByName(): void
     {
-        yield 'a persistent bounded' => [SleepDefaultBounded::class, true];
-        yield 'a bounded operator with persistence off' => [UnpersistedBounded::class, false];
-        yield 'an unbounded operator' => [SleepDefaultUnbounded::class, false];
+        try {
+            self::validate(static fn (Builder $c) => $c->input('in')->into(Echoer::class), durable: 'remote');
+            self::fail('a remote flow class was accepted');
+        } catch (FlezhaException $e) {
+            self::assertSame(['topology.remote_on_flow'], array_column($e->details['issues'], 'code'));
+        }
+    }
+
+    /** @return iterable<string, array{string|array<string, mixed>, string}> */
+    public static function valuesOutsideTheirChoice(): iterable
+    {
+        yield 'a loop shape' => [['steps' => ['each' => 'forever']], 'forever'];
+        yield 'a failure mode' => [['steps' => ['on_failure' => 'best_effort']], 'best_effort'];
+        yield 'a retired kind' => ['bounded', 'bounded'];
     }
 
     /**
-     * Unwritten, sleeping follows persistence on a bounded operator and is off on an unbounded operator.
-     *
-     * @dataProvider sleepDefaults
-     * @param class-string<OperatorBase> $class
+     * @dataProvider valuesOutsideTheirChoice
+     * @param string|array<string, mixed> $run
      */
-    public function testSleepingDefaultsToPersistenceOnABoundedOnly(string $class, bool $sleeps): void
-    {
-        self::assertSame($sleeps, HostClassDecl::of($class::spec())['sleep_when_idle']);
-    }
-
-    /** @return iterable<string, array{class-string<OperatorBase>}> */
-    public static function sleepersWithoutPersistence(): iterable
-    {
-        yield 'an unbounded operator' => [UnpersistedSleepingUnbounded::class];
-        yield 'a bounded operator' => [UnpersistedSleepingBounded::class];
-    }
-
-    /**
-     * @dataProvider sleepersWithoutPersistence
-     * @param class-string<OperatorBase> $class
-     */
-    public function testSleepingWithoutPersistenceIsRefusedByName(string $class): void
+    public function testAValueOutsideItsChoiceIsRefusedNamingIt(string|array $run, string $value): void
     {
         try {
-            self::derived($class::spec());
-            self::fail("$class sleeps with persistence off and was accepted");
+            self::validate(static fn (Builder $c) => $c->input('in')->into(Echoer::class), $run);
+            self::fail("the run $value was accepted");
         } catch (FlezhaException $e) {
-            self::assertSame(['topology.sleep_without_persistence'], array_column($e->details['issues'], 'code'));
+            self::assertSame(['topology.invalid_setting'], array_column($e->details['issues'], 'code'));
+            self::assertStringContainsString($value, $e->getMessage());
         }
     }
 
-    public function testABoundedAttributeOnAnUnboundedIsRefusedAtRegistrationNamingIt(): void
+    public function testTheDurabilityReachesTheDeclarationAsWritten(): void
     {
-        try {
-            Flezha::createRunner('test')->registerFactory(PerInputStream::class);
-            self::fail('an unbounded operator carrying #[Bounded] was registered');
-        } catch (FlezhaException $e) {
-            self::assertSame(
-                ['topology.bounded_setting_on_unbounded', ['#[Bounded] on ' . PerInputStream::class]],
-                [$e->getCode(), $e->details['settings']],
-            );
-        }
-    }
+        $durable = static fn (mixed $tree): mixed => HostClassDecl::of(self::spec(
+            static fn (Builder $c) => $c->input('in')->into(Echoer::class),
+            'steps',
+            $tree,
+        ))['durable'] ?? null;
 
-    public function testSynchronousDurabilityOnAnUnboundedIsRefusedByTheCoresCode(): void
-    {
-        $this->expectException(FlezhaException::class);
-        $this->expectExceptionCode('topology.sync_durability_on_unbounded');
-
-        Flezha::createRunner('test')->registerFactory(SyncDurableUnbounded::class);
+        self::assertSame(
+            [null, false, ['local' => ['sleep_after' => false]]],
+            [$durable(null), $durable(false), $durable(['local' => ['sleep_after' => false]])],
+        );
     }
 
     // -- channel codecs --------------------------------------------------------
@@ -1094,8 +1069,8 @@ final class AuthoringTest extends RepositoryTestCase
     /** @return iterable<string, array{class-string<OperatorBase>, class-string<OperatorBase>}> */
     public static function shortFormTwins(): iterable
     {
-        yield 'an unbounded operator' => [ShortUpcase::class, ShortUpcaseTwinOperator::class];
-        yield 'a bounded operator' => [ShortPlace::class, ShortPlaceTwinOperator::class];
+        yield 'a flow operator' => [ShortUpcase::class, ShortUpcaseTwinOperator::class];
+        yield 'a steps operator' => [ShortPlace::class, ShortPlaceTwinOperator::class];
     }
 
     /**
@@ -1112,24 +1087,28 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $spec = $short::spec();
 
-        self::assertSame($hand::spec()->kind, $spec->kind);
+        self::assertSame($hand::spec()->run, $spec->run);
         self::assertSame(HostClassDecl::of($hand::spec()), HostClassDecl::of($spec));
         self::assertSame([$spec->factoryId], array_column($spec->tasklets, 'name'));
         self::derived($spec);
     }
 
-    public function testABoundedShortFormIsAOnceBounded(): void
-    {
-        self::assertSame(LoopMode::Once, ShortPlace::spec()->bounded?->loopMode);
-    }
-
-    public function testABoundedShortFormDeclaresTheLoopModeItWrites(): void
+    public function testAStepsShortFormDeclaresTheLoopShapeItWrites(): void
     {
         $spec = ShortPerInput::spec();
 
-        self::assertSame('per_input', HostClassDecl::of($spec)['bounded']['loop_mode']);
+        self::assertSame(['steps' => ['each' => 'per_input']], HostClassDecl::of($spec)['run']);
         self::assertSame(['sf_per_input'], array_column($spec->tasklets, 'name'));
         self::derived($spec);
+    }
+
+    public function testAShortFormTakesTheClassSettings(): void
+    {
+        $unkept = HostClassDecl::of(ShortUnpersisted::spec());
+        $limited = HostClassDecl::of(ShortPerInputTimeLimited::spec());
+
+        self::assertSame([false, 60_000], [$unkept['durable'], $limited['max_duration_ms']]);
+        self::derived(ShortPerInputTimeLimited::spec());
     }
 
     public function testASinklessShortFormDeclaresItsEntryIntoItsTaskletAndNothingElse(): void
@@ -1197,17 +1176,6 @@ final class AuthoringTest extends RepositoryTestCase
             'topology.short_form_name_mismatch',
             'a short form\'s tasklet is named after its id',
         ];
-        // A class-level setting but the loop mode is the full form's to write.
-        yield 'a short form with persistence off' => [
-            static fn (): mixed => ShortUnpersisted::spec(),
-            'topology.setting_on_short_form',
-            'declares `persistent: false` on #[Operator], which a short form does not carry',
-        ];
-        yield 'a short form with a bounded setting beside its loop mode' => [
-            static fn (): mixed => ShortPerInputTimeLimited::spec(),
-            'topology.setting_on_short_form',
-            'declares `maxDurationMs` on #[Bounded], which a short form does not carry',
-        ];
         yield 'a short-form argument beside a topology body' => [
             static fn (): mixed => ShortCodecOnTopology::spec(),
             'topology.short_form_field_on_full_form',
@@ -1225,8 +1193,8 @@ final class AuthoringTest extends RepositoryTestCase
         ];
         yield 'a tasklet registered as an operator' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(Echoer::class),
-            'topology.unknown_operator_kind',
-            'declares neither an unbounded nor a bounded operator',
+            'topology.no_operator_exported',
+            'exports no operator declaration',
         ];
     }
 
@@ -1301,7 +1269,7 @@ final class AuthoringTest extends RepositoryTestCase
     /** @return iterable<string, array{class-string<Tasklet>, string}> */
     public static function taskletsWithAnOperatorArgument(): iterable
     {
-        yield 'kind' => [TaskWithKind::class, 'kind'];
+        yield 'run' => [TaskWithRun::class, 'run'];
         yield 'sink' => [TaskWithSink::class, 'sink'];
         yield 'input' => [TaskWithInput::class, 'input'];
         yield 'codec' => [TaskWithCodec::class, 'codec'];
@@ -1320,7 +1288,7 @@ final class AuthoringTest extends RepositoryTestCase
         Flezha::createRunner('test')->registerFactory($class);
     }
 
-    public function testAnUnboundedAndABoundedShortFormUnderOneIdCollide(): void
+    public function testAFlowAndAStepsShortFormUnderOneIdCollide(): void
     {
         $registry = new Registry();
         $registry->add(ShortUpcase::spec());
@@ -1329,7 +1297,7 @@ final class AuthoringTest extends RepositoryTestCase
         $this->expectExceptionCode('topology.duplicate_factory_id');
         $this->expectExceptionMessage("factory 'sf_upcase'");
 
-        $registry->add(ShortUpcaseBounded::spec());
+        $registry->add(ShortUpcaseSteps::spec());
     }
 
     /**
@@ -1349,7 +1317,7 @@ final class AuthoringTest extends RepositoryTestCase
 }
 
 #[Operator(factoryId: 'fan_out')]
-final class FanOut extends UnboundedOperator
+final class FanOut extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1360,7 +1328,7 @@ final class FanOut extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'branched')]
-final class Branched extends UnboundedOperator
+final class Branched extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1372,7 +1340,7 @@ final class Branched extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'hybrid')]
-final class Hybrid extends UnboundedOperator
+final class Hybrid extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1382,7 +1350,7 @@ final class Hybrid extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'keyed_hybrid')]
-final class KeyedHybrid extends UnboundedOperator
+final class KeyedHybrid extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1392,7 +1360,7 @@ final class KeyedHybrid extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'per_edge_transform')]
-final class PerEdgeTransform extends UnboundedOperator
+final class PerEdgeTransform extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1402,107 +1370,12 @@ final class PerEdgeTransform extends UnboundedOperator
     }
 }
 
-#[Operator(factoryId: 'tier_bounded')]
-final class TierBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->effectivelyOnce();
-        $c->input('in')->into(Counter::class)->keyed()->sink('out');
-    }
-}
-
-#[Operator(factoryId: 'checkpoint_bounded')]
-final class CheckpointBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->checkpointEvery(500);
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'correction_bounded')]
-final class CorrectionBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->correctionWindow(60_000);
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'per_input_unbounded')]
-#[Bounded(loopMode: LoopMode::PerInput)]
-final class PerInputStream extends UnboundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'sync_durable_unbounded')]
-#[Bounded(syncDurability: true)]
-final class SyncDurableUnbounded extends UnboundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-final class Unattributed extends UnboundedOperator
+final class Unattributed extends OperatorBase
 {
 }
 
-#[Operator(factoryId: 'sleep_default_bounded')]
-final class SleepDefaultBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'unpersisted_bounded', persistent: false)]
-final class UnpersistedBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'sleep_default_unbounded')]
-final class SleepDefaultUnbounded extends UnboundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'unpersisted_sleeping_unbounded', persistent: false, sleepWhenIdle: true)]
-final class UnpersistedSleepingUnbounded extends UnboundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'unpersisted_sleeping_bounded', persistent: false, sleepWhenIdle: true)]
-final class UnpersistedSleepingBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class);
-    }
-}
-
-#[Operator(factoryId: 'empty_bounded')]
-final class EmptyBounded extends BoundedOperator
+#[Operator(factoryId: 'empty_steps', run: 'steps')]
+final class EmptySteps extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1510,7 +1383,7 @@ final class EmptyBounded extends BoundedOperator
 }
 
 #[Operator(factoryId: 'named_sink')]
-final class NamedSink extends UnboundedOperator
+final class NamedSink extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1519,7 +1392,7 @@ final class NamedSink extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'unnamed_sink')]
-final class UnnamedSink extends UnboundedOperator
+final class UnnamedSink extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1528,7 +1401,7 @@ final class UnnamedSink extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'named_twice')]
-final class NamedTwice extends UnboundedOperator
+final class NamedTwice extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1537,7 +1410,7 @@ final class NamedTwice extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'trailing_named')]
-final class TrailingNamed extends UnboundedOperator
+final class TrailingNamed extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1546,7 +1419,7 @@ final class TrailingNamed extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'trailing_keyed')]
-final class TrailingKeyed extends UnboundedOperator
+final class TrailingKeyed extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1555,7 +1428,7 @@ final class TrailingKeyed extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'one_sink_two_channels')]
-final class OneSinkTwoChannels extends UnboundedOperator
+final class OneSinkTwoChannels extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1565,7 +1438,7 @@ final class OneSinkTwoChannels extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'answers')]
-final class Answers extends UnboundedOperator
+final class Answers extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1574,7 +1447,7 @@ final class Answers extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'answers_and_feeds')]
-final class AnswersAndFeeds extends UnboundedOperator
+final class AnswersAndFeeds extends OperatorBase
 {
     public static function channels(Builder $c): void
     {
@@ -1583,7 +1456,7 @@ final class AnswersAndFeeds extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'diamond')]
-final class Diamond extends UnboundedOperator
+final class Diamond extends OperatorBase
 {
     public static function channels(Builder $c): void
     {

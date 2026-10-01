@@ -17,17 +17,13 @@ namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
-use Flezha\LoopMode;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 use Flezha\Timer;
-use Flezha\BoundedOperator;
 
 /** The readings of a text input every fixture that talks to another SDK shares. */
 final class Wire
@@ -45,6 +41,25 @@ final class Wire
     }
 }
 
+// Settings trees the environment chooses, defined before any class registers:
+// an attribute argument is read then, and a constant is what it may name.
+//
+// A kept instance that sleeps after `FLEZHA_FIXTURE_SLEEP_AFTER_MS`, so a test
+// can watch one sleep; the class default when the variable is unset.
+define(__NAMESPACE__ . '\\FIXTURE_DURABLE', Wire::int(getenv('FLEZHA_FIXTURE_SLEEP_AFTER_MS')) > 0
+    ? ['local' => ['sleep_after' => Wire::int(getenv('FLEZHA_FIXTURE_SLEEP_AFTER_MS'))]]
+    : 'local');
+
+// `bench_checkpoint`'s acknowledgement: every `FLEZHA_BENCH_CHECKPOINT_EVERY`
+// inputs, and with `FLEZHA_BENCH_CHECKPOINT_OUTPUTS=at_checkpoint` its outputs
+// held until the interval closes, for at most `FLEZHA_BENCH_CHECKPOINT_DELAY_MS`.
+define(__NAMESPACE__ . '\\BENCH_CHECKPOINT', ['checkpoint' => [
+    'every' => Wire::int(getenv('FLEZHA_BENCH_CHECKPOINT_EVERY')) ?: 500,
+    ...(getenv('FLEZHA_BENCH_CHECKPOINT_OUTPUTS') === 'at_checkpoint'
+        ? ['outputs' => 'at_checkpoint', 'max_delay_ms' => Wire::int(getenv('FLEZHA_BENCH_CHECKPOINT_DELAY_MS')) ?: 50]
+        : []),
+]]);
+
 // -- do_nothing / bench_echo -------------------------------------------------
 
 #[Task(name: 'do_nothing_tasklet')]
@@ -57,7 +72,7 @@ final class DoNothing extends Tasklet
 }
 
 #[Operator(factoryId: 'do_nothing')]
-final class DoNothingOperator extends UnboundedOperator
+final class DoNothingOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -73,7 +88,7 @@ final class DoNothingOperator extends UnboundedOperator
  * bench's back-pressure posture independent of it.
  */
 #[Operator(factoryId: 'bench_echo')]
-final class BenchEchoOperator extends UnboundedOperator
+final class BenchEchoOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -106,7 +121,7 @@ final class CompareFilter extends Tasklet
 }
 
 #[Operator(factoryId: 'compare_filter')]
-final class CompareFilterOperator extends UnboundedOperator
+final class CompareFilterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -178,7 +193,7 @@ final class MacroStaticDownstream extends PassThrough
 }
 
 #[Operator(factoryId: 'static_cell')]
-final class StaticCellOperator extends UnboundedOperator
+final class StaticCellOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -194,7 +209,7 @@ final class StaticCellOperator extends UnboundedOperator
  * the producing channel.
  */
 #[Operator(factoryId: 'sugar_static_cell')]
-final class SugarStaticCellOperator extends UnboundedOperator
+final class SugarStaticCellOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -216,7 +231,7 @@ final class MixedHandDownstream extends PassThrough
 }
 
 #[Operator(factoryId: 'mixed_operator')]
-final class MixedOperator extends UnboundedOperator
+final class MixedOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -234,13 +249,13 @@ final class MixedOperator extends UnboundedOperator
 // class stands beside them.
 
 #[Operator(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
-final class SugarDoNothing extends UnboundedOperator
+final class SugarDoNothing extends \Flezha\Operator
 {
     use PassesThrough;
 }
 
 #[Operator(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
-final class SugarStoreInput extends UnboundedOperator
+final class SugarStoreInput extends \Flezha\Operator
 {
     public function initState(?string $cellKey): mixed
     {
@@ -266,28 +281,40 @@ final class SugarStoreInput extends UnboundedOperator
     input: 'prices',
     codec: ChannelCodec::Text,
 )]
-final class SugarNamedInput extends UnboundedOperator
+final class SugarNamedInput extends \Flezha\Operator
 {
     use PassesThrough;
 }
 
-#[Operator(factoryId: 'sugar_bounded', sink: 'sugar_bounded_placed', input: 'order', codec: ChannelCodec::Text)]
-final class SugarBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'sugar_steps',
+    run: 'steps',
+    durable: FIXTURE_DURABLE,
+    sink: 'sugar_steps_placed',
+    input: 'order',
+    codec: ChannelCodec::Text,
+)]
+final class SugarSteps extends \Flezha\Operator
 {
     use PassesThrough;
 }
 
 /** The loop mode, the one class-level setting a short form keeps. */
-#[Operator(factoryId: 'sugar_bounded_per_input', sink: 'sugar_bounded_per_input_out', codec: ChannelCodec::Text)]
-#[Bounded(loopMode: LoopMode::PerInput)]
-final class SugarBoundedPerInput extends BoundedOperator
+#[Operator(
+    factoryId: 'sugar_steps_per_input',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    sink: 'sugar_steps_per_input_out',
+    codec: ChannelCodec::Text,
+)]
+final class SugarStepsPerInput extends \Flezha\Operator
 {
     use PassesThrough;
 }
 
 /** No `sink`: the tasklet only keeps what it is sent, and answers nothing. */
 #[Operator(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
-final class SugarStateOnly extends UnboundedOperator
+final class SugarStateOnly extends \Flezha\Operator
 {
     public function initState(?string $cellKey): mixed
     {
@@ -340,7 +367,7 @@ final class HybridConsumer extends Tasklet
 }
 
 #[Operator(factoryId: 'hybrid_channel')]
-final class HybridChannelOperator extends UnboundedOperator
+final class HybridChannelOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -375,7 +402,7 @@ final class MergeLabel extends Tasklet
 }
 
 #[Operator(factoryId: 'merged_input')]
-final class MergedInputOperator extends UnboundedOperator
+final class MergedInputOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -412,7 +439,7 @@ final class TransformLabel extends PassThrough
 }
 
 #[Operator(factoryId: 'transform_chain')]
-final class TransformChainOperator extends UnboundedOperator
+final class TransformChainOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -473,7 +500,7 @@ final class StressD extends StressToP0
 }
 
 #[Operator(factoryId: 'cell_stress')]
-final class CellStressOperator extends UnboundedOperator
+final class CellStressOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -525,12 +552,11 @@ final class Candle extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'candle')]
-final class CandleOperator extends UnboundedOperator
+#[Operator(factoryId: 'candle', run: ['flow' => ['exactly' => ['effectively_once' => ['correction_ms' => 600_000]]]])]
+final class CandleOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce()->correctionWindow(600_000);
         $c->input('input', codec: ChannelCodec::Text)
             ->into(Candle::class)->keyed()
             ->sink('sink');
@@ -577,7 +603,7 @@ final class SessionTimeout extends Tasklet
 }
 
 #[Operator(factoryId: 'session_timeout')]
-final class SessionTimeoutOperator extends UnboundedOperator
+final class SessionTimeoutOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -627,7 +653,7 @@ final class DropOldestMailbox extends BoundedMailbox
 }
 
 #[Operator(factoryId: 'bounded_mailbox_drop_nothing')]
-final class BoundedMailboxDropNothingOperator extends UnboundedOperator
+final class BoundedMailboxDropNothingOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -638,7 +664,7 @@ final class BoundedMailboxDropNothingOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'bounded_mailbox_drop_newest')]
-final class BoundedMailboxDropNewestOperator extends UnboundedOperator
+final class BoundedMailboxDropNewestOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -649,7 +675,7 @@ final class BoundedMailboxDropNewestOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'bounded_mailbox_drop_oldest')]
-final class BoundedMailboxDropOldestOperator extends UnboundedOperator
+final class BoundedMailboxDropOldestOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -688,7 +714,7 @@ final class PartitionRelay extends Tasklet
 }
 
 #[Operator(factoryId: 'partition_relay')]
-final class PartitionRelayOperator extends UnboundedOperator
+final class PartitionRelayOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -725,7 +751,7 @@ final class DynamicCell extends Tasklet
 }
 
 #[Operator(factoryId: 'dynamic_cell')]
-final class DynamicCellOperator extends UnboundedOperator
+final class DynamicCellOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -743,8 +769,8 @@ final class DynamicCellOperator extends UnboundedOperator
 //
 // Operators an outside caller calls and whose graph answers it through
 // `response()`: from the first tasklet, from a downstream one, and from
-// whichever of two filtered paths the input took. `call_turn` is the bounded
-// one, in fixtures_bounded.php.
+// whichever of two filtered paths the input took. `call_turn` is the steps
+// one, in fixtures_steps.php.
 
 #[Task(name: 'call_echo')]
 final class CallEchoStep extends PassThrough
@@ -752,7 +778,7 @@ final class CallEchoStep extends PassThrough
 }
 
 #[Operator(factoryId: 'call_echo')]
-final class CallEcho extends UnboundedOperator
+final class CallEcho extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -775,7 +801,7 @@ final class CallAnswer extends Tasklet
 }
 
 #[Operator(factoryId: 'call_downstream')]
-final class CallDownstream extends UnboundedOperator
+final class CallDownstream extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -811,7 +837,7 @@ final class CallRefuse extends Tasklet
 }
 
 #[Operator(factoryId: 'call_split')]
-final class CallSplit extends UnboundedOperator
+final class CallSplit extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -876,8 +902,8 @@ final class Fixtures
             SugarDoNothing::class,
             SugarStoreInput::class,
             SugarNamedInput::class,
-            SugarBounded::class,
-            SugarBoundedPerInput::class,
+            SugarSteps::class,
+            SugarStepsPerInput::class,
             SugarStateOnly::class,
         ];
     }

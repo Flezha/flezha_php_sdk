@@ -8,7 +8,7 @@ use Flezha\Codec\Json;
 use Flezha\Exception\FlezhaException;
 
 /**
- * The answer to one {@see Ctx::spawnBounded()} request.
+ * The answer to one {@see Ctx::spawnSteps()} request.
  *
  * Read it inside the invocation that made it, where a resolved handle answers
  * every read the same: once that invocation completes the core releases the

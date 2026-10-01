@@ -8,10 +8,14 @@ use Attribute;
 use Flezha\ChannelCodec;
 
 /**
- * The factory id an operator class registers under, whether its change bytes
- * reach the per-cell WAL, and whether an idle instance sleeps: written out and
- * dropped from memory until its next input. Unwritten, a bounded operator sleeps when
- * it persists and an unbounded operator never does.
+ * The factory id an operator class registers under and its class settings,
+ * each written as the settings tree's own data: `run: 'steps'`,
+ * `run: ['steps' => ['each' => 'per_input']]`, `durable: false`,
+ * `durable: ['local' => ['sleep_after' => 2_000]]`. Unwritten, the class runs
+ * as a flow and keeps its work locally without sleeping (a steps class sleeps
+ * after six idle hours unless it says otherwise). The
+ * core reads the tree when the class registers and refuses a misplaced
+ * setting by name.
  *
  * On a §5 short form, a class that defines its one tasklet's `run` instead
  * of `channels()`, it also names the channels that tasklet is wired between:
@@ -26,10 +30,16 @@ use Flezha\ChannelCodec;
 #[Attribute(Attribute::TARGET_CLASS)]
 final class Operator
 {
+    /**
+     * @param string|array<string, mixed>|null      $run
+     * @param bool|string|array<string, mixed>|null $durable
+     */
     public function __construct(
         public readonly string $factoryId,
-        public readonly bool $persistent = true,
-        public readonly ?bool $sleepWhenIdle = null,
+        public readonly string|array|null $run = null,
+        public readonly bool|string|array|null $durable = null,
+        public readonly ?int $maxDurationMs = null,
+        public readonly ?string $description = null,
         public readonly ?string $sink = null,
         public readonly ?string $input = null,
         public readonly ?ChannelCodec $codec = null,

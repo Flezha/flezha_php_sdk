@@ -13,17 +13,13 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Bounded;
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\BoundedOperator;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
-use Flezha\LoopMode;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 abstract class PartSender extends Tasklet
 {
@@ -55,7 +51,7 @@ final class PartEchoStep extends PartSender
 }
 
 #[Operator(factoryId: 'part_echo')]
-final class PartEcho extends UnboundedOperator
+final class PartEcho extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -70,9 +66,13 @@ final class PartEchoTurn extends PartSender
 {
 }
 
-#[Operator(factoryId: 'part_echo_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class PartEchoBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'part_echo_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class PartEchoSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -87,6 +87,6 @@ final class PartFixtures
     /** @return list<class-string<\Flezha\Operator>> */
     public static function all(): array
     {
-        return [PartEcho::class, PartEchoBounded::class];
+        return [PartEcho::class, PartEchoSteps::class];
     }
 }

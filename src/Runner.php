@@ -87,8 +87,7 @@ final class Runner
     }
 
     /**
-     * Register an operator class of either kind, a full form or a §5 short
-     * form alike. The kind is read from the class, never named by the call.
+     * Register an operator class, a full form or a §5 short form alike.
      *
      * @param class-string<Operator> $class
      */

@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Testing;
 
-use Flezha\BeyondWindow;
 use Flezha\ChannelCodec;
-use Flezha\CheckpointOutputs;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Definition;
@@ -70,15 +68,10 @@ final class Harness implements SpawnBridge
 
         $spec = new ClassSpec(
             factoryId: '<harness>',
-            kind: 'unbounded',
-            persistent: true,
-            effectivelyOnce: false,
-            checkpointAck: false,
-            checkpointEvery: null,
-            checkpointOutputs: CheckpointOutputs::AsProduced,
-            checkpointMaxDelayMs: null,
-            correctionWindowMs: null,
-            beyondWindowPolicy: BeyondWindow::ProcessAsArrival,
+            description: null,
+            maxDurationMs: null,
+            run: null,
+            durable: null,
             compactAfterBytes: null,
             tasklets: $builder->tasklets,
             channels: $builder->channels,

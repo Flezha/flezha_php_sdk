@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Bounded;
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\BoundedOperator;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
@@ -15,10 +13,8 @@ use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
-use Flezha\LoopMode;
 use Flezha\Response;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
@@ -193,7 +189,7 @@ final class CallAsk extends Tasklet
 }
 
 #[Operator(factoryId: 'call_back')]
-final class CallingBack extends UnboundedOperator
+final class CallingBack extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -202,7 +198,7 @@ final class CallingBack extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'call_factory')]
-final class CallingFactory extends UnboundedOperator
+final class CallingFactory extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -216,7 +212,7 @@ final class CallingFactory extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'call_beside_sink')]
-final class CallingBesideSink extends UnboundedOperator
+final class CallingBesideSink extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -225,7 +221,7 @@ final class CallingBesideSink extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'call_zero')]
-final class CallingZero extends UnboundedOperator
+final class CallingZero extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -234,7 +230,7 @@ final class CallingZero extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'call_unkeyed')]
-final class CallingUnkeyed extends UnboundedOperator
+final class CallingUnkeyed extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -243,7 +239,7 @@ final class CallingUnkeyed extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'call_unread')]
-final class CallingUnread extends UnboundedOperator
+final class CallingUnread extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -251,8 +247,8 @@ final class CallingUnread extends UnboundedOperator
     }
 }
 
-#[Operator(factoryId: 'call_once')]
-final class CallingOnce extends BoundedOperator
+#[Operator(factoryId: 'call_once', run: 'steps')]
+final class CallingOnce extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -260,9 +256,8 @@ final class CallingOnce extends BoundedOperator
     }
 }
 
-#[Operator(factoryId: 'call_per_input')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 60_000)]
-final class CallingPerInput extends BoundedOperator
+#[Operator(factoryId: 'call_per_input', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 60_000)]
+final class CallingPerInput extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

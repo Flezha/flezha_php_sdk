@@ -16,7 +16,6 @@ use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 // -- poison_probe / wedge_probe ----------------------------------------------
 
@@ -39,7 +38,7 @@ final class PoisonProbe extends Tasklet
 }
 
 #[Operator(factoryId: 'poison_probe')]
-final class PoisonProbeOperator extends UnboundedOperator
+final class PoisonProbeOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -85,7 +84,7 @@ final class WedgeProbe extends Tasklet
 }
 
 #[Operator(factoryId: 'wedge_probe')]
-final class WedgeProbeOperator extends UnboundedOperator
+final class WedgeProbeOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

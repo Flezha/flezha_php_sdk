@@ -37,7 +37,7 @@ final class RegisteredClass
      *
      * A cell is addressed by its operator too: one class serves every
      * operator of its factory on this runner, such as each instance of a
-     * bounded operator, and each has cells of its own under the same keys.
+     * steps operator, and each has cells of its own under the same keys.
      *
      * No lock, and none is missing: a `Swoole\Thread` is a separate
      * interpreter with its own object graph, so two threads never share this

@@ -6,19 +6,13 @@ namespace Flezha\Tests;
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
-use Flezha\BeyondWindow;
 use Flezha\Ctx;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
-use Flezha\LoopMode;
 use Flezha\Tasklet;
-use Flezha\RollbackMode;
-use Flezha\UnboundedOperator;
-use Flezha\BoundedOperator;
 
 /**
  * Every `HostClassDecl` key the core learns, spelled by this builder.
@@ -60,60 +54,15 @@ final class DeclKeysTest extends RepositoryTestCase
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Unknown named parameter $wakeAfterMs');
 
-        new Bounded(...['wakeAfterMs' => 5_000]);
-    }
-
-    /**
-     * No kind gate: a bounded class puts every key its builder recorded on
-     * the wire, so the core judges what the author wrote and refuses a
-     * unbounded-only setting under its own name.
-     */
-    public function testABoundedClassDeclaresEveryClassKeyAnUnboundedClassDoes(): void
-    {
-        $dropped = array_diff(
-            array_keys(HostClassDecl::of(self::tierSpec('unbounded'))),
-            array_keys(HostClassDecl::of(self::tierSpec('bounded'))),
-        );
-
-        self::assertSame([], array_values($dropped), sprintf(
-            'keys a bounded class does not declare: %s',
-            implode(', ', $dropped),
-        ));
-    }
-
-    /** The unbounded fixture's spec re-kinded: every unbounded-only key populated at once. */
-    private static function tierSpec(string $kind): ClassSpec
-    {
-        $stream = FullUnbounded::spec();
-
-        return new ClassSpec(
-            factoryId: "decl_keys_{$kind}_tier",
-            kind: $kind,
-            persistent: $stream->persistent,
-            effectivelyOnce: $stream->effectivelyOnce,
-            checkpointAck: $stream->checkpointAck,
-            checkpointEvery: $stream->checkpointEvery,
-            checkpointOutputs: $stream->checkpointOutputs,
-            checkpointMaxDelayMs: $stream->checkpointMaxDelayMs,
-            correctionWindowMs: $stream->correctionWindowMs,
-            beyondWindowPolicy: $stream->beyondWindowPolicy,
-            compactAfterBytes: $stream->compactAfterBytes,
-            tasklets: $stream->tasklets,
-            channels: $stream->channels,
-            bounded: $kind === 'bounded' ? FullBounded::spec()->bounded : null,
-        );
+        new Operator(...['factoryId' => 'w', 'wakeAfterMs' => 5_000]);
     }
 
     /** @return list<string> */
     private function spelled(): array
     {
-        $stream = HostClassDecl::of(FullUnbounded::spec());
-        $bounded = HostClassDecl::of(FullBounded::spec());
+        $stream = HostClassDecl::of(FullFlow::spec());
 
         $keys = array_map(static fn (string $k): string => "class.$k", array_keys($stream));
-        foreach (array_keys($bounded) as $key) {
-            $keys[] = "class.$key";
-        }
         foreach ($stream['channels'] as $channel) {
             foreach (array_keys($channel) as $key) {
                 $keys[] = "channel.$key";
@@ -124,10 +73,6 @@ final class DeclKeysTest extends RepositoryTestCase
                 $keys[] = "tasklet.$key";
             }
         }
-        foreach (array_keys($bounded['bounded']) as $key) {
-            $keys[] = "bounded.$key";
-        }
-
         $keys = array_values(array_unique($keys));
         sort($keys);
 
@@ -188,7 +133,7 @@ final class DeclKeysTest extends RepositoryTestCase
      * the lines the CORE DERIVES from its record must be the golden's, in
      * order.
      */
-    public function testTheHybridUnboundedTopologyIsTheReference(): void
+    public function testTheHybridFlowTopologyIsTheReference(): void
     {
         self::assertSame(
             $this->golden('hybrid_channel'),
@@ -196,7 +141,7 @@ final class DeclKeysTest extends RepositoryTestCase
         );
     }
 
-    public function testTheStructuredBoundedTopologyIsTheReference(): void
+    public function testTheStructuredStepsTopologyIsTheReference(): void
     {
         self::assertSame(
             $this->golden('commit_block_chain'),
@@ -311,16 +256,21 @@ final class FullFanned extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'decl_keys_unbounded')]
-final class FullUnbounded extends UnboundedOperator
+#[Operator(
+    factoryId: 'decl_keys_flow',
+    run: ['flow' => ['exactly' => ['effectively_once' => [
+        'ack' => ['checkpoint' => ['every' => 4, 'outputs' => 'at_checkpoint', 'max_delay_ms' => 250]],
+        'correction_ms' => 5_000,
+        'beyond_window' => 'drop',
+    ]]]],
+    durable: ['local' => ['sleep_after' => 2_000]],
+    maxDurationMs: 60_000,
+    description: 'every flow key',
+)]
+final class FullFlow extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
-        $c->checkpointEvery(4);
-        $c->outputsAtCheckpoint(250);
-        $c->correctionWindow(5_000);
-        $c->beyondWindowPolicy(BeyondWindow::Drop);
         $c->compactAfterBytes(4_096);
 
         $edge = $c->input('input')->into(FullEntry::class);
@@ -328,23 +278,6 @@ final class FullUnbounded extends UnboundedOperator
             ->retryMax(5)->retryBackoffMs(50)->into(FullDownstream::class);
         $edge->named('fan')->into(FullFanned::class);
         $c->input('second')->into(FullEntry::class)->keyed()->sink('sink');
-    }
-}
-
-#[Operator(factoryId: 'decl_keys_bounded')]
-#[Bounded(
-    loopMode: LoopMode::Chained,
-    rollbackMode: RollbackMode::KeepProgress,
-    maxDurationMs: 60_000,
-    syncDurability: true,
-)]
-final class FullBounded extends BoundedOperator
-{
-    public static function channels(Builder $c): void
-    {
-        // A chained loop seeds each iteration from the terminal's handoff, so
-        // the terminal's output channel is not plugin-bound.
-        $c->input('in')->into(Echoer::class)->named('carry');
     }
 }
 
@@ -365,9 +298,9 @@ final class HybridConsumer extends Tasklet
     }
 }
 
-/** The reference's unbounded fixture: one producing channel, a sink AND a consumer. */
+/** The reference's flow fixture: one producing channel, a sink AND a consumer. */
 #[Operator(factoryId: 'hybrid_channel')]
-final class HybridChannelTopology extends UnboundedOperator
+final class HybridChannelTopology extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -394,9 +327,9 @@ final class BlockB extends Tasklet
     }
 }
 
-/** The reference's durable structured bounded operator: the same hybrid, mid-chain. */
-#[Operator(factoryId: 'commit_block_chain')]
-final class CommitBlockChainTopology extends BoundedOperator
+/** The reference's durable structured steps operator: the same hybrid, mid-chain. */
+#[Operator(factoryId: 'commit_block_chain', run: 'steps')]
+final class CommitBlockChainTopology extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

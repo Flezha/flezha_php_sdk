@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 /**
- * Twins of the reference's crash-resume bounded fixtures — the commit chain,
+ * Twins of the reference's crash-resume steps fixtures — the commit chain,
  * the saga, the output identity, the branch, the diamond and the retry
  * ladder, plus the run-once echo — under the same factory ids, tasklet
  * names, channel names and output bytes as
- * test/apps/rust_runner/src/bounded.rs. Loaded after fixtures.php, whose
- * `Wire` codecs these share; fixtures_bounded_loop.php carries the loop and
+ * test/apps/rust_runner/src/steps.rs. Loaded after fixtures.php, whose
+ * `Wire` codecs these share; fixtures_steps_loop.php carries the loop and
  * bench families and is loaded after this file, as the reference splits them.
  *
  * Entry payloads and plugin frames are UTF-8 text on the wire, as in the
@@ -26,16 +26,13 @@ namespace Flezha\TestApp;
 
 use Flezha\Attribute\Operator;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
-use Flezha\LoopMode;
 use Flezha\Tasklet;
 use Flezha\Timer;
-use Flezha\BoundedOperator;
 
 // -- the release gate --------------------------------------------------------
 
@@ -53,9 +50,9 @@ use Flezha\BoundedOperator;
  * a read on a socket nothing ever writes — no timer, no spin, off the CPU
  * until the process ends.
  */
-final class BoundedGate
+final class StepsGate
 {
-    public const RELEASE_ENV = 'FLEZHA_BOUNDED_E2E_RELEASE';
+    public const RELEASE_ENV = 'FLEZHA_STEPS_E2E_RELEASE';
 
     public static function released(): bool
     {
@@ -65,7 +62,7 @@ final class BoundedGate
     /** Park at `$point` when this runner was booted to hold there, until the release. */
     public static function holdAt(string $point): void
     {
-        if (getenv('FLEZHA_BOUNDED_E2E_HOLD') === $point) {
+        if (getenv('FLEZHA_STEPS_E2E_HOLD') === $point) {
             self::blockUntilReleased();
         }
     }
@@ -103,7 +100,7 @@ final class BoundedGate
 // -- the three bases ---------------------------------------------------------
 
 /**
- * The reference's `durable_step!` (bounded.rs:66-108): a step committing one
+ * The reference's `durable_step!` (steps.rs:66-108): a step committing one
  * idempotent Change keyed by its own name, so a re-run after a resume folds to
  * the state it already had.
  *
@@ -121,7 +118,7 @@ abstract class DurableStep extends Tasklet
     /**
      * A sorted, de-duplicated list. The reference's `SeenState` is a
      * `BTreeSet<String>`, chosen because a set keeps snapshot bytes
-     * deterministic (bounded.rs:50); a PHP array keeps insertion order, so the
+     * deterministic (steps.rs:50); a PHP array keeps insertion order, so the
      * fold sorts for the same determinism and skips a repeat for the same
      * idempotent re-run.
      */
@@ -140,7 +137,7 @@ abstract class DurableStep extends Tasklet
         // always finds it as the uncommitted producer while its sibling arm has
         // committed.
         if ($this->gated($input)) {
-            BoundedGate::blockUntilReleased();
+            StepsGate::blockUntilReleased();
         }
         $ctx->change(['insert' => $this->changeValue($input)]);
         $this->release($input, $ctx);
@@ -169,7 +166,7 @@ abstract class DurableStep extends Tasklet
  * Declared here rather than on {@see DurableStep} because `Definition` reads
  * which class declared a hook: a `compensate` on the durable base would make
  * every durable step compensable and contradict
- * test/fixtures/declarations/commit_block_bounded.json.
+ * test/fixtures/declarations/commit_block_steps.json.
  */
 abstract class UndoingStep extends DurableStep
 {
@@ -180,7 +177,7 @@ abstract class UndoingStep extends DurableStep
     public function compensate(array $outputs, Ctx $ctx): void
     {
         if ($this->compensationGated()) {
-            BoundedGate::blockUntilReleased();
+            StepsGate::blockUntilReleased();
         }
         $record = $this->undoRecord();
         if ($record !== null) {
@@ -208,9 +205,9 @@ abstract class FailingStep extends Tasklet
     }
 }
 
-// -- echo_bounded -----------------------------------------------------------
+// -- echo_steps -----------------------------------------------------------
 //
-// The run-once shape (bounded.rs:14): one tasklet emits its first message
+// The run-once shape (steps.rs:14): one tasklet emits its first message
 // back once and the pass ends, so the controller deregisters the instance.
 
 #[Task(name: 'echo_args')]
@@ -222,8 +219,8 @@ final class EchoArgs extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'echo_bounded')]
-final class EchoBounded extends BoundedOperator
+#[Operator(factoryId: 'echo_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class EchoSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -233,9 +230,9 @@ final class EchoBounded extends BoundedOperator
     }
 }
 
-// -- typed_once_bounded -----------------------------------------------------
+// -- typed_once_steps -----------------------------------------------------
 //
-// The KB-381 shape: a `once` bounded operator whose entry channel decodes the
+// The KB-381 shape: a `once` steps operator whose entry channel decodes the
 // payload's type. Its one tasklet prints what the entry decoded and completes
 // with it, because the runner's stdout and the completion record are the two
 // places the scenario can read.
@@ -253,8 +250,8 @@ final class OncePlaced extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'typed_once_bounded')]
-final class TypedOnceBounded extends BoundedOperator
+#[Operator(factoryId: 'typed_once_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class TypedOnceSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -264,11 +261,11 @@ final class TypedOnceBounded extends BoundedOperator
     }
 }
 
-// -- commit_block_bounded / sync_durable_bounded ---------------------------
+// -- commit_block_steps / sync_durable_steps ---------------------------
 //
 // Task A commits durable state, task B parks until the resumed runner sets the
 // release variable — so a SIGKILL lands with A's state already on the WAL and B
-// never finished. `sync_durable_bounded` is the same chain declaring
+// never finished. `sync_durable_steps` is the same chain declaring
 // SYNCHRONOUS remote durability, which is what lets the kill-the-disk drill
 // destroy the state directory and still resume with A committed.
 
@@ -282,11 +279,11 @@ final class BlockB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        BoundedGate::blockUntilReleased();
+        StepsGate::blockUntilReleased();
     }
 }
 
-abstract class CommitBlockChain extends BoundedOperator
+abstract class CommitBlockChain extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -296,14 +293,13 @@ abstract class CommitBlockChain extends BoundedOperator
     }
 }
 
-#[Operator(factoryId: 'commit_block_bounded')]
-final class CommitBlockBounded extends CommitBlockChain
+#[Operator(factoryId: 'commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class CommitBlockSteps extends CommitBlockChain
 {
 }
 
-#[Operator(factoryId: 'sync_durable_bounded')]
-#[Bounded(syncDurability: true)]
-final class SyncDurableBounded extends CommitBlockChain
+#[Operator(factoryId: 'sync_durable_steps', run: 'steps', durable: 'remote')]
+final class SyncDurableSteps extends CommitBlockChain
 {
 }
 
@@ -314,8 +310,8 @@ final class SyncDurableBounded extends CommitBlockChain
 // durable state. A crash re-runs the chain from the top, so the sink sees A's
 // marker once per run and no journal file exists.
 
-#[Operator(factoryId: 'optout_commit_block', persistent: false)]
-final class OptoutCommitBlock extends BoundedOperator
+#[Operator(factoryId: 'optout_commit_block', run: 'steps', durable: false)]
+final class OptoutCommitBlock extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -326,11 +322,11 @@ final class OptoutCommitBlock extends BoundedOperator
     }
 }
 
-// -- tier_commit_block_bounded ----------------------------------------------
+// -- tier_commit_block_steps ----------------------------------------------
 //
 // Task A commits durable state AND emits `committed:<input>` under a stable
 // key on a keyed hybrid channel; task B parks, so a SIGKILL lands with A's
-// stage committed and B unfinished. A bounded operator commits stage by stage, so the
+// stage committed and B unfinished. A steps operator commits stage by stage, so the
 // class declares no tier of its own.
 
 #[Task(name: 'tier_commit_a')]
@@ -342,8 +338,8 @@ final class TierCommitA extends DurableStep
     }
 }
 
-#[Operator(factoryId: 'tier_commit_block_bounded')]
-final class TierCommitBlockBounded extends BoundedOperator
+#[Operator(factoryId: 'tier_commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class TierCommitBlockSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -354,7 +350,7 @@ final class TierCommitBlockBounded extends BoundedOperator
     }
 }
 
-// -- saga_block_bounded -----------------------------------------------------
+// -- saga_block_steps -----------------------------------------------------
 //
 // SA and SB commit durable state and compensate; SC fails, triggering
 // reverse-order rollback (SB then SA). SA's compensation PARKS, so a SIGKILL
@@ -380,8 +376,8 @@ final class SagaC extends FailingStep
 {
 }
 
-#[Operator(factoryId: 'saga_block_bounded')]
-final class SagaBlockBounded extends BoundedOperator
+#[Operator(factoryId: 'saga_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class SagaBlockSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -392,7 +388,7 @@ final class SagaBlockBounded extends BoundedOperator
     }
 }
 
-// -- keyed_block_bounded / keyed_saga_bounded -----------------------------
+// -- keyed_block_steps / keyed_saga_steps -----------------------------
 //
 // The entry's comma-separated key list is split into one value per key, and a
 // `keyBy` on that value mints one Cell per key of a durable compensable tasklet
@@ -421,7 +417,7 @@ final class KeyedFail extends FailingStep
 {
 }
 
-abstract class KeyedCommits extends BoundedOperator
+abstract class KeyedCommits extends \Flezha\Operator
 {
     protected static function keyedCommits(Builder $c): Edge
     {
@@ -432,8 +428,8 @@ abstract class KeyedCommits extends BoundedOperator
     }
 }
 
-#[Operator(factoryId: 'keyed_block_bounded')]
-final class KeyedBlockBounded extends KeyedCommits
+#[Operator(factoryId: 'keyed_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class KeyedBlockSteps extends KeyedCommits
 {
     public static function channels(Builder $c): void
     {
@@ -441,8 +437,8 @@ final class KeyedBlockBounded extends KeyedCommits
     }
 }
 
-#[Operator(factoryId: 'keyed_saga_bounded')]
-final class KeyedSagaBounded extends KeyedCommits
+#[Operator(factoryId: 'keyed_saga_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class KeyedSagaSteps extends KeyedCommits
 {
     public static function channels(Builder $c): void
     {
@@ -450,9 +446,9 @@ final class KeyedSagaBounded extends KeyedCommits
     }
 }
 
-// -- outbox_block_bounded ---------------------------------------------------
+// -- outbox_block_steps ---------------------------------------------------
 //
-// A bounded output's identity. Task A commits durable state AND emits once,
+// A steps output's identity. Task A commits durable state AND emits once,
 // keyed `k` with one metadata pair, on a keyed hybrid channel; the output rides
 // A's Cell record and reaches the sink once A's stage commits. Task B parks, so
 // a SIGKILL lands with A committed and B unfinished.
@@ -466,8 +462,8 @@ final class OutboxA extends DurableStep
     }
 }
 
-#[Operator(factoryId: 'outbox_block_bounded')]
-final class OutboxBlockBounded extends BoundedOperator
+#[Operator(factoryId: 'outbox_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class OutboxBlockSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -478,7 +474,7 @@ final class OutboxBlockBounded extends BoundedOperator
     }
 }
 
-// -- undo_outbox_bounded ----------------------------------------------------
+// -- undo_outbox_steps ----------------------------------------------------
 //
 // A compensation's undo output. Task UA commits, emits its forward output on a
 // hybrid plugin channel, and compensates by EMITTING an undo record, which
@@ -507,8 +503,8 @@ final class UndoOutboxC extends FailingStep
 {
 }
 
-#[Operator(factoryId: 'undo_outbox_bounded')]
-final class UndoOutboxBounded extends BoundedOperator
+#[Operator(factoryId: 'undo_outbox_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class UndoOutboxSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -519,7 +515,7 @@ final class UndoOutboxBounded extends BoundedOperator
     }
 }
 
-// -- failed_stage_bounded ---------------------------------------------------
+// -- failed_stage_steps ---------------------------------------------------
 //
 // A failed stage delivers nothing. The entry's two values reach one
 // `failed_stage` Cell in order: the first emits on a plugin channel, so the
@@ -538,8 +534,8 @@ final class FailedStage extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'failed_stage_bounded')]
-final class FailedStageBounded extends BoundedOperator
+#[Operator(factoryId: 'failed_stage_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class FailedStageSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -550,12 +546,12 @@ final class FailedStageBounded extends BoundedOperator
     }
 }
 
-// -- branch_bounded ---------------------------------------------------------
+// -- branch_steps ---------------------------------------------------------
 //
 //     BranchA ─┬─▶ BranchB ─▶ BranchD
 //              └─▶ BranchC
 //
-// The tasklet TREE (bounded.rs:352). Every tasklet commits durable state
+// The tasklet TREE (steps.rs:352). Every tasklet commits durable state
 // and compensates by emitting an undo record, so both tree behaviours are
 // observable at one sink:
 //
@@ -609,16 +605,16 @@ final class BranchD extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        if (BoundedGate::armed('FLEZHA_BRANCH_FAIL')) {
+        if (StepsGate::armed('FLEZHA_BRANCH_FAIL')) {
             throw new \RuntimeException('branch_d failed');
         }
-        BoundedGate::blockUntilReleased();
+        StepsGate::blockUntilReleased();
         $ctx->emit("d:$input");
     }
 }
 
-#[Operator(factoryId: 'branch_bounded')]
-final class BranchBounded extends BoundedOperator
+#[Operator(factoryId: 'branch_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class BranchSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -638,12 +634,12 @@ final class BranchBounded extends BoundedOperator
     }
 }
 
-// -- diamond_bounded --------------------------------------------------------
+// -- diamond_steps --------------------------------------------------------
 //
 //     DiamA ─┬─▶ DiamB1 ─▶ DiamB2(parks) ─┬─▶ DiamJoin
 //            └─▶ DiamC ───────────────────┘
 //
-// The fan-in DAG (bounded.rs:475). The join accumulates BOTH arms' outputs and
+// The fan-in DAG (steps.rs:475). The join accumulates BOTH arms' outputs and
 // is dispatched exactly once, after both commit. DiamB2 parks one level BELOW
 // its sibling arm — siblings commit at one level barrier — so a SIGKILL lands
 // with A, B1 and C committed and B2 mid-run: the respawn re-runs B2 alone, and
@@ -698,8 +694,8 @@ final class DiamJoin extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'diamond_bounded')]
-final class DiamondBounded extends BoundedOperator
+#[Operator(factoryId: 'diamond_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class DiamondSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -719,11 +715,11 @@ final class DiamondBounded extends BoundedOperator
     }
 }
 
-// -- retry_bounded ----------------------------------------------------------
+// -- retry_steps ----------------------------------------------------------
 //
-// The per-cell retry ladder (bounded.rs:607). Task RA commits durable state,
+// The per-cell retry ladder (steps.rs:607). Task RA commits durable state,
 // forwards on a hybrid channel, and compensates by emitting an undo record;
-// `retry_flaky` fails its first FLEZHA_BOUNDED_RETRY_FAILS attempts (none by
+// `retry_flaky` fails its first FLEZHA_STEPS_RETRY_FAILS attempts (none by
 // default — each scenario arms it) and then emits `attempt:<n>:<input>`. One
 // armed failure is absorbed by the ladder, so the run completes and the sink
 // sees attempt 2; arming more failures than the ladder has attempts exhausts
@@ -741,7 +737,7 @@ final class RetryA extends UndoingStep
 #[Task(name: 'retry_flaky')]
 final class RetryFlaky extends Tasklet
 {
-    private const FAILS_ENV = 'FLEZHA_BOUNDED_RETRY_FAILS';
+    private const FAILS_ENV = 'FLEZHA_STEPS_RETRY_FAILS';
 
     /**
      * Attempts made in this interpreter. A retry re-runs the tasklet of the
@@ -762,8 +758,8 @@ final class RetryFlaky extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'retry_bounded')]
-final class RetryBounded extends BoundedOperator
+#[Operator(factoryId: 'retry_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class RetrySteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -775,13 +771,13 @@ final class RetryBounded extends BoundedOperator
     }
 }
 
-// -- timer_loop_bounded -----------------------------------------------------
+// -- timer_loop_steps -----------------------------------------------------
 //
 // `in -> tick -> relay -> out`, a per-input loop whose `tick` arms a
 // processing-time timer of the delay `after:<ms>` names and emits `armed:<at>`;
 // its firing emits `fired:<at>` and opens a pass of its own. `slow:<ms>` holds
-// `tick` that long, for a firing due mid-pass (bounded.rs). On a runner booted
-// with `FLEZHA_BOUNDED_E2E_HOLD` the firing parks at the gate: `timer` inside
+// `tick` that long, for a firing due mid-pass (steps.rs). On a runner booted
+// with `FLEZHA_STEPS_E2E_HOLD` the firing parks at the gate: `timer` inside
 // `on_timer`, before `tick` commits; `relay` in `relay`, after.
 
 #[Task(name: 'tick')]
@@ -805,7 +801,7 @@ final class TimerTick extends DurableStep
 
     public function onTimer(Timer $timer, Ctx $ctx): void
     {
-        BoundedGate::holdAt('timer');
+        StepsGate::holdAt('timer');
         $ctx->emit("fired:{$timer->scheduledAt}");
     }
 }
@@ -816,15 +812,19 @@ final class TimerRelay extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         if (str_starts_with((string) $input, 'fired:')) {
-            BoundedGate::holdAt('relay');
+            StepsGate::holdAt('relay');
         }
         $ctx->emit("relay:$input");
     }
 }
 
-#[Operator(factoryId: 'timer_loop_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class TimerLoopBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'timer_loop_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class TimerLoopSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -835,11 +835,11 @@ final class TimerLoopBounded extends BoundedOperator
     }
 }
 
-// -- event_timer_bounded ----------------------------------------------------
+// -- event_timer_steps ----------------------------------------------------
 //
 // An entry-fed tasklet whose clock is the message's leading event time; each
 // message arms an event-time timer 100 later and emits `seen:<t>`, and the
-// firing emits `fired:<at>` (bounded.rs).
+// firing emits `fired:<at>` (steps.rs).
 
 #[Task(name: 'event_tick')]
 final class EventTick extends DurableStep
@@ -862,9 +862,13 @@ final class EventTick extends DurableStep
     }
 }
 
-#[Operator(factoryId: 'event_timer_bounded')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class EventTimerBounded extends BoundedOperator
+#[Operator(
+    factoryId: 'event_timer_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class EventTimerSteps extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -879,9 +883,13 @@ final class CallTurnStep extends PassThrough
 {
 }
 
-#[Operator(factoryId: 'call_turn')]
-#[Bounded(loopMode: LoopMode::PerInput, maxDurationMs: 600_000)]
-final class CallTurn extends BoundedOperator
+#[Operator(
+    factoryId: 'call_turn',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class CallTurn extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -891,43 +899,45 @@ final class CallTurn extends BoundedOperator
 
 // -- registration ------------------------------------------------------------
 
-final class BoundedFixtures
+final class StepsFixtures
 {
     /** @return list<class-string<\Flezha\Operator>> */
     public static function all(): array
     {
         return [
-            EchoBounded::class,
-            TypedOnceBounded::class,
-            CommitBlockBounded::class,
-            SyncDurableBounded::class,
+            EchoSteps::class,
+            TypedOnceSteps::class,
+            CommitBlockSteps::class,
+            SyncDurableSteps::class,
             OptoutCommitBlock::class,
-            TierCommitBlockBounded::class,
-            SagaBlockBounded::class,
-            KeyedBlockBounded::class,
-            KeyedSagaBounded::class,
-            OutboxBlockBounded::class,
-            UndoOutboxBounded::class,
-            FailedStageBounded::class,
-            ChatLoopBounded::class,
-            StatelessLoopBounded::class,
-            KeyedLoopBounded::class,
-            ChatRewindBounded::class,
-            FailingTurnLoopBounded::class,
-            FailingTurnAllOrNothingBounded::class,
-            ReplyBlockLoopBounded::class,
-            RetryBounded::class,
-            BranchBounded::class,
-            DiamondBounded::class,
+            TierCommitBlockSteps::class,
+            SagaBlockSteps::class,
+            KeyedBlockSteps::class,
+            KeyedSagaSteps::class,
+            OutboxBlockSteps::class,
+            UndoOutboxSteps::class,
+            FailedStageSteps::class,
+            ChatLoopSteps::class,
+            StatelessLoopSteps::class,
+            KeyedLoopSteps::class,
+            ChatRewindSteps::class,
+            FailingTurnLoopSteps::class,
+            FailingTurnUndoAllSteps::class,
+            ReplyBlockLoopSteps::class,
+            RetrySteps::class,
+            BranchSteps::class,
+            DiamondSteps::class,
             BenchChain1::class,
             BenchChain4::class,
             BenchChain16::class,
             BenchChainOptout4::class,
-            BenchLoopBounded::class,
-            StaticCellBounded::class,
-            TimerLoopBounded::class,
-            EventTimerBounded::class,
+            BenchLoopSteps::class,
+            StaticCellSteps::class,
+            TimerLoopSteps::class,
+            EventTimerSteps::class,
             CallTurn::class,
+            CompleteFlowOperator::class,
+            ChainedSteps::class,
         ];
     }
 }

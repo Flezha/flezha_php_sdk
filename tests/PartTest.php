@@ -18,7 +18,6 @@ use Flezha\SpawnBridge;
 use Flezha\Tasklet;
 use Flezha\Testing\Harness;
 use Flezha\TestApp\PartEcho;
-use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 #[Task(name: 'previewer')]
@@ -33,7 +32,7 @@ final class Previewer extends Tasklet
 }
 
 #[Operator(factoryId: 'preview_op')]
-final class PreviewOperator extends UnboundedOperator
+final class PreviewOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -70,7 +69,7 @@ final class PartRelay extends Tasklet
 }
 
 #[Operator(factoryId: 'part_feeder_op')]
-final class PartFeederOperator extends UnboundedOperator
+final class PartFeederOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -80,7 +79,7 @@ final class PartFeederOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'part_answerer_op')]
-final class PartAnswererOperator extends UnboundedOperator
+final class PartAnswererOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

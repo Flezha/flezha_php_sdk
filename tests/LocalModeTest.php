@@ -15,7 +15,6 @@ use Flezha\Graph\Builder;
 use Flezha\LocalOperator;
 use Flezha\Tasklet;
 use Flezha\SinkOutput;
-use Flezha\UnboundedOperator;
 
 /**
  * The PHP SDK's local mode: the shipped example's operator class, its
@@ -134,7 +133,7 @@ final class DefaultCodecsTasklet extends Tasklet
 }
 
 #[Operator(factoryId: 'local_default_codecs_php')]
-final class DefaultCodecs extends UnboundedOperator
+final class DefaultCodecs extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

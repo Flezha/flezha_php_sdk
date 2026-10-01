@@ -18,7 +18,6 @@ use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 // -- bench_keyed_nopersist / bench_keyed / the tier stores -------------------
 //
@@ -100,7 +99,7 @@ final class BenchCheckpoint extends KeyedUpsert
  * The same keyed upsert under both durability postures, so the round-trip
  * bench can isolate the cost of per-Cell persistence.
  */
-abstract class KeyedUpsertOperator extends UnboundedOperator
+abstract class KeyedUpsertOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -114,7 +113,7 @@ abstract class KeyedUpsertOperator extends UnboundedOperator
  * Per-cell persistence off: the heap-only posture the bench isolates against
  * the durable one.
  */
-#[Operator(factoryId: 'bench_keyed_nopersist', persistent: false)]
+#[Operator(factoryId: 'bench_keyed_nopersist', durable: false)]
 final class BenchKeyedNoPersistOperator extends KeyedUpsertOperator
 {
 }
@@ -131,12 +130,11 @@ final class BenchKeyedOperator extends KeyedUpsertOperator
  * would hold the min-watermark on the shed offset forever while the log behind
  * it kept growing.
  */
-#[Operator(factoryId: 'tier_store')]
-final class TierStoreOperator extends UnboundedOperator
+#[Operator(factoryId: 'tier_store', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class TierStoreOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)->retryBackoffMs(300)
             ->into(TierStore::class)->keyed()
             ->sink('sink');
@@ -181,7 +179,7 @@ final class TierTally extends Counting
     public function run(mixed $input, Ctx $ctx): void
     {
         [$key, $value] = explode(':', (string) $input, 2) + [1 => ''];
-        if ($value === 'hold' && !BoundedGate::released()) {
+        if ($value === 'hold' && !StepsGate::released()) {
             throw new \RuntimeException('held until released');
         }
         $ctx->change(['delta' => 1]);
@@ -189,12 +187,11 @@ final class TierTally extends Counting
     }
 }
 
-#[Operator(factoryId: 'tier_chain')]
-final class TierChainOperator extends UnboundedOperator
+#[Operator(factoryId: 'tier_chain', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class TierChainOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(TierRelay::class)
             ->keyBy(Wire::prefix(...))->retryMax(1_000)
@@ -203,12 +200,14 @@ final class TierChainOperator extends UnboundedOperator
     }
 }
 
-#[Operator(factoryId: 'checkpoint_store')]
-final class CheckpointStoreOperator extends UnboundedOperator
+#[Operator(
+    factoryId: 'checkpoint_store',
+    run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => 'checkpoint']]]],
+)]
+final class CheckpointStoreOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce()->checkpointAck();
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CheckpointStore::class)->keyed()
             ->sink('sink');
@@ -216,18 +215,22 @@ final class CheckpointStoreOperator extends UnboundedOperator
 }
 
 /**
- * The same tasklet declared `outputsAtCheckpoint`: the interval's outputs are
+ * The same tasklet with `'outputs' => 'at_checkpoint'`: the interval's outputs are
  * held with its changes and ship inside its checkpoint record.
- * `checkpointEvery` is deliberately absent so the test drives the close itself
+ * A checkpoint `every` is deliberately absent so the test drives the close itself
  * — with `commit:` for the batch case, and with the delay alone for the
  * quiet-Cell case.
  */
-#[Operator(factoryId: 'checkpoint_batched_store')]
-final class CheckpointBatchedOperator extends UnboundedOperator
+#[Operator(
+    factoryId: 'checkpoint_batched_store',
+    run: ['flow' => ['exactly' => ['effectively_once' => [
+        'ack' => ['checkpoint' => ['outputs' => 'at_checkpoint', 'max_delay_ms' => 1_500]],
+    ]]]],
+)]
+final class CheckpointBatchedOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce()->checkpointAck()->outputsAtCheckpoint(1_500);
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CheckpointStore::class)->keyed()
             ->sink('sink');
@@ -241,15 +244,14 @@ final class CheckpointBatchedOperator extends UnboundedOperator
  * `FLEZHA_BENCH_CHECKPOINT_DELAY_MS`) additionally holds the interval's outputs
  * until it closes.
  */
-#[Operator(factoryId: 'bench_checkpoint')]
-final class BenchCheckpointOperator extends UnboundedOperator
+#[Operator(
+    factoryId: 'bench_checkpoint',
+    run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => BENCH_CHECKPOINT]]]],
+)]
+final class BenchCheckpointOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce()->checkpointEvery(Wire::int(getenv('FLEZHA_BENCH_CHECKPOINT_EVERY')) ?: 500);
-        if (getenv('FLEZHA_BENCH_CHECKPOINT_OUTPUTS') === 'at_checkpoint') {
-            $c->outputsAtCheckpoint(Wire::int(getenv('FLEZHA_BENCH_CHECKPOINT_DELAY_MS')) ?: 50);
-        }
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(BenchCheckpoint::class)->keyed()
             ->sink('sink');
@@ -281,7 +283,7 @@ final class StoreInput extends Tasklet
 }
 
 #[Operator(factoryId: 'store_input')]
-final class StoreInputOperator extends UnboundedOperator
+final class StoreInputOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -322,7 +324,7 @@ final class Counter extends Tasklet
 }
 
 #[Operator(factoryId: 'stateful_counter')]
-final class StatefulCounterOperator extends UnboundedOperator
+final class StatefulCounterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -336,8 +338,8 @@ final class StatefulCounterOperator extends UnboundedOperator
  * The same topology with per-Cell persistence off, under the reference's
  * node names: the toggle is a class property, not a different computation.
  */
-#[Operator(factoryId: 'persistence_off_counter', persistent: false)]
-final class PersistenceOffCounterOperator extends UnboundedOperator
+#[Operator(factoryId: 'persistence_off_counter', durable: false)]
+final class PersistenceOffCounterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -349,7 +351,7 @@ final class PersistenceOffCounterOperator extends UnboundedOperator
 
 // -- sleeping_counter --------------------------------------------------------
 //
-// An unbounded operator that sleeps when idle: `key:delta` inputs fold into one running
+// A flow operator that sleeps when idle: `key:delta` inputs fold into one running
 // total per key, and every input emits `key=total` on the `totals` sink. The
 // sleep e2e reads the total after a wake to prove the Cell came back with the
 // state it slept with.
@@ -376,8 +378,8 @@ final class SleepingCounter extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'sleeping_counter', sleepWhenIdle: true)]
-final class SleepingCounterOperator extends UnboundedOperator
+#[Operator(factoryId: 'sleeping_counter', durable: FIXTURE_DURABLE)]
+final class SleepingCounterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -429,7 +431,7 @@ final class Tick extends Tasklet
 }
 
 #[Operator(factoryId: 'coalescing_counter')]
-final class CoalescingCounterOperator extends UnboundedOperator
+final class CoalescingCounterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -469,7 +471,7 @@ final class ResumeProbe extends Tasklet
 }
 
 #[Operator(factoryId: 'resume_probe')]
-final class ResumeProbeOperator extends UnboundedOperator
+final class ResumeProbeOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -558,7 +560,7 @@ final class EvolvingCartV2 extends Tasklet
 }
 
 #[Operator(factoryId: 'schema_evolution_v1')]
-final class SchemaEvolutionV1Operator extends UnboundedOperator
+final class SchemaEvolutionV1Operator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -569,7 +571,7 @@ final class SchemaEvolutionV1Operator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'schema_evolution_v2')]
-final class SchemaEvolutionV2Operator extends UnboundedOperator
+final class SchemaEvolutionV2Operator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

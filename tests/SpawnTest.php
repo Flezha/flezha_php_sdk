@@ -24,7 +24,6 @@ use Flezha\SpawnBridge;
 use Flezha\SpawnHandle;
 use Flezha\SpawnOutcome;
 use Flezha\SpawnResult;
-use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 /** Spawns once with no id and once with the id `w1`, reads both, then emits its input. */
@@ -37,8 +36,8 @@ final class Spawner extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $handles = [
-            $ctx->spawnBounded('worker', (string) $input),
-            $ctx->spawnBounded('worker', (string) $input, id: 'w1'),
+            $ctx->spawnSteps('worker', (string) $input),
+            $ctx->spawnSteps('worker', (string) $input, id: 'w1'),
         ];
         foreach ($handles as $handle) {
             try {
@@ -53,7 +52,7 @@ final class Spawner extends Tasklet
 }
 
 #[Operator(factoryId: 'spawner')]
-final class SpawnerOperator extends UnboundedOperator
+final class SpawnerOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -123,7 +122,7 @@ final class SpawnTest extends TestCase
     public function testTheCallReturnsAHandleThatAnswersPendingUntilTheAnswerArrives(): void
     {
         $bridge = new ScriptedSpawns([null, '{"id":"worker-k7m2qzxw4pd3fn2a","outcome":"spawned"}']);
-        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p1'));
+        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p1'));
 
         self::assertSame(
             [[self::TOKEN, 'worker', '', 'p1', 'deliver', false, self::OFFSET]],
@@ -143,7 +142,7 @@ final class SpawnTest extends TestCase
     public function testASpawnWithAnIdDeliversByDefaultAndAnswersThatId(): void
     {
         $bridge = new ScriptedSpawns(['{"id":"w1","outcome":"delivered"}']);
-        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p2', id: 'w1'));
+        $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p2', id: 'w1'));
 
         self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', 'deliver', false, self::OFFSET]], $bridge->requests);
         self::assertEquals(new SpawnResult('w1', SpawnOutcome::Delivered), $handle->wait());
@@ -158,9 +157,9 @@ final class SpawnTest extends TestCase
     {
         $bridge = new ScriptedSpawns(['{"id":"a","outcome":"spawned"}', '{"id":"b","outcome":"spawned"}']);
         self::spawn($bridge, static function (Ctx $ctx): SpawnHandle {
-            $ctx->spawnBounded('worker', 'ticket-1');
+            $ctx->spawnSteps('worker', 'ticket-1');
 
-            return $ctx->spawnBounded('worker', ['symbol' => 'AAPL', 'quantity' => 10]);
+            return $ctx->spawnSteps('worker', ['symbol' => 'AAPL', 'quantity' => 10]);
         });
 
         self::assertSame('ticket-1', $bridge->requests[0][3], 'a string travels as it stands');
@@ -172,7 +171,7 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns([]);
 
         try {
-            self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p', ifRunning: 'error'));
+            self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p', ifRunning: 'error'));
             self::fail('a spawn with ifRunning and no id was accepted');
         } catch (\InvalidArgumentException $e) {
             self::assertStringContainsString('ifRunning without an id', $e->getMessage());
@@ -185,7 +184,7 @@ final class SpawnTest extends TestCase
     {
         yield 'the error policy' => ['operator.already_running', ['operator' => 'w1']];
         yield 'an unknown factory' => ['operator.factory_unknown', ['namespace' => 'default', 'factory' => 'worker']];
-        yield 'an unbounded factory' => ['operator.factory_not_bounded', ['factory' => 'worker', 'namespace' => 'default']];
+        yield 'a flow factory' => ['operator.factory_not_steps', ['factory' => 'worker', 'namespace' => 'default']];
         yield 'a refusal' => ['authz.no_role_binding', []];
         yield 'a timeout' => ['spawn.timeout', ['seconds' => 30]];
         yield 'no control plane' => ['spawn.unavailable', []];
@@ -208,7 +207,7 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns([$refusal]);
         $handle = self::spawn(
             $bridge,
-            static fn (Ctx $ctx): SpawnHandle => $ctx->spawnBounded('worker', 'p', id: 'w1', ifRunning: 'error'),
+            static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p', id: 'w1', ifRunning: 'error'),
         );
         self::assertSame([[self::TOKEN, 'worker', 'w1', 'p', 'error', false, self::OFFSET]], $bridge->requests);
 

@@ -21,7 +21,6 @@ use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 #[Task(name: 'echoer')]
 final class Echoer extends Tasklet
@@ -33,7 +32,7 @@ final class Echoer extends Tasklet
 }
 
 #[Operator(factoryId: 'echo')]
-final class EchoOperator extends UnboundedOperator
+final class EchoOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

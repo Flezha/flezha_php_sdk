@@ -6,7 +6,6 @@ namespace Flezha;
 
 use Flezha\Attribute\Operator as OperatorAttribute;
 use Flezha\Attribute\Task;
-use Flezha\Attribute\Bounded as BoundedAttribute;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
@@ -15,8 +14,8 @@ use ReflectionClass;
 
 /**
  * The base an authored operator extends: an `#[Operator]` attribute for the
- * factory id, and either `channels()` for the graph or, as the §5 short form,
- * the one tasklet's `run`.
+ * factory id and the class settings, and either `channels()` for the graph
+ * or, as the §5 short form, the one tasklet's `run`.
  */
 abstract class Operator
 {
@@ -63,14 +62,6 @@ abstract class Operator
         return $attributes[0]->newInstance();
     }
 
-    /** The `#[Bounded operator]` attribute the class carries, if any. */
-    protected static function boundedDeclaration(): ?BoundedAttribute
-    {
-        $attributes = (new ReflectionClass(static::class))->getAttributes(BoundedAttribute::class);
-
-        return $attributes === [] ? null : $attributes[0]->newInstance();
-    }
-
     protected static function builder(OperatorAttribute $declaration): Builder
     {
         $builder = new Builder($declaration->factoryId);
@@ -92,32 +83,27 @@ abstract class Operator
     }
 
     /**
-     * The declaration both kinds carry, assembled once. An unbounded class names
-     * only what the builder holds; a bounded operator adds its own attribute.
+     * The graph and the settings tree as written: the core judges the tree
+     * and refuses a misplaced setting by name.
      */
-    protected static function assemble(
-        OperatorAttribute $declaration,
-        Builder $builder,
-        string $kind,
-        ?BoundedAttribute $bounded = null,
-    ): ClassSpec {
-        return new ClassSpec(
+    protected static function buildSpec(OperatorAttribute $declaration): ClassSpec
+    {
+        $builder = static::builder($declaration);
+        $spec = new ClassSpec(
             factoryId: $declaration->factoryId,
-            kind: $kind,
-            persistent: $declaration->persistent,
-            effectivelyOnce: $builder->effectivelyOnce,
-            checkpointAck: $builder->checkpointAck,
-            checkpointEvery: $builder->checkpointEvery,
-            checkpointOutputs: $builder->checkpointOutputs,
-            checkpointMaxDelayMs: $builder->checkpointMaxDelayMs,
-            correctionWindowMs: $builder->correctionWindowMs,
-            beyondWindowPolicy: $builder->beyondWindowPolicy,
+            description: $declaration->description,
+            maxDurationMs: $declaration->maxDurationMs,
+            run: $declaration->run,
+            durable: $declaration->durable,
             compactAfterBytes: $builder->compactAfterBytes,
             tasklets: $builder->tasklets,
             channels: $builder->channels,
-            bounded: $bounded,
-            sleepWhenIdle: $declaration->sleepWhenIdle ?? ($kind === 'bounded' && $declaration->persistent),
         );
+        if ($spec->runsInSteps() && $spec->tasklets === []) {
+            throw new FlezhaException('topology.no_steps_body', ['factory_id' => $declaration->factoryId]);
+        }
+
+        return $spec;
     }
 
     /**
@@ -135,7 +121,7 @@ abstract class Operator
             Definition::of($class);
 
             // A tasklet is registered by the operator that wires it.
-            throw new FlezhaException('topology.unknown_operator_kind', ['module' => $class]);
+            throw new FlezhaException('topology.no_operator_exported', ['module' => $class]);
         }
 
         return $class::spec();
@@ -175,23 +161,6 @@ abstract class Operator
 
             return false;
         }
-        $written = $declaration->persistent ? [] : ['`persistent: false` on #[Operator]'];
-        if ($declaration->sleepWhenIdle !== null) {
-            $written[] = '`sleepWhenIdle` on #[Operator]';
-        }
-        // By value, against the default carrying the written loop mode: the
-        // one class-level setting a short form keeps, and restating a default
-        // sets nothing.
-        $bounded = static::boundedDeclaration() ?? new BoundedAttribute();
-        $default = get_object_vars(new BoundedAttribute(loopMode: $bounded->loopMode));
-        foreach (get_object_vars($bounded) as $setting => $value) {
-            if ($value !== $default[$setting]) {
-                $written[] = "`$setting` on #[Bounded]";
-            }
-        }
-        if ($written !== []) {
-            self::refuseFields('topology.setting_on_short_form', $declaration, $written);
-        }
 
         return true;
     }
@@ -201,6 +170,4 @@ abstract class Operator
     {
         throw new FlezhaException($code, ['factory_id' => $declaration->factoryId, 'fields' => $fields]);
     }
-
-    abstract protected static function buildSpec(OperatorAttribute $declaration): ClassSpec;
 }

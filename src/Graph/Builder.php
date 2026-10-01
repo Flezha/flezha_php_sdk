@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
-use Flezha\BeyondWindow;
 use Flezha\ChannelCodec;
-use Flezha\CheckpointOutputs;
 use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
 use Flezha\Operator;
@@ -16,10 +14,9 @@ use Flezha\Tasklet;
 /**
  * The fluent channel builder an operator's `channels()` receives.
  *
- * Class-wide declarations (the tier, the correction window, compaction) are
- * methods on the builder rather than a second attribute, because they are
- * what the graph is being declared with — an author writes them in the same
- * block as the wiring they qualify.
+ * Compaction is a method on the builder rather than an attribute argument,
+ * because it is what the graph is being declared with: an author writes it in
+ * the same block as the wiring it qualifies.
  */
 final class Builder
 {
@@ -44,74 +41,10 @@ final class Builder
 
     private int $mergeGroups = 0;
 
-    public bool $effectivelyOnce = false;
-    public bool $checkpointAck = false;
-    public ?int $checkpointEvery = null;
-    public CheckpointOutputs $checkpointOutputs = CheckpointOutputs::AsProduced;
-    public ?int $checkpointMaxDelayMs = null;
-    public ?int $correctionWindowMs = null;
-    public BeyondWindow $beyondWindowPolicy = BeyondWindow::ProcessAsArrival;
     public ?int $compactAfterBytes = null;
 
     public function __construct(public readonly string $factoryId)
     {
-    }
-
-    /** Deliver each input exactly once, against a durable consumed offset. */
-    public function effectivelyOnce(): self
-    {
-        $this->effectivelyOnce = true;
-
-        return $this;
-    }
-
-    /**
-     * Acknowledge at the checkpoint rather than per input; the interval closes
-     * only on an explicit `ctx.checkpoint()`. Requires `effectivelyOnce()`.
-     *
-     * Each of the three below writes its own raw flag and nothing else: the
-     * acknowledgement granularity is DERIVED by the core, which is the one
-     * place any checkpoint key implies it.
-     */
-    public function checkpointAck(): self
-    {
-        $this->checkpointAck = true;
-
-        return $this;
-    }
-
-    /** Close the checkpoint interval every `$count` inputs, and on demand. */
-    public function checkpointEvery(int $count): self
-    {
-        $this->checkpointEvery = $count;
-
-        return $this;
-    }
-
-    /** Hold outputs until the interval closes, for at most `$maxDelayMs`. */
-    public function outputsAtCheckpoint(?int $maxDelayMs = null): self
-    {
-        $this->checkpointOutputs = CheckpointOutputs::AtCheckpoint;
-        if ($maxDelayMs !== null) {
-            $this->checkpointMaxDelayMs = $maxDelayMs;
-        }
-
-        return $this;
-    }
-
-    /** Accept late inputs for this long after their event time. */
-    public function correctionWindow(int $milliseconds): self
-    {
-        $this->correctionWindowMs = $milliseconds;
-
-        return $this;
-    }
-
-    public function beyondWindowPolicy(BeyondWindow $policy): self
-    {
-        $this->beyondWindowPolicy = $policy;
-
-        return $this;
     }
 
     public function compactAfterBytes(int $bytes): self

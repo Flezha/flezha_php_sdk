@@ -6,20 +6,21 @@ namespace Flezha\Examples\Agentdesk;
 
 use Flezha\Attribute\Operator;
 use Flezha\Graph\Builder;
-use Flezha\UnboundedOperator;
 
 /**
- * The HTTP side of the desk: an unbounded operator that carries the HTTP plugin, answers every
+ * The HTTP side of the desk: a flow operator that carries the HTTP plugin, answers every
  * request, and calls the session a message is for.
  */
-#[Operator(factoryId: 'gateway')]
-final class GatewayOperator extends UnboundedOperator
+#[Operator(
+    factoryId: 'gateway',
+    run: ['flow' => ['exactly' => 'effectively_once']], // each request and answer on disk before it runs
+)]
+final class GatewayOperator extends \Flezha\Operator
 {
     private const DEADLINE_MS = 60_000;
 
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();                       // each request and answer on disk before it runs
         $user = fn (array $value) => $value['user'];
         $http = $c->input('http', Request::decode(...));
         $http->filter(fn (Request $request) => !$request->sends())

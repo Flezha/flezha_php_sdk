@@ -7,7 +7,6 @@ namespace Flezha\Examples\Echo;
 use Flezha\Attribute\Operator;
 use Flezha\ChannelCodec;
 use Flezha\Graph\Builder;
-use Flezha\UnboundedOperator;
 
 /**
  * The deployable unit. An operator declares the graph a message travels: the
@@ -23,7 +22,7 @@ use Flezha\UnboundedOperator;
  * stands, so the output is the text itself, and any other value would be JSON.
  */
 #[Operator(factoryId: 'echo')]
-final class EchoOperator extends UnboundedOperator
+final class EchoOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

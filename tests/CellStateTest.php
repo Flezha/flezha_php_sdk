@@ -11,7 +11,6 @@ use Flezha\Dispatch\Dispatcher;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 use Flezha\Testing\Harness;
-use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 /** Keeps what it was sent, and undoes by emitting what its own cell holds. */
@@ -40,7 +39,7 @@ final class Kept extends Tasklet
 }
 
 #[Operator(factoryId: 'kept_operator')]
-final class KeptOperator extends UnboundedOperator
+final class KeptOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -50,7 +49,7 @@ final class KeptOperator extends UnboundedOperator
 
 /**
  * A cell belongs to one operator: two operators of one factory on one runner,
- * such as two instances of a bounded operator, each keep their own state for
+ * such as two instances of a steps operator, each keep their own state for
  * the same tasklet and cell key, on every path that reads or writes it.
  */
 final class CellStateTest extends TestCase

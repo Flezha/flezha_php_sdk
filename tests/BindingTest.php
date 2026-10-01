@@ -13,7 +13,6 @@ use Flezha\Ffi\Core;
 use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 use PHPUnit\Framework\TestCase;
 
 /** The FFI binding, against a live core. */
@@ -69,7 +68,7 @@ final class BindingTest extends TestCase
             // implementation had, and it panicked inside the core's DashMap
             // the first time a worker thread polled.
             try {
-                $attached->declareClass('{"persistent":true}');
+                $attached->declareClass('{"durable":"local"}');
                 self::fail('the core accepted a declaration with no factory id');
             } catch (FlezhaException $e) {
                 self::assertSame('topology.declaration_unreadable', $e->getCode());
@@ -106,28 +105,23 @@ final class BindingTest extends TestCase
             $this->expectExceptionCode('topology.declaration_unreadable');
             $this->expectExceptionMessage('factory_id');
 
-            $core->declareClass('{"persistent":true}');
+            $core->declareClass('{"durable":"local"}');
         } finally {
             $core->free();
         }
     }
 
     /**
-     * The checkpoint options the core will accept together.
-     *
-     * Asserted against the core rather than against the builder's fields
-     * because the core is what refuses: a declaration holding outputs at a
-     * checkpoint it never acknowledges at is rejected at registration, so a
-     * builder that can express it hands its author a class that cannot start.
+     * The checkpoint acknowledgements the core accepts. Asserted against the
+     * core, which reads the tree and refuses a malformed one.
      */
-    public function testHoldingOutputsAtTheCheckpointAcknowledgesAtTheCheckpoint(): void
+    public function testHoldingOutputsAtTheCheckpointRegistersWithItsDelay(): void
     {
         $decl = HostClassDecl::of(CheckpointOutputsOnly::spec());
-        // The raw flag, and only it: the builder never asks for the
-        // granularity, and the class registers because the core implies it
-        // from this key.
-        self::assertFalse($decl['checkpoint_ack']);
-        self::assertSame('at_checkpoint', $decl['checkpoint_outputs']);
+        self::assertSame(
+            ['checkpoint' => ['outputs' => 'at_checkpoint', 'max_delay_ms' => 1500]],
+            $decl['run']['flow']['exactly']['effectively_once']['ack'],
+        );
 
         $core = Core::create();
 
@@ -140,11 +134,10 @@ final class BindingTest extends TestCase
         }
     }
 
-    public function testTheBareCheckpointOptInRegistersWithNoCadence(): void
+    public function testABareCheckpointRegistersWithNoCadence(): void
     {
         $decl = HostClassDecl::of(CheckpointAckOnly::spec());
-        self::assertTrue($decl['checkpoint_ack']);
-        self::assertArrayNotHasKey('checkpoint_every', $decl);
+        self::assertSame('checkpoint', $decl['run']['flow']['exactly']['effectively_once']['ack']);
 
         $core = Core::create();
 
@@ -262,24 +255,28 @@ final class CheckpointTasklet extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'checkpoint_outputs_only')]
-final class CheckpointOutputsOnly extends UnboundedOperator
+#[Operator(
+    factoryId: 'checkpoint_outputs_only',
+    run: ['flow' => ['exactly' => ['effectively_once' => [
+        'ack' => ['checkpoint' => ['outputs' => 'at_checkpoint', 'max_delay_ms' => 1500]],
+    ]]]],
+)]
+final class CheckpointOutputsOnly extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
-        $c->outputsAtCheckpoint(1500);
         $c->input('input')->into(CheckpointTasklet::class)->keyed()->sink('sink');
     }
 }
 
-#[Operator(factoryId: 'checkpoint_ack_only')]
-final class CheckpointAckOnly extends UnboundedOperator
+#[Operator(
+    factoryId: 'checkpoint_only',
+    run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => 'checkpoint']]]],
+)]
+final class CheckpointAckOnly extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->effectivelyOnce();
-        $c->checkpointAck();
         $c->input('input')->into(CheckpointTasklet::class)->keyed()->sink('sink');
     }
 }

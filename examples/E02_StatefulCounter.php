@@ -23,7 +23,6 @@ use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
 
 /** The durable bytes carry this array, never the class name — so a rename is safe. */
 final class Totals implements Codable
@@ -66,7 +65,7 @@ final class Counter extends Tasklet
 }
 
 #[Operator(factoryId: 'order_totals')]
-final class OrderTotalsOperator extends UnboundedOperator
+final class OrderTotalsOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

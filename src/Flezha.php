@@ -9,7 +9,7 @@ namespace Flezha;
  *
  * The SDK contains no kernel code. Transport, framing, ordering, per-cell
  * exclusivity, durability, retries, the retry-to-park ladder, timers, credit,
- * routing, the bounded driver and reconnect all live in the core; this
+ * routing, the steps driver and reconnect all live in the core; this
  * package brings the authoring surface, the codec for user types, the
  * concurrency host and idiomatic errors.
  *
@@ -20,7 +20,7 @@ namespace Flezha;
  *     }
  *
  *     #[Operator(factoryId: 'echo')]
- *     final class EchoOperator extends UnboundedOperator
+ *     final class EchoOperator extends Operator
  *     {
  *         public static function channels(Builder $c): void
  *         {

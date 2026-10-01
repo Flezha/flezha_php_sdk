@@ -17,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Every activation kind, against a real core context.
  *
- * A real one rather than a double: the context is what `Ctx::spawnBounded`
+ * A real one rather than a double: the context is what `Ctx::spawnSteps`
  * and the completion path talk to, and a double would prove that the
  * dispatcher agrees with the double. Nothing here starts a runner, so no
  * controller connection is attempted.
@@ -46,11 +46,12 @@ final class DispatchTest extends TestCase
         $this->registry = new Registry();
         foreach (
             [EchoOperator::class, CounterOperator::class, KeyedOperator::class, StampOperator::class,
-                MixedStampOperator::class, BoundedEmitOperator::class,
-                BoundedEmitUnboundedOperator::class, JsonEntryOperator::class, MergeOperator::class,
-                RouteLatestOperator::class, FannedOperator::class, CompletingBounded::class,
-                CompletingUnbounded::class, FlakyEntryOperator::class, TimingBounded::class,
-                TimingUnbounded::class, AnsweringOperator::class, SplitKeyedOperator::class] as $class
+                MixedStampOperator::class, StepsEmitOperator::class,
+                StepsEmitFlowOperator::class, StepsCarryOperator::class, JsonEntryOperator::class,
+                MergeOperator::class,
+                RouteLatestOperator::class, FannedOperator::class, CompletingSteps::class,
+                CompletingFlow::class, FlakyEntryOperator::class, TimingSteps::class,
+                TimingFlow::class, AnsweringOperator::class, SplitKeyedOperator::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -265,13 +266,13 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * The SDK's half of a bounded chain: a stage runs like any other
+     * The SDK's half of a steps chain: a stage runs like any other
      * tasklet, and the driver's barrier is answered by the completion. The
      * driver itself — loop modes, suspension, rewind, the task journal that
      * makes a resumed chain skip committed stages — is the core's, reached
      * through step activations, so this SDK implements none of it.
      */
-    public function testABoundedStageRunsAsAnOrdinaryTasklet(): void
+    public function testAStepsStageRunsAsAnOrdinaryTasklet(): void
     {
         $this->registry->add(SagaOperator::spec());
         $result = $this->work('saga_operator', 0, [self::input('"reserve"')]);
@@ -324,13 +325,13 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * A bounded tasklet's `complete` rides its item's effect as JSON, the
+     * A steps tasklet's `complete` rides its item's effect as JSON, the
      * latest call winning, and the rest of the item still runs: the driver
      * ends the instance only after the iteration commits.
      */
-    public function testABoundedTaskletCompletionRidesItsEffect(): void
+    public function testAStepsTaskletCompletionRidesItsEffect(): void
     {
-        $effect = $this->work('completing_bounded', 0, [self::input('{"order":7}')])['effects'][0];
+        $effect = $this->work('completing_steps', 0, [self::input('{"order":7}')])['effects'][0];
 
         self::assertSame('ok', $effect['verdict']);
         self::assertSame('{"seeded":{"order":7}}', $effect['complete']);
@@ -339,12 +340,13 @@ final class DispatchTest extends TestCase
     }
 
     /**
-     * An unbounded tasklet's request is carried the same way, and the core
-     * refuses it; a string result rides as it stands, as a sink sends one.
+     * A flow tasklet's request is carried the same way, and the core ends the
+     * instance once its Cells are idle; a string result rides as it stands, as
+     * a sink sends one.
      */
-    public function testAnUnboundedTaskletCompletionIsCarriedTheSameWay(): void
+    public function testAnFlowTaskletCompletionIsCarriedTheSameWay(): void
     {
-        $effect = $this->work('completing_unbounded', 0, [self::input('"bye"')])['effects'][0];
+        $effect = $this->work('completing_flow', 0, [self::input('"bye"')])['effects'][0];
 
         self::assertSame('ok', $effect['verdict']);
         self::assertSame('bye', $effect['complete']);
@@ -353,30 +355,30 @@ final class DispatchTest extends TestCase
     /** A failed item carries no completion, so a failed iteration cannot end the instance. */
     public function testAnItemThatFailsAfterCompletingCarriesNoCompletion(): void
     {
-        $effect = $this->work('completing_bounded', 0, [self::input('"fail"')])['effects'][0];
+        $effect = $this->work('completing_steps', 0, [self::input('"fail"')])['effects'][0];
 
         self::assertSame('retryable', $effect['verdict']);
         self::assertArrayNotHasKey('complete', $effect);
     }
 
-    /** A bounded tasklet's timer calls ride its item's effect exactly as an unbounded tasklet's do. */
-    public function testABoundedItemCarriesItsTimerOpsAsAnUnboundedItemDoes(): void
+    /** A steps tasklet's timer calls ride its item's effect exactly as a flow tasklet's do. */
+    public function testABoundedItemCarriesItsTimerOpsAsAnFlowItemDoes(): void
     {
-        $bounded = $this->work('timing_bounded', 0, [self::input('7')])['effects'][0];
-        $stream = $this->work('timing_unbounded', 0, [self::input('7')])['effects'][0];
+        $steps = $this->work('timing_steps', 0, [self::input('7')])['effects'][0];
+        $stream = $this->work('timing_flow', 0, [self::input('7')])['effects'][0];
 
-        self::assertSame('ok', $bounded['verdict']);
+        self::assertSame('ok', $steps['verdict']);
         self::assertSame([
             ['kind' => 'processing_time', 'scheduled_at' => 2_000, 'register' => true],
             ['kind' => 'event_time', 'scheduled_at' => 6_000, 'register' => true],
             ['kind' => 'processing_time', 'scheduled_at' => 2_000, 'register' => false],
-        ], $bounded['timers']);
-        self::assertSame($stream['timers'], $bounded['timers']);
+        ], $steps['timers']);
+        self::assertSame($stream['timers'], $steps['timers']);
     }
 
     public function testEveryTimerCallOfACompensateContextIsRefusedAndArmsNothing(): void
     {
-        $registered = $this->registry->get('timing_bounded');
+        $registered = $this->registry->get('timing_steps');
         self::assertNotNull($registered);
         $calls = [
             'timerAfter' => static fn (Ctx $ctx): int => $ctx->timerAfter(60_000),
@@ -547,9 +549,9 @@ final class DispatchTest extends TestCase
         return $this->work('stamp_operator', 0, [self::input($payload)], 'ek', 5);
     }
 
-    public function testAStructuredBoundedReleasesOneUntransformedEdgeOutput(): void
+    public function testAStructuredStepsReleasesOneUntransformedEdgeOutput(): void
     {
-        $outputs = $this->work('bounded_emit', 0, [self::input('10')])['effects'][0]['outputs'];
+        $outputs = $this->work('steps_emit', 0, [self::input('10')])['effects'][0]['outputs'];
 
         self::assertSame(
             [['edge', 1, null, '10'], ['plugin', null, 'handoff', '10']],
@@ -567,6 +569,19 @@ final class DispatchTest extends TestCase
         self::assertNull($outputs[0]['event_time']);
     }
 
+    public function testAStepsTerminalNothingConsumesHandsItsValueToTheCoreAsTheCarry(): void
+    {
+        $outputs = $this->work('steps_carry', 0, [self::input('3')])['effects'][0]['outputs'];
+
+        self::assertSame(
+            [['edge', 1, 0, '3']],
+            array_map(
+                static fn (array $o): array => [$o['target'], $o['channel'], $o['consumer'], $o['payload']],
+                $outputs,
+            ),
+        );
+    }
+
     /**
      * `Json::encode` hands back the finished string, so the frame carries it
      * as it stands. A host that layers nothing on its encoder satisfies the
@@ -574,7 +589,7 @@ final class DispatchTest extends TestCase
      */
     public function testAnEdgePayloadIsTheEncodersOwnString(): void
     {
-        $outputs = $this->work('bounded_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
+        $outputs = $this->work('steps_emit_flow', 0, [self::input('10')])['effects'][0]['outputs'];
 
         self::assertCount(3, $outputs);
         foreach ($outputs as $index => $output) {
@@ -583,9 +598,9 @@ final class DispatchTest extends TestCase
         }
     }
 
-    public function testTheSameGraphOnAnUnboundedClassReleasesOneOutputPerConsumer(): void
+    public function testTheSameGraphOnAnFlowClassReleasesOneOutputPerConsumer(): void
     {
-        $outputs = $this->work('bounded_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
+        $outputs = $this->work('steps_emit_flow', 0, [self::input('10')])['effects'][0]['outputs'];
 
         self::assertSame(
             [['edge', 1, '11'], ['edge', 2, '10'], ['plugin', null, '10']],
@@ -598,24 +613,24 @@ final class DispatchTest extends TestCase
 
     // The other end of the same two arms: what the CONSUMER is handed. A stream
     // producer already applied the edge, so delivery applies nothing; a
-    // bounded stage released the value raw, so delivery is the one
+    // steps stage released the value raw, so delivery is the one
     // application.
 
-    public function testAnUnboundedInterTaskEdgeAppliesItsMapExactlyOnce(): void
+    public function testAnFlowInterTaskEdgeAppliesItsMapExactlyOnce(): void
     {
-        $produced = $this->work('bounded_emit_stream', 0, [self::input('10')])['effects'][0]['outputs'];
+        $produced = $this->work('steps_emit_flow', 0, [self::input('10')])['effects'][0]['outputs'];
 
-        self::assertSame([11], $this->delivered('bounded_emit_stream', 1, $produced[0]['payload']));
+        self::assertSame([11], $this->delivered('steps_emit_flow', 1, $produced[0]['payload']));
     }
 
     public function testABoundedConsumerAppliesItsOwnEdgeExactlyOnceAtDelivery(): void
     {
-        $released = $this->work('bounded_emit', 0, [self::input('10')])['effects'][0]['outputs'][0]['payload'];
+        $released = $this->work('steps_emit', 0, [self::input('10')])['effects'][0]['outputs'][0]['payload'];
 
         // One released value reaches BOTH children — the driver's fan-out —
         // and each evaluates its own edge here.
-        self::assertSame([11], $this->delivered('bounded_emit', 1, $released));
-        self::assertSame([10], $this->delivered('bounded_emit', 2, $released));
+        self::assertSame([11], $this->delivered('steps_emit', 1, $released));
+        self::assertSame([10], $this->delivered('steps_emit', 2, $released));
     }
 
     /**

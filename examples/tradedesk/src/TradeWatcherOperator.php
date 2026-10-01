@@ -6,19 +6,18 @@ namespace Flezha\Examples\Tradedesk;
 
 use Flezha\Attribute\Operator;
 use Flezha\Graph\Builder;
-use Flezha\UnboundedOperator;
 
 /**
  * The desk's stream: trades in, each price compared with its symbol's recent average, and an order
  * started when a price jumps far enough above it.
  *
- * An unbounded operator runs for as long as the desk does. The exchange sends other messages
+ * A flow operator runs for as long as the desk does. The exchange sends other messages
  * beside its trades and delivers several trades in one message, so the wiring keeps the trade
  * messages, splits each into its trades before anything else sees them, drops what the desk does
  * not follow, and routes the rest to a cell per symbol.
  */
 #[Operator(factoryId: 'trade_watcher')]
-final class TradeWatcherOperator extends UnboundedOperator
+final class TradeWatcherOperator extends \Flezha\Operator
 {
     /**
      * Four transforms on the wiring, then two tasklets, and one place output leaves the desk.

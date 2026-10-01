@@ -12,8 +12,6 @@ use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\UnboundedOperator;
-use Flezha\BoundedOperator;
 
 /**
  * The tasklets and operators the unit suite declares against.
@@ -83,7 +81,7 @@ final class Keyed extends Tasklet
 }
 
 #[Operator(factoryId: 'echo_operator')]
-final class EchoOperator extends UnboundedOperator
+final class EchoOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -92,7 +90,7 @@ final class EchoOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'answering_operator')]
-final class AnsweringOperator extends UnboundedOperator
+final class AnsweringOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -101,7 +99,7 @@ final class AnsweringOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'counter_operator')]
-final class CounterOperator extends UnboundedOperator
+final class CounterOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -111,7 +109,7 @@ final class CounterOperator extends UnboundedOperator
 
 /** A short form that only keeps state: no `sink`, and a body answering nothing. */
 #[Operator(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
-final class ShortCounter extends UnboundedOperator
+final class ShortCounter extends \Flezha\Operator
 {
     public function initState(?string $cellKey): mixed
     {
@@ -130,7 +128,7 @@ final class ShortCounter extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'keyed_operator')]
-final class KeyedOperator extends UnboundedOperator
+final class KeyedOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -149,7 +147,7 @@ final class KeyedOperator extends UnboundedOperator
  * behind its own filter: the crossing's keys are the keyed consumer's.
  */
 #[Operator(factoryId: 'split_keyed_operator')]
-final class SplitKeyedOperator extends UnboundedOperator
+final class SplitKeyedOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -190,7 +188,7 @@ final class StampEmitter extends Tasklet
  * per-emit ordinal has to be right.
  */
 #[Operator(factoryId: 'stamp_operator')]
-final class StampOperator extends UnboundedOperator
+final class StampOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -230,7 +228,7 @@ final class FanTarget extends Tasklet
  * the channel's own value, so the order says which value that is.
  */
 #[Operator(factoryId: 'mixed_stamp_operator')]
-final class MixedStampOperator extends UnboundedOperator
+final class MixedStampOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -263,7 +261,7 @@ final class Poison extends Tasklet
 }
 
 #[Operator(factoryId: 'poison_operator')]
-final class PoisonOperator extends UnboundedOperator
+final class PoisonOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -287,7 +285,7 @@ final class Flaky extends Tasklet
 
 /** A text entry whose edge transform rejects `poison`, into a handler that rejects `boom`. */
 #[Operator(factoryId: 'flaky_entry_operator')]
-final class FlakyEntryOperator extends UnboundedOperator
+final class FlakyEntryOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -320,8 +318,8 @@ final class SagaStep extends Tasklet
     }
 }
 
-#[\Flezha\Attribute\Operator(factoryId: 'saga_operator')]
-final class SagaOperator extends \Flezha\BoundedOperator
+#[\Flezha\Attribute\Operator(factoryId: 'saga_operator', run: 'steps')]
+final class SagaOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -332,7 +330,7 @@ final class SagaOperator extends \Flezha\BoundedOperator
 // -- a tasklet's completion ------------------------------------------------
 //
 // One tasklet under both kinds: the SDK carries the request either way, and
-// the core decides what it means, ending a bounded operator or failing an unbounded operator's item.
+// the core decides what it means, ending a steps operator or failing a flow operator's item.
 
 #[Task(name: 'completer')]
 final class Completer extends Tasklet
@@ -359,14 +357,14 @@ trait CompletingGraph
     }
 }
 
-#[Operator(factoryId: 'completing_bounded')]
-final class CompletingBounded extends BoundedOperator
+#[Operator(factoryId: 'completing_steps', run: 'steps')]
+final class CompletingSteps extends \Flezha\Operator
 {
     use CompletingGraph;
 }
 
-#[Operator(factoryId: 'completing_unbounded')]
-final class CompletingUnbounded extends UnboundedOperator
+#[Operator(factoryId: 'completing_flow')]
+final class CompletingFlow extends \Flezha\Operator
 {
     use CompletingGraph;
 }
@@ -414,28 +412,28 @@ trait TimingGraph
     }
 }
 
-#[Operator(factoryId: 'timing_bounded')]
-final class TimingBounded extends BoundedOperator
+#[Operator(factoryId: 'timing_steps', run: 'steps')]
+final class TimingSteps extends \Flezha\Operator
 {
     use TimingGraph;
 }
 
-#[Operator(factoryId: 'timing_unbounded')]
-final class TimingUnbounded extends UnboundedOperator
+#[Operator(factoryId: 'timing_flow')]
+final class TimingFlow extends \Flezha\Operator
 {
     use TimingGraph;
 }
 
-// -- the structured-bounded emit arm ----------------------------------------
+// -- the structured-steps emit arm ----------------------------------------
 //
-// One released value is ONE edge output on a bounded class, untransformed and
+// One released value is ONE edge output on a steps class, untransformed and
 // unkeyed, naming the producing channel and its first consumer: the driver fans
-// it out from the journaled handoff. On an unbounded class the same topology
+// it out from the journaled handoff. On a flow class the same topology
 // releases one output per consumer, transformed and keyed. The plugin output
 // rides alongside either way.
 
-#[Task(name: 'bounded_producer')]
-final class BoundedProducer extends Tasklet
+#[Task(name: 'steps_producer')]
+final class StepsProducer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -450,8 +448,8 @@ final class Delivered
     public static array $values = [];
 }
 
-#[Task(name: 'bounded_b')]
-final class BoundedB extends Tasklet
+#[Task(name: 'steps_b')]
+final class StepsB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -459,8 +457,8 @@ final class BoundedB extends Tasklet
     }
 }
 
-#[Task(name: 'bounded_c')]
-final class BoundedC extends Tasklet
+#[Task(name: 'steps_c')]
+final class StepsC extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -468,37 +466,47 @@ final class BoundedC extends Tasklet
     }
 }
 
-trait BoundedEmitGraph
+trait StepsEmitGraph
 {
     public static function channels(Builder $c): void
     {
-        $edge = $c->input('in')->into(BoundedProducer::class)->named('handoff');
-        $edge->map(static fn (mixed $v): mixed => $v + 1)->into(BoundedB::class);
-        $edge->into(BoundedC::class);
+        $edge = $c->input('in')->into(StepsProducer::class)->named('handoff');
+        $edge->map(static fn (mixed $v): mixed => $v + 1)->into(StepsB::class);
+        $edge->into(StepsC::class);
         $edge->sink();
     }
 }
 
 /** An entry naming no codec, into a consumer that records what it was handed. */
 #[Operator(factoryId: 'json_entry_operator')]
-final class JsonEntryOperator extends UnboundedOperator
+final class JsonEntryOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(BoundedB::class);
+        $c->input('in')->into(StepsB::class);
     }
 }
 
-#[Operator(factoryId: 'bounded_emit')]
-final class BoundedEmitOperator extends BoundedOperator
+#[Operator(factoryId: 'steps_emit', run: 'steps')]
+final class StepsEmitOperator extends \Flezha\Operator
 {
-    use BoundedEmitGraph;
+    use StepsEmitGraph;
 }
 
-#[Operator(factoryId: 'bounded_emit_stream')]
-final class BoundedEmitUnboundedOperator extends UnboundedOperator
+#[Operator(factoryId: 'steps_emit_flow')]
+final class StepsEmitFlowOperator extends \Flezha\Operator
 {
-    use BoundedEmitGraph;
+    use StepsEmitGraph;
+}
+
+/** A chained loop whose terminal nothing consumes: its value is the pass's carry. */
+#[Operator(factoryId: 'steps_carry', run: ['steps' => ['each' => 'chained']])]
+final class StepsCarryOperator extends \Flezha\Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(StepsProducer::class)->named('carry');
+    }
 }
 
 // -- merges, the router and fanned keys -------------------------------------
@@ -529,7 +537,7 @@ final class StaticRecorder extends Tasklet
 
 /** Two entries merged into one tasklet, each tagged by its own mapping and keyed on the tag's symbol. */
 #[Operator(factoryId: 'merge_operator')]
-final class MergeOperator extends UnboundedOperator
+final class MergeOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -544,7 +552,7 @@ final class MergeOperator extends UnboundedOperator
 }
 
 #[Operator(factoryId: 'route_latest_operator')]
-final class RouteLatestOperator extends UnboundedOperator
+final class RouteLatestOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
@@ -555,7 +563,7 @@ final class RouteLatestOperator extends UnboundedOperator
 
 /** An entry payload fanned into several values, keyed on the wiring and by a static key set. */
 #[Operator(factoryId: 'fanned_operator')]
-final class FannedOperator extends UnboundedOperator
+final class FannedOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {

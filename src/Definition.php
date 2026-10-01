@@ -194,12 +194,12 @@ final class Definition
             }
             $arguments = [...$arguments, ...$own];
         }
-        foreach (['kind', 'sink', 'input', 'codec'] as $operatorArgument) {
+        foreach (['run', 'durable', 'sink', 'input', 'codec'] as $operatorArgument) {
             if (array_key_exists($operatorArgument, $arguments)) {
                 throw new FlezhaException('topology.operator_field_on_tasklet', [
                     'tasklet' => $arguments['name'] ?? $reflection->getName(),
                     'fields' => ["`$operatorArgument` on #[Task]"],
-                    'instead' => '#[Operator] on a class extending UnboundedOperator or BoundedOperator that defines `run`',
+                    'instead' => '#[Operator] on a class extending Operator that defines `run`',
                 ]);
             }
         }
