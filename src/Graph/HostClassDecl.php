@@ -39,7 +39,7 @@ final class HostClassDecl
     }
 
     /** @return array<string, mixed> */
-    public static function of(ClassSpec $spec): array
+    public static function of(ClassSpec $spec, bool $embedded = false): array
     {
         $keyed = self::keyedTasklets($spec->channels);
 
@@ -58,6 +58,7 @@ final class HostClassDecl
                 static fn (TaskNode $node): array => self::tasklet($node, isset($keyed[$node->index])),
                 $spec->tasklets,
             ),
+            'embedded' => $embedded ?: null,
         ]);
     }
 
@@ -124,7 +125,7 @@ final class HostClassDecl
             },
             'cell_keys' => $decl->cellKeys ?? [],
             'idle_ttl_ms' => $decl->idleTtlSeconds === null ? null : $decl->idleTtlSeconds * 1000,
-            'max_cells' => $decl->maxCells,
+            'max_cells' => $node->maxCells ?? $decl->maxCells,
             'cells_for_overridden' => $definition->declares('cellsFor'),
             'compensate_overridden' => $definition->declares('compensate'),
             'clock' => $definition->clock(),
@@ -135,6 +136,8 @@ final class HostClassDecl
             'change_is_nochange' => !$definition->declares('initState'),
             'schema_version' => $decl->schemaVersion,
             'min_readable_schema_version' => $decl->minReadableSchemaVersion,
+            'operator' => $node->embeds === null ? null : $node->embeds::declaration()->factoryId,
+            'input' => $node->input,
         ]);
     }
 

@@ -35,6 +35,16 @@ final class Validate
      */
     public static function spec(ClassSpec $spec, Core $core): array
     {
+        // The core judges an embedding against the class it names, so every
+        // steps class this one embeds is declared first: registered, never
+        // announced.
+        foreach ($spec->tasklets as $node) {
+            if ($node->embeds !== null) {
+                $inner = $node->embeds::spec();
+                self::spec($inner, $core);
+                $core->declareClass(Json::encode(HostClassDecl::of($inner, embedded: true)));
+            }
+        }
         foreach ($spec->tasklets as $node) {
             self::schema($node);
         }

@@ -397,7 +397,7 @@ final class Runner
     {
         $core = $this->core();
         foreach ($this->registry->all() as $registered) {
-            $core->declareClass(Json::encode(HostClassDecl::of($registered->spec)));
+            $core->declareClass(Json::encode(HostClassDecl::of($registered->spec, $registered->embedded)));
         }
     }
 

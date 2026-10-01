@@ -372,7 +372,8 @@ final class Ctx
         ?string $key,
         ?array $metadata,
     ): array {
-        $definition = $this->spec->tasklets[$edge->tasklet]->definition;
+        $consumer = $this->spec->tasklets[$edge->tasklet];
+        $definition = $consumer->definition;
         $outputs = [];
 
         // Producer-side, in declaration order: the core routes on `(edge, key)`
@@ -390,7 +391,9 @@ final class Ctx
                     ? $definition->eventTimeOf($transformed)
                     : null,
                 'metadata' => $this->metadata($metadata),
-                'payload' => $this->edgePayload($channel, $transformed),
+                'payload' => $consumer->encode !== null
+                    ? ($consumer->encode)($transformed)
+                    : $this->edgePayload($channel, $transformed),
             ];
         }
 

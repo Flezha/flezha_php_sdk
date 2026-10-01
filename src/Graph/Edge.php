@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Graph;
 
 use Flezha\ChannelCodec;
+use Flezha\Definition;
 use Flezha\Dropped;
 use Flezha\Exception\FlezhaException;
 use Flezha\Fanned;
@@ -118,10 +119,23 @@ final class Edge
      * Wire this edge into a tasklet: a `Tasklet` subclass, or a short-form
      * operator class, which is its own.
      *
+     * Or into an operator class with a `channels()` graph. One that runs in
+     * steps becomes a node, named by its factory id, that runs one stepped
+     * instance of it per key of this edge (one on an unkeyed edge) with its
+     * own state and journal; the edge answered carries its exit tasklet's
+     * output, and `$maxCells` caps the instances a keyed edge keeps at once.
+     * One that runs in flow is inlined: its graph joins this one, fed by this
+     * edge, its nodes named `<factoryId>.<node>`, and the edge answered is its
+     * exit's. `$input` names the class's entry channel when it declares
+     * several.
+     *
      * @param class-string<Tasklet>|class-string<Operator> $class
      */
-    public function into(string $class, ?string $nodeName = null): self
+    public function into(string $class, ?string $nodeName = null, ?string $input = null, ?int $maxCells = null): self
     {
+        if (is_subclass_of($class, Operator::class) && !Definition::overrides($class, 'run')) {
+            return $this->builder->embed($this, $class, $nodeName, $input, $maxCells);
+        }
         $node = $this->builder->nodeFor($class, $nodeName);
 
         return $this->wire($node, ['link' => 'into', 'tasklet' => $node->index]);

@@ -20,6 +20,9 @@ final class RegisteredClass
     /** @var array<string, mixed> */
     private array $cells = [];
 
+    /** Declared only to be embedded by another class, never announced. */
+    public bool $embedded = false;
+
     public function __construct(public readonly ClassSpec $spec)
     {
         $outgoing = [];

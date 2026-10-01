@@ -118,10 +118,71 @@ final class PalettePlainMailboxHuge extends PalettePlain
 }
 
 /**
+ * The class palette. One operator class per class role the fixture header
+ * names, its factory id the role.
+ */
+#[OperatorAttribute(factoryId: 'inner_session', run: ['steps' => ['each' => 'per_input']])]
+final class InnerSessionClass extends Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('turns')->into(PalettePlain::class);
+    }
+}
+
+#[OperatorAttribute(factoryId: 'inner_loop', run: ['steps' => ['each' => 'chained']])]
+final class InnerLoopClass extends Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('turns')->into(PalettePlain::class)->named('carry');
+    }
+}
+
+#[OperatorAttribute(factoryId: 'inner_cleanup')]
+final class InnerCleanupClass extends Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('raw')->into(PalettePlain::class)->into(PaletteSecond::class);
+    }
+}
+
+#[OperatorAttribute(factoryId: 'inner_two_entries', run: ['steps' => ['each' => 'per_input']])]
+final class InnerTwoEntriesClass extends Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('a')->into(PalettePlain::class);
+        $c->input('b')->into(PaletteSecond::class);
+    }
+}
+
+#[OperatorAttribute(factoryId: 'inner_two_exits', run: ['steps' => ['each' => 'per_input']])]
+final class InnerTwoExitsClass extends Operator
+{
+    public static function channels(Builder $c): void
+    {
+        $turns = $c->input('turns');
+        $turns->into(PalettePlain::class);
+        $turns->into(PaletteSecond::class);
+    }
+}
+
+/**
  * The record a row's steps describe, written the way an author writes it.
  */
 final class RowInterpreter
 {
+    /** class role => the operator class it is bound to */
+    private const CLASSES = [
+        'inner_session' => InnerSessionClass::class,
+        'inner_loop' => InnerLoopClass::class,
+        'inner_cleanup' => InnerCleanupClass::class,
+        'inner_two_entries' => InnerTwoEntriesClass::class,
+        'inner_two_exits' => InnerTwoExitsClass::class,
+    ];
+
     /** role => the palette class it is bound to */
     private const PALETTE = [
         'plain' => PalettePlain::class,
@@ -246,6 +307,10 @@ final class RowInterpreter
             'sink' => $arg === '' ? $edge->sink() : $edge->sink($arg),
             'response' => $edge->response(),
             'into' => $this->wire($edge, $arg),
+            // The result is the class's exit, addressed by the class's role.
+            'into_class' => $this->handles[$arg] = $edge->into(self::CLASSES[$arg] ?? throw new \RuntimeException(
+                "the fixture names a class role that is not one: $arg"
+            )),
             // Declared on the tasklet in this SDK, and read as the palette
             // class was bound — one step earlier than the step that names it.
             'mailbox' => $edge,
