@@ -71,13 +71,6 @@ final class ChannelSpec
         public $sinkEncode = null,
         /** The channel's call end, when a chain closes on one. */
         public ?CallEnd $call = null,
-        /**
-         * An entry channel's writer, its codec's, JSON when it names none:
-         * what a tasklet of a class embedding this one writes a value into it with.
-         *
-         * @var (callable(mixed):string)|null
-         */
-        public $entryEncode = null,
     ) {
     }
 }

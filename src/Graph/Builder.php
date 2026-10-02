@@ -43,14 +43,6 @@ final class Builder
 
     public ?int $compactAfterBytes = null;
 
-    /**
-     * The flow classes being inlined, the innermost last: the edge that feeds
-     * each, the prefix its nodes carry and the entry channels it declared.
-     *
-     * @var list<array{prefix: string, feed: Edge, entries: list<string>}>
-     */
-    private array $inlining = [];
-
     public function __construct(public readonly string $factoryId)
     {
     }
@@ -71,17 +63,9 @@ final class Builder
      */
     public function input(string $name, ?callable $decode = null, ?ChannelCodec $codec = null): Edge
     {
-        // Inside a flow class being inlined, the entry is the edge that feeds it.
-        $inline = array_key_last($this->inlining);
-        if ($inline !== null) {
-            $this->inlining[$inline]['entries'][] = $name;
-
-            return $this->inlining[$inline]['feed'];
-        }
         $channel = new ChannelSpec(index: count($this->channels), name: $name, kind: 'entry');
         $this->refuseCodecBesideCallable($channel, $codec, $decode);
         $channel->decode = $decode ?? ($codec ?? ChannelCodec::Json)->decoder($channel);
-        $channel->entryEncode = ($codec ?? ChannelCodec::Json)->encoder($channel);
         $this->channels[] = $channel;
 
         return new Edge($this, ['entry', $channel], []);
@@ -161,7 +145,7 @@ final class Builder
     public function nodeFor(string $class, ?string $name = null): TaskNode
     {
         $definition = Definition::of($class);
-        $identity = $this->prefixed($name ?? $definition->name);
+        $identity = $name ?? $definition->name;
 
         foreach ($this->tasklets as $node) {
             if ($node->name !== $identity) {
@@ -180,85 +164,6 @@ final class Builder
         $this->tasklets[] = $node;
 
         return $node;
-    }
-
-    /**
-     * `$feed` into an operator class: a steps class becomes a node that runs
-     * one stepped instance of it per key of the edge, its exit output
-     * continuing on the edge answered; a flow class is inlined.
-     *
-     * @internal
-     * @param class-string<Operator> $operator
-     */
-    public function embed(Edge $feed, string $operator, ?string $name, ?string $input, ?int $maxCells): Edge
-    {
-        if (!$operator::spec()->runsInSteps()) {
-            return $this->inline($feed, $operator, $name, $input);
-        }
-        $node = $this->nodeFor(EmbeddingNode::class, $name ?? $operator::declaration()->factoryId);
-        if ($node->embeds !== null && $node->embeds !== $operator) {
-            throw new FlezhaException('topology.node_identity_collision', ['name' => $node->name]);
-        }
-        $node->embeds = $operator;
-        $node->input = $input;
-        $node->maxCells = $maxCells;
-        $entries = array_values(array_filter(
-            $operator::spec()->channels,
-            static fn (ChannelSpec $channel): bool => $channel->kind === 'entry',
-        ));
-        $named = array_values(array_filter($entries, static fn (ChannelSpec $channel): bool => $channel->name === $input));
-        $node->encode = ($named[0] ?? $entries[0] ?? null)?->entryEncode;
-
-        return $feed->wire($node, ['link' => 'into', 'tasklet' => $node->index]);
-    }
-
-    /**
-     * Run a flow class's `channels()` on this builder: its entry is `$feed`
-     * and every node it names carries its prefix. The edge answered is its
-     * exit's, the one node it added that nothing consumes (its last when
-     * every node feeds another or a sink).
-     *
-     * @param class-string<Operator> $operator
-     */
-    private function inline(Edge $feed, string $operator, ?string $name, ?string $input): Edge
-    {
-        $factoryId = $operator::declaration()->factoryId;
-        $first = count($this->tasklets);
-        $this->inlining[] = ['prefix' => $this->prefixed($name ?? $factoryId), 'feed' => $feed, 'entries' => []];
-        try {
-            $operator::channels($this);
-        } finally {
-            $frame = array_pop($this->inlining);
-        }
-        $entries = array_values(array_unique($frame['entries']));
-        sort($entries);
-        if ($input === null ? count($entries) !== 1 : $entries !== [$input]) {
-            throw new FlezhaException('topology.embedded_entry_ambiguous', [
-                'inner' => $factoryId,
-                'channels' => implode(', ', $entries),
-            ]);
-        }
-        $added = array_slice($this->tasklets, $first);
-        $exits = array_values(array_filter($added, static fn (TaskNode $node): bool => $node->output === null));
-        if (count($exits) > 1) {
-            $names = array_map(static fn (TaskNode $node): string => $node->name, $exits);
-            sort($names);
-            throw new FlezhaException('topology.embedded_exit_ambiguous', [
-                'inner' => $factoryId,
-                'channels' => implode(', ', $names),
-            ]);
-        }
-        $exit = $exits[0] ?? ($added === [] ? null : $added[count($added) - 1]);
-
-        return $exit === null ? $feed : new Edge($this, ['tasklet', $exit], []);
-    }
-
-    /** A node's identity inside the class being inlined: `<prefix>.<name>`. */
-    private function prefixed(string $name): string
-    {
-        $inline = array_key_last($this->inlining);
-
-        return $inline === null ? $name : $this->inlining[$inline]['prefix'] . '.' . $name;
     }
 
     /**

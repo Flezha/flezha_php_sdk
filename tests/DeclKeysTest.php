@@ -60,24 +60,17 @@ final class DeclKeysTest extends RepositoryTestCase
     /** @return list<string> */
     private function spelled(): array
     {
-        $keys = [];
-        foreach ([
-            HostClassDecl::of(FullFlow::spec()),
-            HostClassDecl::of(FullEmbedding::spec()),
-            HostClassDecl::of(FullEmbedded::spec(), embedded: true),
-        ] as $stream) {
-            foreach (array_keys($stream) as $key) {
-                $keys[] = "class.$key";
+        $stream = HostClassDecl::of(FullFlow::spec());
+
+        $keys = array_map(static fn (string $k): string => "class.$k", array_keys($stream));
+        foreach ($stream['channels'] as $channel) {
+            foreach (array_keys($channel) as $key) {
+                $keys[] = "channel.$key";
             }
-            foreach ($stream['channels'] as $channel) {
-                foreach (array_keys($channel) as $key) {
-                    $keys[] = "channel.$key";
-                }
-            }
-            foreach ($stream['tasklets'] as $tasklet) {
-                foreach (array_keys($tasklet) as $key) {
-                    $keys[] = "tasklet.$key";
-                }
+        }
+        foreach ($stream['tasklets'] as $tasklet) {
+            foreach (array_keys($tasklet) as $key) {
+                $keys[] = "tasklet.$key";
             }
         }
         $keys = array_values(array_unique($keys));
@@ -285,25 +278,6 @@ final class FullFlow extends \Flezha\Operator
             ->retryMax(5)->retryBackoffMs(50)->into(FullDownstream::class);
         $edge->named('fan')->into(FullFanned::class);
         $c->input('second')->into(FullEntry::class)->keyed()->sink('sink');
-    }
-}
-
-/** A steps class embedded by name on an edge. */
-#[Operator(factoryId: 'decl_keys_embedded', run: ['steps' => ['each' => 'per_input']])]
-final class FullEmbedded extends \Flezha\Operator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(FullDownstream::class);
-    }
-}
-
-#[Operator(factoryId: 'decl_keys_embedding')]
-final class FullEmbedding extends \Flezha\Operator
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(FullEmbedded::class, input: 'in')->sink('out');
     }
 }
 
