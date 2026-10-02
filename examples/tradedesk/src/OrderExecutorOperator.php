@@ -29,7 +29,7 @@ use Flezha\Graph\Edge;
  * methods: the order is cancelled, then the money is released. A step with no `compensate` is
  * skipped, which is why the desk's book is left alone.
  */
-#[Operator(factoryId: 'order_executor', run: ['steps' => ['each' => 'per_input']])]
+#[Operator(factoryId: 'order_executor', run: ['steps' => ['each' => 'per_input', 'on_failure' => 'undo_all']])]
 final class OrderExecutorOperator extends \Flezha\Operator
 {
     /**
