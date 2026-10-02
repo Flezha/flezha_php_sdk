@@ -37,6 +37,38 @@ final class AdminTest extends TestCase
         self::assertEquals(new StartResult('my_echo', StartOutcome::AlreadyRunning), $result);
     }
 
+    public function testAPluginIsEnabledByNameAndBoundAndUnboundByOperator(): void
+    {
+        $admin = $this->answering('null');
+        $admin->enablePlugin('writer', 'operator_file_sink', ['path' => 'out.txt']);
+        $admin->enablePlugin(
+            'feed',
+            'operator_websocket',
+            single: true,
+            operatorId: 'my_echo',
+            hooks: [['on_output', new \stdClass()]],
+        );
+        $admin->bindPlugin('writer', 'my_echo');
+        $admin->bindPlugin('writer', 'my_other', hooks: ['on_output'], channel: 'in');
+        $admin->unbindPlugin('writer', 'my_echo');
+        $admin->disablePlugin('writer');
+        $admin->listPlugins();
+
+        self::assertSame([
+            ['PluginManager.enable', '["writer",{"provider":"operator_file_sink","opts":{"path":"out.txt"}}]'],
+            [
+                'PluginManager.enable',
+                '["feed",{"provider":"operator_websocket","opts":{},"single":true,'
+                    . '"operator_id":"my_echo","hooks":[["on_output",{}]]}]',
+            ],
+            ['PluginManager.bind', '["writer",{"operator_id":"my_echo"}]'],
+            ['PluginManager.bind', '["writer",{"operator_id":"my_other","hooks":["on_output"],"channel":"in"}]'],
+            ['PluginManager.unbind', '["writer",{"operator_id":"my_echo"}]'],
+            ['PluginManager.disable', '["writer",{}]'],
+            ['PluginManager.list', '[]'],
+        ], $this->calls);
+    }
+
     public function testAnAnswerOfAnotherShapeIsRefused(): void
     {
         $this->expectException(FlezhaException::class);

@@ -45,9 +45,8 @@ final class Admin
         mixed $initValues = null,
         mixed $opts = null,
     ): StartResult {
-        $answer = $this->call('Operator.start', array_filter(
+        $answer = $this->call('Operator.start', self::given(
             ['factory_id' => $factoryId, 'id' => $id, 'init_values' => $initValues, 'opts' => $opts],
-            static fn (mixed $field): bool => $field !== null,
         ));
         $outcome = StartOutcome::tryFrom((string) ($answer['outcome'] ?? ''));
         if ($outcome === null || !is_string($answer['id'] ?? null)) {
@@ -69,16 +68,57 @@ final class Admin
         return $this->call('Operator.send', $operatorId, $message, $channel);
     }
 
-    /** Enable a plugin, built from the fields `flz plugin enable` takes. */
-    public function enablePlugin(string $pluginId, array $fields): mixed
-    {
-        return $this->call('PluginManager.enable', $pluginId, $fields);
+    /**
+     * Enable the plugin `$name` in this namespace, of the provider `$provider`
+     * (for example `operator_websocket`), on its `$opts`. `$single` runs one
+     * copy in the whole cluster; `$operatorId` with `$hooks` binds that
+     * operator in the same call.
+     *
+     * @param array<string, mixed> $opts
+     * @param list<mixed>|null $hooks names or `[name, opts]` pairs
+     */
+    public function enablePlugin(
+        string $name,
+        string $provider,
+        array $opts = [],
+        bool $single = false,
+        ?string $operatorId = null,
+        ?array $hooks = null,
+    ): mixed {
+        return $this->call('PluginManager.enable', $name, self::given([
+            'provider' => $provider,
+            'opts' => (object) $opts,
+            'single' => $single ?: null,
+            'operator_id' => $operatorId,
+            'hooks' => $hooks,
+        ]));
     }
 
-    /** Disable a plugin, or every partitioned instance of it. */
-    public function disablePlugin(string $pluginId): mixed
+    /**
+     * Bind the operator `$operatorId` to the enabled plugin `$name`, with the
+     * optional `$hooks` and `$channel`.
+     *
+     * @param list<mixed>|null $hooks names or `[name, opts]` pairs
+     */
+    public function bindPlugin(string $name, string $operatorId, ?array $hooks = null, ?string $channel = null): mixed
     {
-        return $this->call('PluginManager.disable', $pluginId);
+        return $this->call(
+            'PluginManager.bind',
+            $name,
+            self::given(['operator_id' => $operatorId, 'hooks' => $hooks, 'channel' => $channel]),
+        );
+    }
+
+    /** Unbind the operator `$operatorId` from the plugin `$name`, which stays enabled. */
+    public function unbindPlugin(string $name, string $operatorId): mixed
+    {
+        return $this->call('PluginManager.unbind', $name, ['operator_id' => $operatorId]);
+    }
+
+    /** Disable the plugin `$name`, stopping it wherever it runs. */
+    public function disablePlugin(string $name): mixed
+    {
+        return $this->call('PluginManager.disable', $name, new \stdClass());
     }
 
     /** The operator ids running in this namespace. */
@@ -87,7 +127,7 @@ final class Admin
         return $this->call('Operator.list_operators');
     }
 
-    /** The plugins enabled on the controller node answering this call. */
+    /** The plugins enabled in this namespace: name, provider, single, bound operators. */
     public function listPlugins(): mixed
     {
         return $this->call('PluginManager.list');
@@ -110,5 +150,16 @@ final class Admin
         $answer = ($this->adminCall)($verb, json_encode(array_values($args), JSON_THROW_ON_ERROR));
 
         return json_decode($answer, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * The named parameters a call was given, leaving out every one it was not.
+     *
+     * @param array<string, mixed> $fields
+     * @return array<string, mixed>
+     */
+    private static function given(array $fields): array
+    {
+        return array_filter($fields, static fn (mixed $field): bool => $field !== null);
     }
 }

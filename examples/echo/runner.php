@@ -27,13 +27,8 @@ $runner = Flezha::createRunner($argv[1] ?? 'default')
 //
 // $admin = $runner->admin();
 // $admin->startOperator('echo', id: 'my_echo');
-// $admin->enablePlugin('writer', [
-//     'id' => 'writer',
-//     'provider' => 'operator_file_sink',
-//     'operator_id' => 'my_echo',
-//     'opts' => ['path' => 'echo-out.txt'],
-//     'hooks' => [['on_output', new stdClass()]],
-// ]);
+// $admin->enablePlugin('writer', 'operator_file_sink', ['path' => 'echo-out.txt']);
+// $admin->bindPlugin('writer', 'my_echo', hooks: [['on_output', new stdClass()]]);
 // $admin->send('my_echo', 'hello world', 'in');
 //
 // PHP has no threads: the message is processed once `awaitTermination()` below
