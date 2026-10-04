@@ -24,12 +24,12 @@ final class AgentOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->input('turn', codec: ChannelCodec::Text)
+        $c->input('turn', codec: ChannelCodec::Text) // entry 1: `flz operator call`
             ->into(Reply::class)
-            ->sink('answer')                         // to whoever listens
+            ->sink('answer')                         // to whoever listens; the chain goes on
             ->into(Deliver::class)
             ->response();                            // to whoever called
-        $c->input('message')                         // from the gateway
+        $c->input('message')                         // entry 2: the gateway, into the same Reply
             ->map(fn (array $message) => $message['text'])
             ->into(Reply::class);
     }

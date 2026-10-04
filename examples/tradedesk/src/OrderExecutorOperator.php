@@ -29,6 +29,8 @@ use Flezha\Graph\Edge;
  * methods: the order is cancelled, then the money is released. A step with no `compensate` is
  * skipped, which is why the desk's book is left alone.
  */
+// one instance per order; it stays until confirm_fill completes it
+// a failed step undoes the finished ones
 #[Operator(factoryId: 'order_executor', run: ['steps' => ['each' => 'per_input', 'on_failure' => 'undo_all']])]
 final class OrderExecutorOperator extends \Flezha\Operator
 {
@@ -43,7 +45,7 @@ final class OrderExecutorOperator extends \Flezha\Operator
      */
     public static function channels(Builder $c): void
     {
-        $c->input('order')
+        $c->input('order')                                            // the order to carry out
             ->into(ReserveFunds::class)                               // step one
             ->into(PlaceOrder::class)                                 // step two, once step one is done
             ->branch(

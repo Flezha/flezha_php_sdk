@@ -14,7 +14,7 @@ final class Deliver extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit($input);
+        $ctx->emit($input); // the whole answer, to whoever called
     }
 
     // The undo, when a turn is taken back: an answer already given has nothing to take back.

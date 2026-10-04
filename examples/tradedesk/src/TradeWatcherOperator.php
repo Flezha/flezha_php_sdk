@@ -37,13 +37,13 @@ final class TradeWatcherOperator extends \Flezha\Operator
      */
     public static function channels(Builder $c): void
     {
-        $c->input('trades')
+        $c->input('trades')                                                            // JSON from the exchange
             ->filter(fn (array $message) => ($message['channel'] ?? null) === 'trade') // trade messages only
             ->flatMap(fn (array $message) => $message['data'])                         // a message into its trades
             ->filter(fn (array $trade) => $trade['ord_type'] === 'market')             // market orders only
             ->keyBy(fn (array $trade) => $trade['symbol'])                             // one cell per symbol
             ->into(TrackPrices::class)
-            ->into(BuyAboveAverage::class)
-            ->sink('signals');
+            ->into(BuyAboveAverage::class)                                             // fed by the tasklet above
+            ->sink('signals');                                                         // out to the file plugin
     }
 }

@@ -18,8 +18,8 @@ use Flezha\Flezha;
 // `run()` is `start()` followed by `awaitTermination()`. Splitting them leaves
 // room for the admin calls below, and still blocks until shutdown.
 $runner = Flezha::createRunner($argv[1] ?? 'default')
-    ->registerFactory(EchoOperator::class)
-    ->start();
+    ->registerFactory(EchoOperator::class) // the operators this runner serves
+    ->start();                             // connects to the controller
 
 // Everything `flz operator` and `flz plugin` do is also a method here.
 // Uncomment to drive this namespace from the application instead of from a

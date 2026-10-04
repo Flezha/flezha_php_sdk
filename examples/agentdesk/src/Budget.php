@@ -49,9 +49,9 @@ final class Budget extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $today = gmdate('Y-m-d', intdiv($ctx->now(), 1000));
-        if (isset($input['tokens'])) {               // the tokens an answer used
+        if (isset($input['tokens'])) {               // the tokens an answer used: count them
             $ctx->change(['day' => $today, 'tokens' => $input['tokens']]);
-        } else {                                     // a message to admit
+        } else {                                     // a message to admit: hand on its verdict
             $ctx->emit(['message' => $input, 'spent' => self::on($ctx->state, $today)]);
         }
     }

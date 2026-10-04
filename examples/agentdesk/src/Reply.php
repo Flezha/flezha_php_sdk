@@ -30,6 +30,7 @@ final class Reply extends Tasklet
 
     public function run(mixed $input, Ctx $ctx): void
     {
+        // Each piece streams out as it is made; then the whole answer.
         $ctx->emit(DemoModel::answer($ctx->state['messages'], $input, $ctx->part(...)));
         $ctx->change(['kind' => 'said', 'message' => $input]);
     }

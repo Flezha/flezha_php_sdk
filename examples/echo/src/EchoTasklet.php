@@ -20,11 +20,11 @@ use Flezha\Tasklet;
  * Where the result goes is not decided here. The operator decides that, so the
  * graph can be rewired without touching this class.
  */
-#[Task(name: 'echo')]
+#[Task(name: 'echo')] // state is saved under this name, so choose it once
 final class EchoTasklet extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit('echo: ' . $input);
+        $ctx->emit('echo: ' . $input); // where it goes is the operator's business
     }
 }

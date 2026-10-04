@@ -21,13 +21,13 @@ use Flezha\Graph\Builder;
  * arrives as that string. The sink names nothing: a string is sent as it
  * stands, so the output is the text itself, and any other value would be JSON.
  */
-#[Operator(factoryId: 'echo')]
+#[Operator(factoryId: 'echo')] // the name `flz operator start` takes
 final class EchoOperator extends \Flezha\Operator
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)
-            ->into(EchoTasklet::class)
-            ->sink('out');
+        $c->input('in', codec: ChannelCodec::Text) // messages arrive on the entry channel "in"
+            ->into(EchoTasklet::class)             // each one runs through the echo tasklet
+            ->sink('out');                         // the result leaves on "out", for a plugin to pick up
     }
 }
