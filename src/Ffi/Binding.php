@@ -94,6 +94,8 @@ final class Binding
         int32_t flz_core_spawn_result(uintptr_t ctx, uint64_t handle, uint64_t timeout_ms, char **out, size_t *out_len);
         int32_t flz_core_part(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len);
         int32_t flz_core_admin_call(uintptr_t ctx, const char *verb, const char *args, char **result_out, size_t *result_len_out);
+        int32_t flz_core_send_message(uintptr_t ctx, const char *operator_id, const char *channel, const char *message, size_t len, const char *msg_id, const char *key, int32_t local, char **result_out, size_t *result_len_out);
+        int32_t flz_core_operators(uintptr_t ctx, char **buf_out, size_t *len_out);
         uint64_t flz_core_monotonic_nanos(void);
         void flz_core_buf_free(char *buf, size_t len);
         void flz_core_context_free(uintptr_t ctx);

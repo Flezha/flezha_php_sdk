@@ -371,6 +371,58 @@ final class Core implements SpawnBridge
         return (string) $result;
     }
 
+    /**
+     * Send one message, through the controller or locally, answering as JSON:
+     * the verdict, or `null` for a local send. A null id or key is none.
+     */
+    public function sendMessage(
+        string $operator,
+        string $channel,
+        string $message,
+        ?string $msgId,
+        ?string $key,
+        bool $local,
+    ): string {
+        $result = null;
+        $this->check($this->outBuffer(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_send_message(
+                $this->live(),
+                $operator,
+                $channel,
+                $message,
+                strlen($message),
+                $msgId ?? '',
+                $key ?? '',
+                (int) $local,
+                FFI::addr($out),
+                FFI::addr($len),
+            ),
+            $result,
+        ));
+
+        return (string) $result;
+    }
+
+    /**
+     * The ids of the operator instances bound on this runner.
+     *
+     * @return list<string>
+     */
+    public function operators(): array
+    {
+        $ids = null;
+        $this->check($this->outBuffer(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_operators(
+                $this->live(),
+                FFI::addr($out),
+                FFI::addr($len),
+            ),
+            $ids,
+        ));
+
+        return array_values(json_decode((string) $ids, true, 512, JSON_THROW_ON_ERROR));
+    }
+
     /** The core's monotonic clock, in nanoseconds since a process origin. */
     public function monotonicNanos(): int
     {

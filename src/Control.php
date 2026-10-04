@@ -9,7 +9,7 @@ use Flezha\Ffi\Core;
 
 /**
  * Administering the namespace this runner's connection proved, from ordinary
- * application code.
+ * application code. Sending is the runner's own, {@see \Flezha\Runner::send()}.
  *
  * No tasklet has to be running and the application holds no credential of
  * its own: the controller judges every call as the identity the connection
@@ -22,7 +22,7 @@ use Flezha\Ffi\Core;
  * Every method here is one line over a single native entry point, because the
  * verb travels as data. Adding a verb costs a method and no native work.
  */
-final class Admin
+final class Control
 {
     /** @param \Closure(string, string): string $adminCall {@see Core::adminCall()} */
     public function __construct(private readonly \Closure $adminCall)
@@ -50,7 +50,7 @@ final class Admin
         ));
         $outcome = StartOutcome::tryFrom((string) ($answer['outcome'] ?? ''));
         if ($outcome === null || !is_string($answer['id'] ?? null)) {
-            throw new FlezhaException('admin.unreadable_answer', ['verb' => 'Operator.start']);
+            throw new FlezhaException('control.unreadable_answer', ['verb' => 'Operator.start']);
         }
 
         return new StartResult($answer['id'], $outcome);
@@ -60,12 +60,6 @@ final class Admin
     public function stopOperator(string $operatorId): mixed
     {
         return $this->call('Operator.stop', $operatorId);
-    }
-
-    /** Inject a message into an operator's input stream, blocking for the verdict. */
-    public function send(string $operatorId, string $message, string $channel = ''): mixed
-    {
-        return $this->call('Operator.send', $operatorId, $message, $channel);
     }
 
     /**

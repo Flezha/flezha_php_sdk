@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Admin;
+use Flezha\Control;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\StartOutcome;
@@ -12,7 +12,7 @@ use Flezha\StartResult;
 use PHPUnit\Framework\TestCase;
 
 /** Starting an operator from application code. */
-final class AdminTest extends TestCase
+final class ControlTest extends TestCase
 {
     /** @var list<array{string, string}> each call's verb and JSON arguments */
     private array $calls = [];
@@ -39,20 +39,20 @@ final class AdminTest extends TestCase
 
     public function testAPluginIsEnabledByNameAndBoundAndUnboundByOperator(): void
     {
-        $admin = $this->answering('null');
-        $admin->enablePlugin('writer', 'operator_file_sink', ['path' => 'out.txt']);
-        $admin->enablePlugin(
+        $control = $this->answering('null');
+        $control->enablePlugin('writer', 'operator_file_sink', ['path' => 'out.txt']);
+        $control->enablePlugin(
             'feed',
             'operator_websocket',
             single: true,
             operatorId: 'my_echo',
             hooks: [['on_output', new \stdClass()]],
         );
-        $admin->bindPlugin('writer', 'my_echo');
-        $admin->bindPlugin('writer', 'my_other', hooks: ['on_output'], channel: 'in');
-        $admin->unbindPlugin('writer', 'my_echo');
-        $admin->disablePlugin('writer');
-        $admin->listPlugins();
+        $control->bindPlugin('writer', 'my_echo');
+        $control->bindPlugin('writer', 'my_other', hooks: ['on_output'], channel: 'in');
+        $control->unbindPlugin('writer', 'my_echo');
+        $control->disablePlugin('writer');
+        $control->listPlugins();
 
         self::assertSame([
             ['PluginManager.enable', '["writer",{"provider":"operator_file_sink","opts":{"path":"out.txt"}}]'],
@@ -72,7 +72,7 @@ final class AdminTest extends TestCase
     public function testAnAnswerOfAnotherShapeIsRefused(): void
     {
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionCode('admin.unreadable_answer');
+        $this->expectExceptionCode('control.unreadable_answer');
 
         $this->answering('"duplicate"')->startOperator('echo', id: 'my_echo');
     }
@@ -84,17 +84,37 @@ final class AdminTest extends TestCase
 
         try {
             $this->expectException(FlezhaException::class);
-            $this->expectExceptionCode('admin.no_control_plane');
+            $this->expectExceptionCode('control.no_control_plane');
 
-            (new Admin($core->adminCall(...)))->startOperator('echo');
+            (new Control($core->adminCall(...)))->startOperator('echo');
         } finally {
             $core->free();
         }
     }
 
-    private function answering(string $answer): Admin
+    /** Against the real core: no runner here holds `elsewhere`, and only the controller reads an id. */
+    public function testTheCoreRefusesALocalSendHeldElsewhereOrWithAnId(): void
     {
-        return new Admin(function (string $verb, string $args) use ($answer): string {
+        $core = Core::create();
+
+        try {
+            self::assertSame([], $core->operators());
+            foreach ([['elsewhere', null, 'runtime.operator_not_local'], ['orders', 'm-1', 'usage.options_conflict']] as [$operator, $msgId, $code]) {
+                try {
+                    $core->sendMessage($operator, 'in', 'x', $msgId, null, true);
+                    self::fail("a local send to {$operator} was not refused");
+                } catch (FlezhaException $refused) {
+                    self::assertSame($code, $refused->getCode());
+                }
+            }
+        } finally {
+            $core->free();
+        }
+    }
+
+    private function answering(string $answer): Control
+    {
+        return new Control(function (string $verb, string $args) use ($answer): string {
             $this->calls[] = [$verb, $args];
 
             return $answer;

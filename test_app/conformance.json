@@ -40,7 +40,7 @@
     "call",
     "untyped_tree"
   ],
-  "deferred": [],
+  "deferred": ["local_send"],
   "fixtures": {
     "runner_lifecycle": [
       "do_nothing",

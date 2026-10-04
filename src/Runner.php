@@ -143,8 +143,8 @@ final class Runner
     }
 
     /**
-     * Administer this namespace from ordinary application code: start, stop
-     * and feed operators, enable and disable plugins, read what is running.
+     * Administer this namespace from ordinary application code: start and
+     * stop operators, enable and disable plugins, read what is running.
      *
      * The controller judges every call as the identity this connection proved,
      * so no credential is held here and nothing expires. A user grants a
@@ -152,9 +152,48 @@ final class Runner
      * `flz role bind runner@<namespace> app <namespace>`; until then every
      * call is refused.
      */
-    public function admin(): Admin
+    public function control(): Control
     {
-        return new Admin($this->core()->adminCall(...));
+        return new Control($this->core()->adminCall(...));
+    }
+
+    /**
+     * Send `$message` to the entry channel `$channel` of `$operatorId`, through
+     * the controller under the same role check as {@see control()}, answering
+     * its verdict: `['to' => operator, 'verdict' => 'delivered' | 'absorbed' |
+     * 'suspended']`. `$msgId` is stamped as `flz.msg_id`, so an operator whose
+     * input log still holds that id absorbs the repeat; `$key` reaches the
+     * partition group member whose range owns it.
+     *
+     * `$local`: in process, without the controller: the message is on no disk,
+     * is lost if the runner stops before handling it, and an operator's input
+     * log does not cover it. It answers null.
+     *
+     * @throws FlezhaException
+     */
+    public function send(
+        string $operatorId,
+        string $message,
+        string $channel,
+        ?string $msgId = null,
+        ?string $key = null,
+        bool $local = false,
+    ): mixed {
+        $answer = $this->core()->sendMessage($operatorId, $channel, $message, $msgId, $key, $local);
+
+        return json_decode($answer, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * The ids of the operator instances bound on this runner now, read without
+     * the controller.
+     *
+     * @return list<string>
+     * @throws FlezhaException `runtime.runner_not_started` before it starts
+     */
+    public function operators(): array
+    {
+        return ($this->core ?? throw new FlezhaException('runtime.runner_not_started'))->operators();
     }
 
     /**
