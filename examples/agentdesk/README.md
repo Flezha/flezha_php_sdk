@@ -20,7 +20,6 @@ the session's answer as it is written, and each user has a daily token budget.
 | `runner.php` | the runner: this process joins the `agents` namespace and registers the `agent` and `gateway` factories |
 | `src/AgentRelay.php` | a session, a steps relay: one turn per message, and a failed turn fails alone |
 | `src/Reply.php` | answers a message with the demo model, sends the answer as it grows, and keeps the conversation |
-| `src/Deliver.php` | hands the finished answer to whoever called |
 | `src/DemoModel.php` | the demo model |
 | `src/GatewayRelay.php` | the HTTP side, a flow relay: it carries the HTTP plugin, answers every request, and calls the session a message is for |
 | `src/Request.php` | one HTTP request, as the plugin hands it to the gateway, the two routes the gateway knows, and the message a POST is for a session |

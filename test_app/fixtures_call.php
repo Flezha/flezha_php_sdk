@@ -8,9 +8,10 @@ declare(strict_types=1);
  * tasklet names, channel names and payloads: relays that call another
  * relay from their graph and read the outcome as a `Flezha\Response`.
  *
- * - `call_pricing`: a flow callee answering `price:<input>`; an input
- *   starting `silent` is never answered.
- * - `call_orders`: a flow caller calling the instance `pricing`.
+ * - `call_pricing`: a flow callee answering `price:<input>` on its sink
+ *   `quotes`; an input starting `silent` is never answered.
+ * - `call_orders`: a flow caller calling the instance `pricing`, answered from
+ *   `quotes`.
  * - `call_agent`: a durable per-input keep-progress session answering
  *   `answer:<turn>`; `boom` fails the turn, `slow` answers after 2 s.
  * - `call_gateway`: an effectively-once caller calling `call_agent` by the
@@ -112,7 +113,7 @@ final class CallPricing extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(PricingQuote::class)->response();
+        $c->input('in', codec: ChannelCodec::Text)->into(PricingQuote::class)->sink('quotes');
     }
 }
 
@@ -138,7 +139,12 @@ final class CallOrders extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(OrderAsk::class)
             ->named('order')
-            ->call('pricing', deadlineMs: RelayCall::DEADLINE_MS, codec: ChannelCodec::Text)
+            ->call(
+                'pricing',
+                deadlineMs: RelayCall::DEADLINE_MS,
+                answerChannel: 'quotes',
+                codec: ChannelCodec::Text,
+            )
             ->into(OrderPriced::class)
             ->sink('priced');
     }
@@ -170,7 +176,7 @@ final class CallAgent extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('turn', codec: ChannelCodec::Text)->into(AgentTurn::class)->response();
+        $c->input('turn', codec: ChannelCodec::Text)->into(AgentTurn::class)->sink();
     }
 }
 

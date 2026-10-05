@@ -767,9 +767,9 @@ final class DynamicCellRelay extends \Flezha\Relay
 
 // -- call_response -------------------------------------------------------------
 //
-// Relays an outside caller calls and whose graph answers it through
-// `response()`: from the first tasklet, from a downstream one, and from
-// whichever of two filtered paths the input took. `call_turn` is the steps
+// Relays an outside caller calls and whose sink output answers it: from the
+// first tasklet, from a downstream one, and from whichever of two filtered
+// paths the input took. `call_turn` is the steps
 // one, in fixtures_steps.php.
 
 #[Task(name: 'call_echo')]
@@ -782,7 +782,7 @@ final class CallEcho extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(CallEchoStep::class)->response();
+        $c->input('in', codec: ChannelCodec::Text)->into(CallEchoStep::class)->sink();
     }
 }
 
@@ -808,7 +808,7 @@ final class CallDownstream extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(CallParse::class)
             ->into(CallAnswer::class)
-            ->response();
+            ->sink();
     }
 }
 
@@ -844,10 +844,10 @@ final class CallSplit extends \Flezha\Relay
         $admitted = $c->input('in', codec: ChannelCodec::Text)->into(CallAdmit::class);
         $admitted->filter(static fn (mixed $input): bool => !str_starts_with($input, 'no'))
             ->into(CallAccept::class)
-            ->response();
+            ->sink();
         $admitted->filter(static fn (mixed $input): bool => str_starts_with($input, 'no'))
             ->into(CallRefuse::class)
-            ->response();
+            ->sink();
     }
 }
 

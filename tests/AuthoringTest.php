@@ -606,30 +606,13 @@ final class AuthoringTest extends RepositoryTestCase
         self::derived(OneSinkTwoChannels::spec());
     }
 
-    /** `response()` records its link and ends the channel as a sink would, keeping the name. */
-    public function testResponseRecordsItsLinkAndEndsTheChannelAsASinkWould(): void
-    {
-        self::assertSame(
-            [[['link' => 'response']]],
-            HostClassDecl::of(Answers::spec())['channels'][1]['chains'],
-        );
-        // A response is a plugin end but not a sink: the core names no sink for it.
-        self::assertSame(
-            [['in', 'entry', null, [0], null], ['echoer', 'plugin', 0, [], null]],
-            self::channelsOf(Answers::spec()),
-        );
-        self::assertSame(
-            [['in', 'entry', null, [0], null], ['echoer', 'inter_task', 0, [1], null]],
-            self::channelsOf(AnswersAndFeeds::spec()),
-        );
-    }
-
-    /** A sink beside a response on one channel is refused as ending twice. */
-    public function testASinkBesideAResponseOnOneChannelIsRefused(): void
+    /** A sink beside a call on one channel is refused as ending twice. */
+    public function testASinkBesideACallOnOneChannelIsRefused(): void
     {
         try {
             self::validate(static function (Builder $c): void {
-                $c->input('in')->into(Echoer::class)->sink('out')->response();
+                $c->input('in')->into(Echoer::class)->sink('out')
+                    ->call('pricing', deadlineMs: 500)->into(Counter::class);
             });
             self::fail('a channel ending twice was accepted');
         } catch (FlezhaException $e) {
@@ -1431,24 +1414,6 @@ final class OneSinkTwoChannels extends RelayBase
     {
         $c->input('in')->into(Echoer::class)->sink('shared')
             ->into(Counter::class)->sink('shared');
-    }
-}
-
-#[Relay(factoryId: 'answers')]
-final class Answers extends RelayBase
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class)->response();
-    }
-}
-
-#[Relay(factoryId: 'answers_and_feeds')]
-final class AnswersAndFeeds extends RelayBase
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in')->into(Echoer::class)->response()->into(Counter::class);
     }
 }
 

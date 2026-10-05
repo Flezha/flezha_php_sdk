@@ -15,7 +15,7 @@ final class Admit extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $user = $input['message']['user'];
-        $ctx->emit(Budget::admitted($input)
+        $ctx->emitKeyed($user, Budget::admitted($input)
             ? ['status' => 202, 'body' => "sent to $user"]
             : [
                 'status' => 429,

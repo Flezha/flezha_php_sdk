@@ -48,9 +48,9 @@ final class ChannelSpec
         public ?int $retryBackoffMs = null,
         public bool $keyed = false,
         /**
-         * The channel's name once a plugin end, a sink or a response, is
+         * The channel's name once a plugin end, a sink or a call, is
          * attached; null means none. The core's answer names no sink for a
-         * response.
+         * call.
          */
         public ?string $sink = null,
         /**

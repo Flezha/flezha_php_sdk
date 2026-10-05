@@ -244,7 +244,6 @@ final class RowInterpreter
             'retry_max' => $edge->retryMax((int) $arg),
             'on_full' => $edge->onFull(Overflow::from($arg)),
             'sink' => $arg === '' ? $edge->sink() : $edge->sink($arg),
-            'response' => $edge->response(),
             'into' => $this->wire($edge, $arg),
             // Declared on the tasklet in this SDK, and read as the palette
             // class was bound — one step earlier than the step that names it.
@@ -462,7 +461,6 @@ final class Conformance
         'merge',
         'steps',
         'shorthand',
-        'response',
         'call',
         'untyped_tree',
     ];

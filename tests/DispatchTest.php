@@ -51,7 +51,7 @@ final class DispatchTest extends TestCase
                 MergeRelay::class,
                 RouteLatestRelay::class, FannedRelay::class, CompletingSteps::class,
                 CompletingFlow::class, FlakyEntryRelay::class, TimingSteps::class,
-                TimingFlow::class, AnsweringRelay::class, SplitKeyedRelay::class] as $class
+                TimingFlow::class, SplitKeyedRelay::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -72,16 +72,6 @@ final class DispatchTest extends TestCase
         // The CHANNEL's name, which the fixture sets with `named('out')`, not
         // the sink's — it is what rides the frame as `channel` metadata.
         self::assertSame('out', $result['effects'][0]['outputs'][0]['plugin_channel']);
-    }
-
-    public function testAnEmitOnAResponseChannelLeavesAsASinksPluginOutput(): void
-    {
-        $output = $this->work('answering_relay', 0, [self::input('"hello"')])['effects'][0]['outputs'][0];
-
-        self::assertSame(
-            ['plugin', 'echoer', 'hello'],
-            [$output['target'], $output['plugin_channel'], $output['payload']],
-        );
     }
 
     public function testARecordedChangeIsJournaledAndFoldedLive(): void

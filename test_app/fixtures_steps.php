@@ -876,8 +876,8 @@ final class EventTimerSteps extends \Flezha\Relay
     }
 }
 
-// call_turn: a durable per-input loop whose turn answers the outside call
-// through `response()`.
+// call_turn: a durable per-input loop whose turn's sink output answers the
+// outside call.
 #[Task(name: 'call_turn')]
 final class CallTurnStep extends PassThrough
 {
@@ -893,7 +893,7 @@ final class CallTurn extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(CallTurnStep::class)->response();
+        $c->input('in', codec: ChannelCodec::Text)->into(CallTurnStep::class)->sink();
     }
 }
 

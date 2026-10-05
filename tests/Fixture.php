@@ -89,15 +89,6 @@ final class EchoRelay extends \Flezha\Relay
     }
 }
 
-#[Relay(factoryId: 'answering_relay')]
-final class AnsweringRelay extends \Flezha\Relay
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('input')->into(Echoer::class)->response();
-    }
-}
-
 #[Relay(factoryId: 'counter_relay')]
 final class CounterRelay extends \Flezha\Relay
 {

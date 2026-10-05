@@ -78,15 +78,6 @@ final class PartFeederRelay extends \Flezha\Relay
     }
 }
 
-#[Relay(factoryId: 'part_answerer_op')]
-final class PartAnswererRelay extends \Flezha\Relay
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('in', codec: ChannelCodec::Text)->into(PartFeeder::class)->response();
-    }
-}
-
 /**
  * A tasklet's part: the runtime hands the core the activation's token, the
  * index of the item the handler runs and the value encoded as the sink would
@@ -138,12 +129,11 @@ final class PartTest extends TestCase
     {
         PartFeeder::$refusals = [];
         self::assertSame(['x'], self::released(PartFeederRelay::class, ['x']));
-        self::assertSame(['y'], self::released(PartAnswererRelay::class, ['y'], 'part_feeder'));
 
         self::assertSame(
-            ['part.no_sink', 'part.no_sink'],
+            ['part.no_sink'],
             PartFeeder::$refusals,
-            'a channel feeding another tasklet and a response end preview nothing',
+            'a channel feeding another tasklet previews nothing',
         );
     }
 

@@ -46,7 +46,8 @@ final class CallTest extends RepositoryTestCase
     {
         self::assertSame(
             [['link' => 'transform'], ['link' => 'transform'], ['link' => 'key'], ['link' => 'call', 'factory' => 'agent', 'deadline_ms' => 60_000,
-                'create' => false, 'channel' => 'turn', 'response' => 'call_ask.response']],
+                'create' => false, 'channel' => 'turn', 'answer_channel' => 'reply',
+                'response' => 'call_ask.response']],
             HostClassDecl::of(CallingFactory::spec())['channels'][1]['chains'][0],
         );
     }
@@ -206,7 +207,14 @@ final class CallingFactory extends \Flezha\Relay
             ->filter(static fn (mixed $line): bool => $line !== 'drop')
             ->map(static fn (mixed $line): string => "req:$line")
             ->keyBy(static fn (mixed $line): string => explode(':', $line)[1])
-            ->call(factory: 'agent', deadlineMs: 60_000, create: false, channel: 'turn', codec: ChannelCodec::Text)
+            ->call(
+                factory: 'agent',
+                deadlineMs: 60_000,
+                create: false,
+                channel: 'turn',
+                answerChannel: 'reply',
+                codec: ChannelCodec::Text,
+            )
             ->into(CallAsk::class);
     }
 }

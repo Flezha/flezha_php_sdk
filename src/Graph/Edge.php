@@ -186,27 +186,8 @@ final class Edge
         // what keeps the serializer-only form from spelling `sink(null, $enc)`.
         $name = is_string($nameOrEncode) ? $nameOrEncode : null;
         $encode = is_callable($nameOrEncode) ? $nameOrEncode : $encode;
-        $link = ['link' => 'sink'];
-        if ($name !== null) {
-            $link['name'] = $name;
-        }
 
-        return $this->plugEnd($link, $name, $encode, $codec);
-    }
-
-    /**
-     * Terminate this edge's channel on the answer to the outside call its
-     * input carried, and answer the edge. Each value emitted on it answers
-     * that caller and reaches no plugin. It takes no name, so the channel
-     * keeps the one it would have without it, and consumers may follow it
-     * exactly as after `sink()`. A channel ends in one sink or one response.
-     * `$encode` and `$codec` are `sink()`'s.
-     *
-     * @param (callable(mixed):string)|null $encode
-     */
-    public function response(?callable $encode = null, ?ChannelCodec $codec = null): self
-    {
-        return $this->plugEnd(['link' => 'response'], null, $encode, $codec);
+        return $this->attachSink($name, $encode, $codec);
     }
 
     /**
@@ -217,9 +198,11 @@ final class Edge
      * instance, or a partition group whose member the key chooses; `$factory`
      * instead names a factory whose instance the key names, started when
      * absent unless `$create` is false. `$deadlineMs` is required; `$channel`
-     * names the callee's entry channel, and `$codec` the format of both the
-     * request and the answer, JSON by default. A call is not an edge, so the
-     * Response channel may feed this tasklet.
+     * names the callee's entry channel, `$answerChannel` the callee's channel
+     * whose output answers (its first output for the request when null), and
+     * `$codec` the format of both the request and the answer, JSON by default.
+     * A call is not an edge, so the Response channel may feed this tasklet. A
+     * channel ends in one sink or one call.
      */
     public function call(
         ?string $target = null,
@@ -227,6 +210,7 @@ final class Edge
         ?int $deadlineMs = null,
         bool $create = true,
         ?string $channel = null,
+        ?string $answerChannel = null,
         ?ChannelCodec $codec = null,
     ): self {
         if ($deadlineMs === null) {
@@ -242,7 +226,7 @@ final class Edge
         $this->builder->linkChain(
             $this->from,
             $this->pending['chain'] ?? null,
-            self::callLink($target, $factory, $deadlineMs, $create, $channel, $response),
+            self::callLink($target, $factory, $deadlineMs, $create, $channel, $answerChannel, $response),
         );
         // First call wins, as for a sink; a second end is the core's to refuse.
         $source->call ??= new CallEnd($this->transforms(), $this->pending['keyBy'] ?? null, $codec->encoder($source));
@@ -263,6 +247,7 @@ final class Edge
         int $deadlineMs,
         bool $create,
         ?string $channel,
+        ?string $answerChannel,
         string $response,
     ): array {
         return ['link' => 'call']
@@ -270,17 +255,17 @@ final class Edge
             + ($factory !== null ? ['factory' => $factory] : [])
             + ['deadline_ms' => $deadlineMs, 'create' => $create]
             + ($channel !== null ? ['channel' => $channel] : [])
+            + ($answerChannel !== null ? ['answer_channel' => $answerChannel] : [])
             + ['response' => $response];
     }
 
     /**
-     * Attach a plugin end, a sink or a response: both leave as a plugin
-     * output encoded the same way, and the core refuses a second end.
+     * Attach a sink, which leaves as a plugin output; the core refuses a
+     * second end.
      *
-     * @param array{link: string, name?: string} $link
-     * @param (callable(mixed):string)|null      $encode
+     * @param (callable(mixed):string)|null $encode
      */
-    private function plugEnd(array $link, ?string $name, ?callable $encode, ?ChannelCodec $codec): self
+    private function attachSink(?string $name, ?callable $encode, ?ChannelCodec $codec): self
     {
         if ($this->from[0] !== 'tasklet') {
             throw new FlezhaException('topology.sink_on_entry', ['channel' => $name ?? '<derived>']);
@@ -293,6 +278,7 @@ final class Edge
             $channel->name = $name;
         }
         $this->builder->refuseCodecBesideCallable($channel, $codec, $encode);
+        $link = $name === null ? ['link' => 'sink'] : ['link' => 'sink', 'name' => $name];
         $this->builder->linkChain($this->from, $this->pending['chain'] ?? null, $link);
         // First call wins on the builder's own side, as the reference does; a
         // second end is what the core refuses the class for.

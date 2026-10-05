@@ -139,8 +139,7 @@ final class Ctx
      * dropped, and a replayed input sends none.
      *
      * @throws FlezhaException `part.no_sink` when the output channel does not
-     *   end in a sink (it only feeds another tasklet, or ends in `response`
-     *   or `call`),
+     *   end in a sink (it only feeds another tasklet, or ends in `call`),
      *   `part.outside_invocation` through a context whose invocation returned
      */
     public function part(mixed $value): void
