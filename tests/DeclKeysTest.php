@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Ffi\Core;
@@ -54,7 +54,7 @@ final class DeclKeysTest extends RepositoryTestCase
         $this->expectException(\Error::class);
         $this->expectExceptionMessage('Unknown named parameter $wakeAfterMs');
 
-        new Operator(...['factoryId' => 'w', 'wakeAfterMs' => 5_000]);
+        new Relay(...['factoryId' => 'w', 'wakeAfterMs' => 5_000]);
     }
 
     /** @return list<string> */
@@ -106,7 +106,7 @@ final class DeclKeysTest extends RepositoryTestCase
         ];
         self::assertSame(
             [[$merged(0)], [$merged(0)]],
-            array_column(HostClassDecl::of(MergeOperator::spec())['channels'], 'chains'),
+            array_column(HostClassDecl::of(MergeRelay::spec())['channels'], 'chains'),
         );
 
         $same = static fn (mixed $v): mixed => $v;
@@ -256,7 +256,7 @@ final class FullFanned extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'decl_keys_flow',
     run: ['flow' => ['exactly' => ['effectively_once' => [
         'ack' => ['checkpoint' => ['every' => 4, 'outputs' => 'at_checkpoint', 'max_delay_ms' => 250]],
@@ -267,7 +267,7 @@ final class FullFanned extends Tasklet
     maxDurationMs: 60_000,
     description: 'every flow key',
 )]
-final class FullFlow extends \Flezha\Operator
+final class FullFlow extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -299,8 +299,8 @@ final class HybridConsumer extends Tasklet
 }
 
 /** The reference's flow fixture: one producing channel, a sink AND a consumer. */
-#[Operator(factoryId: 'hybrid_channel')]
-final class HybridChannelTopology extends \Flezha\Operator
+#[Relay(factoryId: 'hybrid_channel')]
+final class HybridChannelTopology extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -327,9 +327,9 @@ final class BlockB extends Tasklet
     }
 }
 
-/** The reference's durable structured steps operator: the same hybrid, mid-chain. */
-#[Operator(factoryId: 'commit_block_chain', run: 'steps')]
-final class CommitBlockChainTopology extends \Flezha\Operator
+/** The reference's durable structured steps relay: the same hybrid, mid-chain. */
+#[Relay(factoryId: 'commit_block_chain', run: 'steps')]
+final class CommitBlockChainTopology extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

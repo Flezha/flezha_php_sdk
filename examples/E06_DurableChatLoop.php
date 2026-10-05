@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * A chat session as a `PerInput` steps operator: one iteration per message.
+ * A chat session as a `PerInput` steps relay: one iteration per message.
  *
  * The conversation lives in cell state, so a crash resumes at the last
  * committed turn, and between messages the instance parks without holding a
@@ -15,7 +15,7 @@ namespace Flezha\Examples\E06;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
@@ -49,8 +49,8 @@ final class ChatTurn extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'chat', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 3_600_000)]
-final class ChatSteps extends \Flezha\Operator
+#[Relay(factoryId: 'chat', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 3_600_000)]
+final class ChatSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

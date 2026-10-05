@@ -15,7 +15,7 @@ namespace Flezha\Examples\E05;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
@@ -54,8 +54,8 @@ final class ChargeCard extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'checkout', run: 'steps')]
-final class CheckoutSteps extends \Flezha\Operator
+#[Relay(factoryId: 'checkout', run: 'steps')]
+final class CheckoutSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

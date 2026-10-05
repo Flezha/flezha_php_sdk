@@ -7,12 +7,12 @@ namespace Flezha\Graph;
 use Flezha\ChannelCodec;
 use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
-use Flezha\Operator;
+use Flezha\Relay;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 
 /**
- * The fluent channel builder an operator's `channels()` receives.
+ * The fluent channel builder a relay's `channels()` receives.
  *
  * Compaction is a method on the builder rather than an attribute argument,
  * because it is what the graph is being declared with: an author writes it in
@@ -89,7 +89,7 @@ final class Builder
     }
 
     /**
-     * Turn an operator-wide document stream into per-key deliveries: every key
+     * Turn a relay-wide document stream into per-key deliveries: every key
      * seen on `$traffic` receives each distinct document once, on that key's
      * own next traffic item, as a `[$key, $document]` pair.
      *
@@ -99,7 +99,7 @@ final class Builder
      * nothing. A document whose JSON is identical to the retained one is inert.
      *
      * The node is `route_latest` like any tasklet node, so a second router in
-     * one operator needs {@see routeLatestNamed()}.
+     * one relay needs {@see routeLatestNamed()}.
      *
      * @param callable(mixed):string $keyFn
      */
@@ -140,7 +140,7 @@ final class Builder
      * node — the naming convention every SDK mirrors — so a diamond that fans
      * out and back in has one instance, not two.
      *
-     * @param class-string<Tasklet>|class-string<Operator> $class
+     * @param class-string<Tasklet>|class-string<Relay> $class
      */
     public function nodeFor(string $class, ?string $name = null): TaskNode
     {

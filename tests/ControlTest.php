@@ -11,7 +11,7 @@ use Flezha\StartOutcome;
 use Flezha\StartResult;
 use PHPUnit\Framework\TestCase;
 
-/** Starting an operator from application code. */
+/** Starting a relay from application code. */
 final class ControlTest extends TestCase
 {
     /** @var list<array{string, string}> each call's verb and JSON arguments */
@@ -19,33 +19,33 @@ final class ControlTest extends TestCase
 
     public function testAStartWithoutAnIdSendsNoneAndAnswersTheGeneratedOne(): void
     {
-        $result = $this->answering('{"id":"echo-k7m2qzxw4pd3fn2a","outcome":"started"}')->startOperator('echo');
+        $result = $this->answering('{"id":"echo-k7m2qzxw4pd3fn2a","outcome":"started"}')->startRelay('echo');
 
-        self::assertSame([['Operator.start', '[{"factory_id":"echo"}]']], $this->calls);
+        self::assertSame([['Relay.start', '[{"factory_id":"echo"}]']], $this->calls);
         self::assertEquals(new StartResult('echo-k7m2qzxw4pd3fn2a', StartOutcome::Started), $result);
     }
 
     public function testAStartOfARunningIdAnswersAlreadyRunning(): void
     {
         $result = $this->answering('{"id":"my_echo","outcome":"already_running"}')
-            ->startOperator('echo', id: 'my_echo');
+            ->startRelay('echo', id: 'my_echo');
 
         self::assertSame(
-            [['Operator.start', '[{"factory_id":"echo","id":"my_echo"}]']],
+            [['Relay.start', '[{"factory_id":"echo","id":"my_echo"}]']],
             $this->calls,
         );
         self::assertEquals(new StartResult('my_echo', StartOutcome::AlreadyRunning), $result);
     }
 
-    public function testAPluginIsEnabledByNameAndBoundAndUnboundByOperator(): void
+    public function testAPluginIsEnabledByNameAndBoundAndUnboundByRelay(): void
     {
         $control = $this->answering('null');
-        $control->enablePlugin('writer', 'operator_file_sink', ['path' => 'out.txt']);
+        $control->enablePlugin('writer', 'relay_file_sink', ['path' => 'out.txt']);
         $control->enablePlugin(
             'feed',
-            'operator_websocket',
+            'relay_websocket',
             single: true,
-            operatorId: 'my_echo',
+            relayId: 'my_echo',
             hooks: [['on_output', new \stdClass()]],
         );
         $control->bindPlugin('writer', 'my_echo');
@@ -55,15 +55,15 @@ final class ControlTest extends TestCase
         $control->listPlugins();
 
         self::assertSame([
-            ['PluginManager.enable', '["writer",{"provider":"operator_file_sink","opts":{"path":"out.txt"}}]'],
+            ['PluginManager.enable', '["writer",{"provider":"relay_file_sink","opts":{"path":"out.txt"}}]'],
             [
                 'PluginManager.enable',
-                '["feed",{"provider":"operator_websocket","opts":{},"single":true,'
-                    . '"operator_id":"my_echo","hooks":[["on_output",{}]]}]',
+                '["feed",{"provider":"relay_websocket","opts":{},"single":true,'
+                    . '"relay_id":"my_echo","hooks":[["on_output",{}]]}]',
             ],
-            ['PluginManager.bind', '["writer",{"operator_id":"my_echo"}]'],
-            ['PluginManager.bind', '["writer",{"operator_id":"my_other","hooks":["on_output"],"channel":"in"}]'],
-            ['PluginManager.unbind', '["writer",{"operator_id":"my_echo"}]'],
+            ['PluginManager.bind', '["writer",{"relay_id":"my_echo"}]'],
+            ['PluginManager.bind', '["writer",{"relay_id":"my_other","hooks":["on_output"],"channel":"in"}]'],
+            ['PluginManager.unbind', '["writer",{"relay_id":"my_echo"}]'],
             ['PluginManager.disable', '["writer",{}]'],
             ['PluginManager.list', '[]'],
         ], $this->calls);
@@ -74,7 +74,7 @@ final class ControlTest extends TestCase
         $this->expectException(FlezhaException::class);
         $this->expectExceptionCode('control.unreadable_answer');
 
-        $this->answering('"duplicate"')->startOperator('echo', id: 'my_echo');
+        $this->answering('"duplicate"')->startRelay('echo', id: 'my_echo');
     }
 
     /** Reported as every administration call reports a refusal: the core's reason, thrown. */
@@ -86,7 +86,7 @@ final class ControlTest extends TestCase
             $this->expectException(FlezhaException::class);
             $this->expectExceptionCode('control.no_control_plane');
 
-            (new Control($core->adminCall(...)))->startOperator('echo');
+            (new Control($core->adminCall(...)))->startRelay('echo');
         } finally {
             $core->free();
         }
@@ -98,11 +98,11 @@ final class ControlTest extends TestCase
         $core = Core::create();
 
         try {
-            self::assertSame([], $core->operators());
-            foreach ([['elsewhere', null, 'runtime.operator_not_local'], ['orders', 'm-1', 'usage.options_conflict']] as [$operator, $msgId, $code]) {
+            self::assertSame([], $core->relays());
+            foreach ([['elsewhere', null, 'runtime.relay_not_local'], ['orders', 'm-1', 'usage.options_conflict']] as [$relay, $msgId, $code]) {
                 try {
-                    $core->sendMessage($operator, 'in', 'x', $msgId, null, true);
-                    self::fail("a local send to {$operator} was not refused");
+                    $core->sendMessage($relay, 'in', 'x', $msgId, null, true);
+                    self::fail("a local send to {$relay} was not refused");
                 } catch (FlezhaException $refused) {
                     self::assertSame($code, $refused->getCode());
                 }

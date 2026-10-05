@@ -128,7 +128,7 @@ final class Core implements SpawnBridge
         return (int) $this->ffi->flz_core_schema_version();
     }
 
-    /** Register one operator class from its `HostClassDecl` JSON. */
+    /** Register one relay class from its `HostClassDecl` JSON. */
     public function declareClass(string $json): void
     {
         $this->check($this->ffi->flz_core_declare_class($this->live(), $json, strlen($json)));
@@ -173,9 +173,9 @@ final class Core implements SpawnBridge
      * Start the declared class as a local run: no controller, no socket. The
      * alternative to {@see start()}, never an addition.
      */
-    public function localStart(string $factoryId, string $operatorId): void
+    public function localStart(string $factoryId, string $relayId): void
     {
-        $this->check($this->ffi->flz_core_local_start($this->live(), $factoryId, $operatorId));
+        $this->check($this->ffi->flz_core_local_start($this->live(), $factoryId, $relayId));
     }
 
     /** Queue a declared sink for {@see localNextOutput()}. */
@@ -376,7 +376,7 @@ final class Core implements SpawnBridge
      * the verdict, or `null` for a local send. A null id or key is none.
      */
     public function sendMessage(
-        string $operator,
+        string $relay,
         string $channel,
         string $message,
         ?string $msgId,
@@ -387,7 +387,7 @@ final class Core implements SpawnBridge
         $this->check($this->outBuffer(
             fn (CData $out, CData $len): int => $this->ffi->flz_core_send_message(
                 $this->live(),
-                $operator,
+                $relay,
                 $channel,
                 $message,
                 strlen($message),
@@ -404,15 +404,15 @@ final class Core implements SpawnBridge
     }
 
     /**
-     * The ids of the operator instances bound on this runner.
+     * The ids of the relay instances bound on this runner.
      *
      * @return list<string>
      */
-    public function operators(): array
+    public function relays(): array
     {
         $ids = null;
         $this->check($this->outBuffer(
-            fn (CData $out, CData $len): int => $this->ffi->flz_core_operators(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_relays(
                 $this->live(),
                 FFI::addr($out),
                 FFI::addr($len),

@@ -9,7 +9,7 @@ Three files, one for each part the guides describe:
 | File | Part | What it does |
 |---|---|---|
 | `src/EchoTasklet.php` | the tasklet | the processing stage: prefixes each message |
-| `src/EchoOperator.php` | the operator | the graph: `in` feeds the tasklet, output lands on `out` |
+| `src/EchoRelay.php` | the relay | the graph: `in` feeds the tasklet, output lands on `out` |
 | `runner.php` | the runner | this process: registers the echo factory and waits |
 
 ## Run it
@@ -30,8 +30,8 @@ platform, from the release matching that version. The `allow-plugins` entry in
 Then, from another terminal:
 
 ```sh
-flz operator start echo --id my_echo
-flz operator send my_echo --text 'hello world' --await 2000
+flz relay start echo --id my_echo
+flz relay send my_echo --text 'hello world' --await 2000
 ```
 
 ```

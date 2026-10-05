@@ -13,7 +13,7 @@ use Throwable;
 
 /**
  * The poll loop on a pool of `Swoole\Thread`s over one shared `FlzContext`, so
- * a single runner — and therefore a single operator's tasklet class — uses
+ * a single runner — and therefore a single relay's tasklet class — uses
  * more than one core.
  *
  * Each thread bootstraps the runner's entry script, rebuilds the PHP-side

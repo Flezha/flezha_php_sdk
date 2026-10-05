@@ -8,7 +8,7 @@ use Attribute;
 use Flezha\ChannelCodec;
 
 /**
- * The factory id an operator class registers under and its class settings,
+ * The factory id a relay class registers under and its class settings,
  * each written as the settings tree's own data: `run: 'steps'`,
  * `run: ['steps' => ['each' => 'per_input']]`, `durable: false`,
  * `durable: ['local' => ['sleep_after' => 2_000]]`. Unwritten, the class runs
@@ -22,13 +22,13 @@ use Flezha\ChannelCodec;
  * the entry channel (`input` when none is written) and its `codec`, and the
  * plugin `sink` the tasklet's output reaches, if any.
  *
- * Deliberately not inherited: two operators cannot share a factory id, and a
+ * Deliberately not inherited: two relays cannot share a factory id, and a
  * subclass silently taking its parent's would be refused by the core at
  * declare time rather than here. PHP attributes are not inherited by default,
  * which is the behaviour this wants.
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-final class Operator
+final class Relay
 {
     /**
      * @param string|array<string, mixed>|null      $run

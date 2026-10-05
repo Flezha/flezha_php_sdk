@@ -146,12 +146,12 @@ final class Dispatcher
             spec: $registered->spec,
             node: $node,
             outgoing: $registered->outgoing[$node->index],
-            operator: (string) $activation['operator'],
+            relay: (string) $activation['relay'],
             cellKey: $activation['cell_key'],
             changeSeq: (int) $activation['change_seq'],
             now: $now,
             replay: $replay,
-            state: $registered->stateOf($node, (string) $activation['operator'], $activation['cell_key']),
+            state: $registered->stateOf($node, (string) $activation['relay'], $activation['cell_key']),
             bridge: $bridge,
             token: (int) $activation['token'],
             offset: $offset,
@@ -162,7 +162,7 @@ final class Dispatcher
         try {
             $body($ctx);
         } finally {
-            $registered->setState($node, (string) $activation['operator'], $activation['cell_key'], $ctx->state);
+            $registered->setState($node, (string) $activation['relay'], $activation['cell_key'], $ctx->state);
         }
 
         return $ctx;
@@ -312,7 +312,7 @@ final class Dispatcher
      */
     private function restoreFold(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
-        $registered->setState($node, (string) $activation['operator'], $activation['cell_key'], Restore::fold(
+        $registered->setState($node, (string) $activation['relay'], $activation['cell_key'], Restore::fold(
             $node->definition,
             ['snapshot' => $activation['snapshot'], 'changes' => $activation['changes']],
             $activation['cell_key'],
@@ -330,7 +330,7 @@ final class Dispatcher
     {
         $registered->setState(
             $node,
-            (string) $activation['operator'],
+            (string) $activation['relay'],
             $activation['cell_key'],
             $node->definition->decode('state', (string) $activation['state_json']),
         );
@@ -452,7 +452,7 @@ final class Dispatcher
             'outcome' => $outcome,
             $field => $node->definition->encode(
                 'state',
-                $registered->stateOf($node, (string) $activation['operator'], $activation['cell_key']),
+                $registered->stateOf($node, (string) $activation['relay'], $activation['cell_key']),
             ),
         ];
     }

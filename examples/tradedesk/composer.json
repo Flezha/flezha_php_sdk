@@ -1,6 +1,6 @@
 {
     "name": "flezha/tradedesk-example",
-    "description": "The toy trader the Part 2 guides build: a stream that watches prices, and a steps operator per order.",
+    "description": "The toy trader the Part 2 guides build: a stream that watches prices, and a steps relay per order.",
     "type": "project",
     "license": "Apache-2.0",
     "require": {

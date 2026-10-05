@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /**
- * Twins of the reference's operator call fixtures
- * (sdk/rust/test_app/src/operator_call.rs), under the same factory ids,
- * tasklet names, channel names and payloads: operators that call another
- * operator from their graph and read the outcome as a `Flezha\Response`.
+ * Twins of the reference's relay call fixtures
+ * (sdk/rust/test_app/src/relay_call.rs), under the same factory ids,
+ * tasklet names, channel names and payloads: relays that call another
+ * relay from their graph and read the outcome as a `Flezha\Response`.
  *
  * - `call_pricing`: a flow callee answering `price:<input>`; an input
  *   starting `silent` is never answered.
@@ -27,7 +27,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -36,7 +36,7 @@ use Flezha\Graph\Builder;
 use Flezha\Response;
 use Flezha\Tasklet;
 
-final class OperatorCall
+final class RelayCall
 {
     public const DEADLINE_MS = 30_000;
 
@@ -61,7 +61,7 @@ final class OperatorCall
     }
 
     /** What a caller's tasklet emits: a turn as it came, an outcome as its line. */
-    public static function relay(mixed $input): string
+    public static function pass(mixed $input): string
     {
         return $input instanceof Response ? self::OUTCOME . self::render($input) : (string) $input;
     }
@@ -107,8 +107,8 @@ final class PricingQuote extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_pricing')]
-final class CallPricing extends \Flezha\Operator
+#[Relay(factoryId: 'call_pricing')]
+final class CallPricing extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -126,19 +126,19 @@ final class OrderPriced extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit(OperatorCall::render($input));
+        $ctx->emit(RelayCall::render($input));
     }
 }
 
-#[Operator(factoryId: 'call_orders')]
-final class CallOrders extends \Flezha\Operator
+#[Relay(factoryId: 'call_orders')]
+final class CallOrders extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(OrderAsk::class)
             ->named('order')
-            ->call('pricing', deadlineMs: OperatorCall::DEADLINE_MS, codec: ChannelCodec::Text)
+            ->call('pricing', deadlineMs: RelayCall::DEADLINE_MS, codec: ChannelCodec::Text)
             ->into(OrderPriced::class)
             ->sink('priced');
     }
@@ -160,13 +160,13 @@ final class AgentTurn extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'call_agent',
     run: ['steps' => ['each' => 'per_input', 'on_failure' => 'keep_progress']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class CallAgent extends \Flezha\Operator
+final class CallAgent extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -179,7 +179,7 @@ final class GatewayAccount extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit(OperatorCall::relay($input));
+        $ctx->emit(RelayCall::pass($input));
     }
 }
 
@@ -188,7 +188,7 @@ final class GatewayResume extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit(substr((string) $input, strlen(OperatorCall::RESUME)));
+        $ctx->emit(substr((string) $input, strlen(RelayCall::RESUME)));
     }
 }
 
@@ -197,33 +197,33 @@ final class GatewayLog extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit(OperatorCall::unprefixed($input));
+        $ctx->emit(RelayCall::unprefixed($input));
     }
 }
 
-#[Operator(factoryId: 'call_gateway', run: ['flow' => ['exactly' => 'effectively_once']])]
-final class CallGateway extends \Flezha\Operator
+#[Relay(factoryId: 'call_gateway', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class CallGateway extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $account = $c->input('in', codec: ChannelCodec::Text)->into(GatewayAccount::class)->named('gateway');
-        $account->filter(OperatorCall::isTurn(...))
-            ->keyBy(OperatorCall::session(...))
-            ->call(factory: 'call_agent', deadlineMs: OperatorCall::DEADLINE_MS, codec: ChannelCodec::Text)
+        $account->filter(RelayCall::isTurn(...))
+            ->keyBy(RelayCall::session(...))
+            ->call(factory: 'call_agent', deadlineMs: RelayCall::DEADLINE_MS, codec: ChannelCodec::Text)
             ->into(GatewayAccount::class);
-        $account->filter(OperatorCall::isResume(...))
+        $account->filter(RelayCall::isResume(...))
             ->into(GatewayResume::class)
             ->named('resume')
-            ->keyBy(OperatorCall::session(...))
+            ->keyBy(RelayCall::session(...))
             ->call(
                 factory: 'call_agent',
-                deadlineMs: OperatorCall::DEADLINE_MS,
+                deadlineMs: RelayCall::DEADLINE_MS,
                 create: false,
                 codec: ChannelCodec::Text,
             )
             ->into(GatewayAccount::class);
-        $account->filter(OperatorCall::isOutcome(...))
-            ->keyBy(OperatorCall::session(...))
+        $account->filter(RelayCall::isOutcome(...))
+            ->keyBy(RelayCall::session(...))
             ->into(GatewayLog::class)
             ->keyed()
             ->sink('gateway_out');
@@ -235,7 +235,7 @@ final class ToolTurn extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit(OperatorCall::relay($input));
+        $ctx->emit(RelayCall::pass($input));
     }
 }
 
@@ -244,31 +244,31 @@ final class ToolLog extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        $ctx->emit(OperatorCall::unprefixed($input));
+        $ctx->emit(RelayCall::unprefixed($input));
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'call_tool_session',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class CallToolSession extends \Flezha\Operator
+final class CallToolSession extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $turn = $c->input('turn', codec: ChannelCodec::Text)->into(ToolTurn::class)->named('tool');
-        $turn->filter(static fn (mixed $line): bool => !OperatorCall::isOutcome($line))
-            ->call('pricing', deadlineMs: OperatorCall::DEADLINE_MS, codec: ChannelCodec::Text)
+        $turn->filter(static fn (mixed $line): bool => !RelayCall::isOutcome($line))
+            ->call('pricing', deadlineMs: RelayCall::DEADLINE_MS, codec: ChannelCodec::Text)
             ->into(ToolTurn::class);
-        $turn->filter(OperatorCall::isOutcome(...))->into(ToolLog::class)->sink('tool_out');
+        $turn->filter(RelayCall::isOutcome(...))->into(ToolLog::class)->sink('tool_out');
     }
 }
 
 final class CallFixtures
 {
-    /** @return list<class-string<\Flezha\Operator>> */
+    /** @return list<class-string<\Flezha\Relay>> */
     public static function all(): array
     {
         return [CallPricing::class, CallOrders::class, CallAgent::class, CallGateway::class, CallToolSession::class];

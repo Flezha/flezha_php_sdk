@@ -14,11 +14,11 @@ use Flezha\Timer;
  * rejects anything above its own size, which is what makes this the step that fails, and answers
  * ten seconds later, which leaves time to stop the runner in the middle of an order.
  *
- * The answer is a timer rather than a wait: a PHP runner serves every operator on one thread, so
+ * The answer is a timer rather than a wait: a PHP runner serves every relay on one thread, so
  * `sleep()` here would hold up the price stream too. `run` keeps the order in the cell and asks
  * for a timer, and `onTimer` reads the answer. The timer is saved with the cell, so it still
  * fires after a runner restart. It ends the instance with a result rather than emitting one: the
- * order's outcome is the instance's own answer, which `flz operator info` reads back.
+ * order's outcome is the instance's own answer, which `flz relay info` reads back.
  *
  * A refusal is retried first, and once the retries are spent the instance ends abnormally.
  * Everything that finished is then undone in reverse, across both arms: the order is cancelled and

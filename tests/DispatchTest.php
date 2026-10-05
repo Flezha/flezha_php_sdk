@@ -45,13 +45,13 @@ final class DispatchTest extends TestCase
     {
         $this->registry = new Registry();
         foreach (
-            [EchoOperator::class, CounterOperator::class, KeyedOperator::class, StampOperator::class,
-                MixedStampOperator::class, StepsEmitOperator::class,
-                StepsEmitFlowOperator::class, StepsCarryOperator::class, JsonEntryOperator::class,
-                MergeOperator::class,
-                RouteLatestOperator::class, FannedOperator::class, CompletingSteps::class,
-                CompletingFlow::class, FlakyEntryOperator::class, TimingSteps::class,
-                TimingFlow::class, AnsweringOperator::class, SplitKeyedOperator::class] as $class
+            [EchoRelay::class, CounterRelay::class, KeyedRelay::class, StampRelay::class,
+                MixedStampRelay::class, StepsEmitRelay::class,
+                StepsEmitFlowRelay::class, StepsCarryRelay::class, JsonEntryRelay::class,
+                MergeRelay::class,
+                RouteLatestRelay::class, FannedRelay::class, CompletingSteps::class,
+                CompletingFlow::class, FlakyEntryRelay::class, TimingSteps::class,
+                TimingFlow::class, AnsweringRelay::class, SplitKeyedRelay::class] as $class
         ) {
             $spec = $class::spec();
             Validate::spec($spec, self::core());
@@ -62,7 +62,7 @@ final class DispatchTest extends TestCase
 
     public function testAnInputReachesTheTaskletAndWhatItEmitsIsSent(): void
     {
-        $result = $this->work('echo_operator', 0, [self::input('"hello"')]);
+        $result = $this->work('echo_relay', 0, [self::input('"hello"')]);
 
         self::assertSame('work', $result['outcome']);
         self::assertSame('ok', $result['effects'][0]['verdict']);
@@ -76,7 +76,7 @@ final class DispatchTest extends TestCase
 
     public function testAnEmitOnAResponseChannelLeavesAsASinksPluginOutput(): void
     {
-        $output = $this->work('answering_operator', 0, [self::input('"hello"')])['effects'][0]['outputs'][0];
+        $output = $this->work('answering_relay', 0, [self::input('"hello"')])['effects'][0]['outputs'][0];
 
         self::assertSame(
             ['plugin', 'echoer', 'hello'],
@@ -86,13 +86,13 @@ final class DispatchTest extends TestCase
 
     public function testARecordedChangeIsJournaledAndFoldedLive(): void
     {
-        $result = $this->work('counter_operator', 0, [self::input('"a"'), self::input('"b"')]);
+        $result = $this->work('counter_relay', 0, [self::input('"a"'), self::input('"b"')]);
 
         self::assertCount(2, $result['effects']);
         self::assertSame(['{"push":"a"}'], $result['effects'][0]['changes']);
         self::assertSame(
             ['count' => 2, 'seen' => ['a', 'b']],
-            $this->stateOf('counter_operator'),
+            $this->stateOf('counter_relay'),
         );
     }
 
@@ -104,7 +104,7 @@ final class DispatchTest extends TestCase
     public function testPlainTextIntoAnEntryNamingNoCodecNeverReachesTheHandler(): void
     {
         Delivered::$values = [];
-        $result = $this->work('json_entry_operator', 0, [self::input('{"a":1}'), self::input('hello')]);
+        $result = $this->work('json_entry_relay', 0, [self::input('{"a":1}'), self::input('hello')]);
 
         self::assertSame(
             ['ok', 'unreadable'],
@@ -121,19 +121,19 @@ final class DispatchTest extends TestCase
      */
     public function testAnEntryTransformFailureIsUnreadableWhileAHandlerFailureIsRetryable(): void
     {
-        $mapped = $this->work('flaky_entry_operator', 0, [self::input('poison')]);
+        $mapped = $this->work('flaky_entry_relay', 0, [self::input('poison')]);
         self::assertSame('unreadable', $mapped['effects'][0]['verdict']);
         self::assertStringContainsString('the mapping rejected it', $mapped['effects'][0]['message']);
 
-        $thrown = $this->work('flaky_entry_operator', 0, [self::input('boom')]);
+        $thrown = $this->work('flaky_entry_relay', 0, [self::input('boom')]);
         self::assertSame('retryable', $thrown['effects'][0]['verdict']);
         self::assertStringContainsString('the handler rejected it', $thrown['effects'][0]['message']);
     }
 
     public function testANonRetryableErrorParksImmediately(): void
     {
-        $this->registry->add(PoisonOperator::spec());
-        $result = $this->work('poison_operator', 0, [self::input('"poison"')]);
+        $this->registry->add(PoisonRelay::spec());
+        $result = $this->work('poison_relay', 0, [self::input('"poison"')]);
 
         self::assertSame('non_retryable', $result['effects'][0]['verdict']);
         self::assertStringContainsString('poisoned', $result['effects'][0]['message']);
@@ -142,8 +142,8 @@ final class DispatchTest extends TestCase
     /** Items after a failure are re-handed by the core, so the batch stops. */
     public function testTheBatchStopsAtTheFailedItem(): void
     {
-        $this->registry->add(PoisonOperator::spec());
-        $result = $this->work('poison_operator', 0, [
+        $this->registry->add(PoisonRelay::spec());
+        $result = $this->work('poison_relay', 0, [
             self::input('"ok"'),
             self::input('"poison"'),
             self::input('"never reached"'),
@@ -156,7 +156,7 @@ final class DispatchTest extends TestCase
 
     public function testATimerFiringReachesOnTimerWithNowEqualToItsSchedule(): void
     {
-        $result = $this->work('counter_operator', 0, [
+        $result = $this->work('counter_relay', 0, [
             ['kind' => 'timer', 'timer_kind' => 'processing_time', 'scheduled_at' => 5_000],
         ]);
 
@@ -168,9 +168,9 @@ final class DispatchTest extends TestCase
     {
         $restored = $this->dispatcher->answer([
             'token' => 1,
-            'factory' => 'counter_operator',
+            'factory' => 'counter_relay',
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'restore_fold',
@@ -182,20 +182,20 @@ final class DispatchTest extends TestCase
         ]);
 
         self::assertSame('restored', $restored['outcome']);
-        self::assertSame(['count' => 2, 'seen' => ['x', 'y']], $this->stateOf('counter_operator'));
+        self::assertSame(['count' => 2, 'seen' => ['x', 'y']], $this->stateOf('counter_relay'));
     }
 
     public function testASnapshotRoundTripsThroughALaterRestore(): void
     {
-        $this->work('counter_operator', 0, [self::input('"a"')]);
-        $snapshot = $this->command('counter_operator', 'snapshot_request')['state'];
+        $this->work('counter_relay', 0, [self::input('"a"')]);
+        $snapshot = $this->command('counter_relay', 'snapshot_request')['state'];
 
         $fresh = new Dispatcher($this->registry, self::core());
         $fresh->answer([
             'token' => 2,
-            'factory' => 'counter_operator',
+            'factory' => 'counter_relay',
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'restore_fold',
@@ -203,15 +203,15 @@ final class DispatchTest extends TestCase
             'changes' => [],
         ]);
 
-        self::assertSame(['count' => 1, 'seen' => ['a']], $this->stateOf('counter_operator'));
+        self::assertSame(['count' => 1, 'seen' => ['a']], $this->stateOf('counter_relay'));
     }
 
     public function testALiveStateReadAndAMigrationSerializeAnswerTheSameJson(): void
     {
-        $this->work('counter_operator', 0, [self::input('"a"')]);
+        $this->work('counter_relay', 0, [self::input('"a"')]);
 
-        $live = $this->command('counter_operator', 'live_state_read')['json'];
-        $migration = $this->command('counter_operator', 'migration_serialize')['json'];
+        $live = $this->command('counter_relay', 'live_state_read')['json'];
+        $migration = $this->command('counter_relay', 'migration_serialize')['json'];
 
         self::assertSame('{"count":1,"seen":["a"]}', $live);
         self::assertSame($live, $migration);
@@ -221,9 +221,9 @@ final class DispatchTest extends TestCase
     {
         $applied = $this->dispatcher->answer([
             'token' => 3,
-            'factory' => 'counter_operator',
+            'factory' => 'counter_relay',
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'apply_state',
@@ -231,7 +231,7 @@ final class DispatchTest extends TestCase
         ]);
 
         self::assertSame('state_applied', $applied['outcome']);
-        self::assertSame(['count' => 9, 'seen' => ['z']], $this->stateOf('counter_operator'));
+        self::assertSame(['count' => 9, 'seen' => ['z']], $this->stateOf('counter_relay'));
     }
 
     public function testThePrepareCrossingAnswersOneKeyPerPayload(): void
@@ -250,7 +250,7 @@ final class DispatchTest extends TestCase
     /** The keys answer the keyed consumer, whatever an unkeyed consumer declared before it filters. */
     public function testThePrepareCrossingAnswersTheKeyedConsumersKeys(): void
     {
-        $prepared = $this->prepare(['"a:1"', '"drop"'], 'split_keyed_operator');
+        $prepared = $this->prepare(['"a:1"', '"drop"'], 'split_keyed_relay');
 
         self::assertSame([['keys' => ['a'], 'event_time' => null], ['keys' => []]], $prepared);
     }
@@ -274,8 +274,8 @@ final class DispatchTest extends TestCase
      */
     public function testAStepsStageRunsAsAnOrdinaryTasklet(): void
     {
-        $this->registry->add(SagaOperator::spec());
-        $result = $this->work('saga_operator', 0, [self::input('"reserve"')]);
+        $this->registry->add(SagaRelay::spec());
+        $result = $this->work('saga_relay', 0, [self::input('"reserve"')]);
 
         self::assertSame('ok', $result['effects'][0]['verdict']);
         $emitted = json_decode($result['effects'][0]['outputs'][0]['payload'], true);
@@ -286,12 +286,12 @@ final class DispatchTest extends TestCase
     /** An aborted chain compensates the stages that committed, in reverse. */
     public function testCompensationRunsOverTheRecordedForwardOutputs(): void
     {
-        $this->registry->add(SagaOperator::spec());
+        $this->registry->add(SagaRelay::spec());
         $result = $this->dispatcher->answer([
             'token' => 4,
-            'factory' => 'saga_operator',
+            'factory' => 'saga_relay',
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'compensate_run',
@@ -310,9 +310,9 @@ final class DispatchTest extends TestCase
     {
         $result = $this->dispatcher->answer([
             'token' => 5,
-            'factory' => 'echo_operator',
+            'factory' => 'echo_relay',
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'compensate_run',
@@ -336,7 +336,7 @@ final class DispatchTest extends TestCase
         self::assertSame('ok', $effect['verdict']);
         self::assertSame('{"seeded":{"order":7}}', $effect['complete']);
         self::assertSame('{"order":7}', $effect['outputs'][0]['payload']);
-        self::assertNull($this->work('echo_operator', 0, [self::input('"x"')])['effects'][0]['complete']);
+        self::assertNull($this->work('echo_relay', 0, [self::input('"x"')])['effects'][0]['complete']);
     }
 
     /**
@@ -388,7 +388,7 @@ final class DispatchTest extends TestCase
         foreach ($calls as $name => $call) {
             $refused = null;
             $ctx = Dispatcher::invoke(
-                ['token' => 1, 'operator' => 'op', 'cell_key' => null, 'change_seq' => 0, 'kind' => 'compensate_run'],
+                ['token' => 1, 'relay' => 'op', 'cell_key' => null, 'change_seq' => 0, 'kind' => 'compensate_run'],
                 $registered,
                 $registered->spec->tasklets[0],
                 self::core(),
@@ -518,7 +518,7 @@ final class DispatchTest extends TestCase
     public function testAFreshWorkItemRestartsTheEmitOrdinal(): void
     {
         $result = $this->work(
-            'stamp_operator',
+            'stamp_relay',
             0,
             [self::input('"twice"'), self::input('"twice"')],
             'ek',
@@ -546,7 +546,7 @@ final class DispatchTest extends TestCase
     /** @return array<string, mixed> */
     private function stamped(string $payload): array
     {
-        return $this->work('stamp_operator', 0, [self::input($payload)], 'ek', 5);
+        return $this->work('stamp_relay', 0, [self::input($payload)], 'ek', 5);
     }
 
     public function testAStructuredStepsReleasesOneUntransformedEdgeOutput(): void
@@ -659,7 +659,7 @@ final class DispatchTest extends TestCase
     public function testMergedSourcesReachTheTaskletEachUnderItsOwnMapping(): void
     {
         Delivered::$values = [];
-        $result = $this->work('merge_operator', 0, [
+        $result = $this->work('merge_relay', 0, [
             self::input('"A:1"'),
             self::input('"A:2"'),
             self::input('"A:3"', channel: 1),
@@ -678,13 +678,13 @@ final class DispatchTest extends TestCase
     {
         self::assertSame(
             [['keys' => ['B'], 'event_time' => null]],
-            $this->prepare(['"B:1"'], 'merge_operator', channel: 1),
+            $this->prepare(['"B:1"'], 'merge_relay', channel: 1),
         );
     }
 
     public function testRouteLatestHandsAKeyTheDocumentOnItsOwnTraffic(): void
     {
-        $result = $this->work('route_latest_operator', 0, [
+        $result = $this->work('route_latest_relay', 0, [
             self::input('{"limit":5}'),
             self::input('{"symbol":"A"}', channel: 1),
         ]);
@@ -698,7 +698,7 @@ final class DispatchTest extends TestCase
     public function testAFanOfThreeRunsTheHandlerOncePerValueUnderOneInput(): void
     {
         Delivered::$values = [];
-        $result = $this->work('fanned_operator', 0, [self::input('"a:1,a:2,a:3"', offset: 7)], 'a');
+        $result = $this->work('fanned_relay', 0, [self::input('"a:1,a:2,a:3"', offset: 7)], 'a');
 
         self::assertCount(1, $result['effects']);
         self::assertSame(7, $result['effects'][0]['consumed_offset']);
@@ -707,15 +707,15 @@ final class DispatchTest extends TestCase
 
     public function testAFanOfNoneIsADrop(): void
     {
-        self::assertSame([], $this->delivered('fanned_operator', 0, '"none"', channel: 0, cellKey: 'a'));
-        self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_operator'));
+        self::assertSame([], $this->delivered('fanned_relay', 0, '"none"', channel: 0, cellKey: 'a'));
+        self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_relay'));
     }
 
     public function testAFanFollowedByAKeyAnswersEveryKeyAtTheCrossing(): void
     {
         self::assertSame(
             [['keys' => ['a', 'b', 'c'], 'event_time' => null]],
-            $this->prepare(['"a:1,b:2,c:3"'], 'fanned_operator'),
+            $this->prepare(['"a:1,b:2,c:3"'], 'fanned_relay'),
         );
     }
 
@@ -736,14 +736,14 @@ final class DispatchTest extends TestCase
     public function testEachCellAFanReachesRunsOnlyTheValuesRoutedToIt(int $tasklet, int $channel): void
     {
         foreach (['a' => [['a', 'a:1'], ['a', 'a:3']], 'b' => [['b', 'b:2']]] as $cell => $routed) {
-            self::assertSame($routed, $this->delivered('fanned_operator', $tasklet, '"a:1,b:2,a:3"', $channel, $cell));
+            self::assertSame($routed, $this->delivered('fanned_relay', $tasklet, '"a:1,b:2,a:3"', $channel, $cell));
         }
     }
 
     /** @return array<string, mixed> */
     private function mixed(string $payload, int $tasklet = 0): array
     {
-        return $this->work('mixed_stamp_operator', $tasklet, [self::input($payload)], 'ek', 5);
+        return $this->work('mixed_stamp_relay', $tasklet, [self::input($payload)], 'ek', 5);
     }
 
     /** @param list<array<string, mixed>> $items @return array<string, mixed> */
@@ -758,7 +758,7 @@ final class DispatchTest extends TestCase
             'token' => 1,
             'factory' => $factory,
             'tasklet' => $tasklet,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => $cellKey,
             'change_seq' => $changeSeq,
             'kind' => 'work',
@@ -773,7 +773,7 @@ final class DispatchTest extends TestCase
             'token' => 1,
             'factory' => $factory,
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => $kind,
@@ -781,13 +781,13 @@ final class DispatchTest extends TestCase
     }
 
     /** @param list<string> $payloads @return list<array<string, mixed>> */
-    private function prepare(array $payloads, string $factory = 'keyed_operator', int $channel = 0): array
+    private function prepare(array $payloads, string $factory = 'keyed_relay', int $channel = 0): array
     {
         return $this->dispatcher->answer([
             'token' => 1,
             'factory' => $factory,
             'tasklet' => 0,
-            'operator' => 'op',
+            'relay' => 'op',
             'cell_key' => null,
             'change_seq' => 0,
             'kind' => 'key_request',

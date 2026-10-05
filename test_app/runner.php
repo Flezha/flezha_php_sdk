@@ -61,17 +61,17 @@ try {
         // topology dies at declaration, before the core is started.
         Conformance::registerOnly($runner, $topology);
     } else {
-        foreach (Fixtures::all() as $operator) {
-            $runner->registerFactory($operator);
+        foreach (Fixtures::all() as $relay) {
+            $runner->registerFactory($relay);
         }
-        foreach (StepsFixtures::all() as $operator) {
-            $runner->registerFactory($operator);
+        foreach (StepsFixtures::all() as $relay) {
+            $runner->registerFactory($relay);
         }
-        foreach (PartFixtures::all() as $operator) {
-            $runner->registerFactory($operator);
+        foreach (PartFixtures::all() as $relay) {
+            $runner->registerFactory($relay);
         }
-        foreach (CallFixtures::all() as $operator) {
-            $runner->registerFactory($operator);
+        foreach (CallFixtures::all() as $relay) {
+            $runner->registerFactory($relay);
         }
     }
 

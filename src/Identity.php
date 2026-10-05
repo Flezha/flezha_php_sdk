@@ -37,7 +37,7 @@ final class Identity
      */
     public static function cell(string $instanceId, string $taskletName, string $cellKey): string
     {
-        $parts = [['operator id', $instanceId, 255], ['tasklet name', $taskletName, 255], ['cell key', $cellKey, 0xFFFF]];
+        $parts = [['relay id', $instanceId, 255], ['tasklet name', $taskletName, 255], ['cell key', $cellKey, 0xFFFF]];
         foreach ($parts as [$part, $value, $limit]) {
             if (strlen($value) > $limit) {
                 throw new FlezhaException(

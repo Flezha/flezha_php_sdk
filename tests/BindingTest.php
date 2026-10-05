@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
@@ -255,13 +255,13 @@ final class CheckpointTasklet extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'checkpoint_outputs_only',
     run: ['flow' => ['exactly' => ['effectively_once' => [
         'ack' => ['checkpoint' => ['outputs' => 'at_checkpoint', 'max_delay_ms' => 1500]],
     ]]]],
 )]
-final class CheckpointOutputsOnly extends \Flezha\Operator
+final class CheckpointOutputsOnly extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -269,11 +269,11 @@ final class CheckpointOutputsOnly extends \Flezha\Operator
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'checkpoint_only',
     run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => 'checkpoint']]]],
 )]
-final class CheckpointAckOnly extends \Flezha\Operator
+final class CheckpointAckOnly extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

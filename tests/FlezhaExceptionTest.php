@@ -60,11 +60,11 @@ final class FlezhaExceptionTest extends RepositoryTestCase
     {
         $error = FlezhaException::fromDocument(
             '{"error":{"code":"quota.exceeded","class":"denied","message":"the quota is reached",'
-            . '"details":{"kind":"max_operators"},"hint":"flz namespace quota"}}',
+            . '"details":{"kind":"max_relays"},"hint":"flz namespace quota"}}',
         );
 
         self::assertSame(
-            ['quota.exceeded', 'denied', 'the quota is reached', ['kind' => 'max_operators'], 'flz namespace quota'],
+            ['quota.exceeded', 'denied', 'the quota is reached', ['kind' => 'max_relays'], 'flz namespace quota'],
             [$error->getCode(), $error->errorClass, $error->getMessage(), $error->details, $error->hint],
         );
     }

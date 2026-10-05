@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -14,13 +14,13 @@ use Flezha\Overflow;
 use Flezha\Tasklet;
 
 /**
- * The tasklets and operators the unit suite declares against.
+ * The tasklets and relays the unit suite declares against.
  *
  * One file, so a test that needs "a stateful keyed tasklet" names one rather
  * than declaring a fourth almost-identical class.
  */
 
-/** The echo body, for a tasklet and a short-form operator alike. */
+/** The echo body, for a tasklet and a short-form relay alike. */
 trait Echoes
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -80,8 +80,8 @@ final class Keyed extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'echo_operator')]
-final class EchoOperator extends \Flezha\Operator
+#[Relay(factoryId: 'echo_relay')]
+final class EchoRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -89,8 +89,8 @@ final class EchoOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'answering_operator')]
-final class AnsweringOperator extends \Flezha\Operator
+#[Relay(factoryId: 'answering_relay')]
+final class AnsweringRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -98,8 +98,8 @@ final class AnsweringOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'counter_operator')]
-final class CounterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'counter_relay')]
+final class CounterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -108,8 +108,8 @@ final class CounterOperator extends \Flezha\Operator
 }
 
 /** A short form that only keeps state: no `sink`, and a body answering nothing. */
-#[Operator(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
-final class ShortCounter extends \Flezha\Operator
+#[Relay(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
+final class ShortCounter extends \Flezha\Relay
 {
     public function initState(?string $cellKey): mixed
     {
@@ -127,8 +127,8 @@ final class ShortCounter extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'keyed_operator')]
-final class KeyedOperator extends \Flezha\Operator
+#[Relay(factoryId: 'keyed_relay')]
+final class KeyedRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -146,8 +146,8 @@ final class KeyedOperator extends \Flezha\Operator
  * One entry feeding an unkeyed consumer first and a keyed one after it, each
  * behind its own filter: the crossing's keys are the keyed consumer's.
  */
-#[Operator(factoryId: 'split_keyed_operator')]
-final class SplitKeyedOperator extends \Flezha\Operator
+#[Relay(factoryId: 'split_keyed_relay')]
+final class SplitKeyedRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -187,8 +187,8 @@ final class StampEmitter extends Tasklet
  * One keyed plugin channel: the topology every SDK can express, and where the
  * per-emit ordinal has to be right.
  */
-#[Operator(factoryId: 'stamp_operator')]
-final class StampOperator extends \Flezha\Operator
+#[Relay(factoryId: 'stamp_relay')]
+final class StampRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -227,8 +227,8 @@ final class FanTarget extends Tasklet
  * attached sink is `TransformAfterTerminal` in every SDK — the sink serializes
  * the channel's own value, so the order says which value that is.
  */
-#[Operator(factoryId: 'mixed_stamp_operator')]
-final class MixedStampOperator extends \Flezha\Operator
+#[Relay(factoryId: 'mixed_stamp_relay')]
+final class MixedStampRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -260,8 +260,8 @@ final class Poison extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'poison_operator')]
-final class PoisonOperator extends \Flezha\Operator
+#[Relay(factoryId: 'poison_relay')]
+final class PoisonRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -284,8 +284,8 @@ final class Flaky extends Tasklet
 }
 
 /** A text entry whose edge transform rejects `poison`, into a handler that rejects `boom`. */
-#[Operator(factoryId: 'flaky_entry_operator')]
-final class FlakyEntryOperator extends \Flezha\Operator
+#[Relay(factoryId: 'flaky_entry_relay')]
+final class FlakyEntryRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -318,8 +318,8 @@ final class SagaStep extends Tasklet
     }
 }
 
-#[\Flezha\Attribute\Operator(factoryId: 'saga_operator', run: 'steps')]
-final class SagaOperator extends \Flezha\Operator
+#[\Flezha\Attribute\Relay(factoryId: 'saga_relay', run: 'steps')]
+final class SagaRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -330,7 +330,7 @@ final class SagaOperator extends \Flezha\Operator
 // -- a tasklet's completion ------------------------------------------------
 //
 // One tasklet under both kinds: the SDK carries the request either way, and
-// the core decides what it means, ending a steps operator or failing a flow operator's item.
+// the core decides what it means, ending a steps relay or failing a flow relay's item.
 
 #[Task(name: 'completer')]
 final class Completer extends Tasklet
@@ -357,14 +357,14 @@ trait CompletingGraph
     }
 }
 
-#[Operator(factoryId: 'completing_steps', run: 'steps')]
-final class CompletingSteps extends \Flezha\Operator
+#[Relay(factoryId: 'completing_steps', run: 'steps')]
+final class CompletingSteps extends \Flezha\Relay
 {
     use CompletingGraph;
 }
 
-#[Operator(factoryId: 'completing_flow')]
-final class CompletingFlow extends \Flezha\Operator
+#[Relay(factoryId: 'completing_flow')]
+final class CompletingFlow extends \Flezha\Relay
 {
     use CompletingGraph;
 }
@@ -412,14 +412,14 @@ trait TimingGraph
     }
 }
 
-#[Operator(factoryId: 'timing_steps', run: 'steps')]
-final class TimingSteps extends \Flezha\Operator
+#[Relay(factoryId: 'timing_steps', run: 'steps')]
+final class TimingSteps extends \Flezha\Relay
 {
     use TimingGraph;
 }
 
-#[Operator(factoryId: 'timing_flow')]
-final class TimingFlow extends \Flezha\Operator
+#[Relay(factoryId: 'timing_flow')]
+final class TimingFlow extends \Flezha\Relay
 {
     use TimingGraph;
 }
@@ -478,8 +478,8 @@ trait StepsEmitGraph
 }
 
 /** An entry naming no codec, into a consumer that records what it was handed. */
-#[Operator(factoryId: 'json_entry_operator')]
-final class JsonEntryOperator extends \Flezha\Operator
+#[Relay(factoryId: 'json_entry_relay')]
+final class JsonEntryRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -487,21 +487,21 @@ final class JsonEntryOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'steps_emit', run: 'steps')]
-final class StepsEmitOperator extends \Flezha\Operator
+#[Relay(factoryId: 'steps_emit', run: 'steps')]
+final class StepsEmitRelay extends \Flezha\Relay
 {
     use StepsEmitGraph;
 }
 
-#[Operator(factoryId: 'steps_emit_flow')]
-final class StepsEmitFlowOperator extends \Flezha\Operator
+#[Relay(factoryId: 'steps_emit_flow')]
+final class StepsEmitFlowRelay extends \Flezha\Relay
 {
     use StepsEmitGraph;
 }
 
 /** A chained loop whose terminal nothing consumes: its value is the pass's carry. */
-#[Operator(factoryId: 'steps_carry', run: ['steps' => ['each' => 'chained']])]
-final class StepsCarryOperator extends \Flezha\Operator
+#[Relay(factoryId: 'steps_carry', run: ['steps' => ['each' => 'chained']])]
+final class StepsCarryRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -536,8 +536,8 @@ final class StaticRecorder extends Tasklet
 }
 
 /** Two entries merged into one tasklet, each tagged by its own mapping and keyed on the tag's symbol. */
-#[Operator(factoryId: 'merge_operator')]
-final class MergeOperator extends \Flezha\Operator
+#[Relay(factoryId: 'merge_relay')]
+final class MergeRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -551,8 +551,8 @@ final class MergeOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'route_latest_operator')]
-final class RouteLatestOperator extends \Flezha\Operator
+#[Relay(factoryId: 'route_latest_relay')]
+final class RouteLatestRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -562,8 +562,8 @@ final class RouteLatestOperator extends \Flezha\Operator
 }
 
 /** An entry payload fanned into several values, keyed on the wiring and by a static key set. */
-#[Operator(factoryId: 'fanned_operator')]
-final class FannedOperator extends \Flezha\Operator
+#[Relay(factoryId: 'fanned_relay')]
+final class FannedRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

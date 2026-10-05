@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Agentdesk;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\ChannelCodec;
 use Flezha\Graph\Builder;
 
 /**
- * One conversation: an operator that runs in steps, one turn per message it is sent, for as long
+ * One conversation: a relay that runs in steps, one turn per message it is sent, for as long
  * as the session lasts. Every session is an instance of its own, with its own state.
  */
-#[Operator(
+#[Relay(
     factoryId: 'agent',
     run: ['steps' => [
         'each' => 'per_input',                       // one turn per message
@@ -20,11 +20,11 @@ use Flezha\Graph\Builder;
     ]],
     durable: ['local' => ['sleep_after' => 10_000]], // an idle session sleeps after 10 s
 )]
-final class AgentOperator extends \Flezha\Operator
+final class AgentRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('turn', codec: ChannelCodec::Text) // entry 1: `flz operator call`
+        $c->input('turn', codec: ChannelCodec::Text) // entry 1: `flz relay call`
             ->into(Reply::class)
             ->sink('answer')                         // to whoever listens; the chain goes on
             ->into(Deliver::class)

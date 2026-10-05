@@ -15,7 +15,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -71,8 +71,8 @@ final class DoNothing extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'do_nothing')]
-final class DoNothingOperator extends \Flezha\Operator
+#[Relay(factoryId: 'do_nothing')]
+final class DoNothingRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -87,8 +87,8 @@ final class DoNothingOperator extends \Flezha\Operator
  * merge-blocking bench factory and must not change; this keeps the round-trip
  * bench's back-pressure posture independent of it.
  */
-#[Operator(factoryId: 'bench_echo')]
-final class BenchEchoOperator extends \Flezha\Operator
+#[Relay(factoryId: 'bench_echo')]
+final class BenchEchoRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -120,8 +120,8 @@ final class CompareFilter extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'compare_filter')]
-final class CompareFilterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'compare_filter')]
+final class CompareFilterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -131,7 +131,7 @@ final class CompareFilterOperator extends \Flezha\Operator
     }
 }
 
-// -- static_cell / sugar_static_cell / mixed_operator -------------------
+// -- static_cell / sugar_static_cell / mixed_relay -------------------
 
 #[Task(name: 'static_entry_tasklet', cellKeys: ['a', 'b', 'c', 'd'])]
 class StaticEntry extends Tasklet
@@ -192,8 +192,8 @@ final class MacroStaticDownstream extends PassThrough
 {
 }
 
-#[Operator(factoryId: 'static_cell')]
-final class StaticCellOperator extends \Flezha\Operator
+#[Relay(factoryId: 'static_cell')]
+final class StaticCellRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -208,8 +208,8 @@ final class StaticCellOperator extends \Flezha\Operator
  * The reference pipeline sugar leaves the hop unnamed and lets the sink name
  * the producing channel.
  */
-#[Operator(factoryId: 'sugar_static_cell')]
-final class SugarStaticCellOperator extends \Flezha\Operator
+#[Relay(factoryId: 'sugar_static_cell')]
+final class SugarStaticCellRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -230,8 +230,8 @@ final class MixedHandDownstream extends PassThrough
 {
 }
 
-#[Operator(factoryId: 'mixed_operator')]
-final class MixedOperator extends \Flezha\Operator
+#[Relay(factoryId: 'mixed_relay')]
+final class MixedRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -244,18 +244,18 @@ final class MixedOperator extends \Flezha\Operator
 
 // -- the §5 short forms ------------------------------------------------------
 //
-// One class each: an operator that defines its one tasklet's `run` instead
+// One class each: a relay that defines its one tasklet's `run` instead
 // of `channels()`, and `runner.php` registers the class itself. No tasklet
 // class stands beside them.
 
-#[Operator(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
-final class SugarDoNothing extends \Flezha\Operator
+#[Relay(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
+final class SugarDoNothing extends \Flezha\Relay
 {
     use PassesThrough;
 }
 
-#[Operator(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
-final class SugarStoreInput extends \Flezha\Operator
+#[Relay(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
+final class SugarStoreInput extends \Flezha\Relay
 {
     public function initState(?string $cellKey): mixed
     {
@@ -275,18 +275,18 @@ final class SugarStoreInput extends \Flezha\Operator
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'sugar_named_input',
     sink: 'sugar_named_input_sink',
     input: 'prices',
     codec: ChannelCodec::Text,
 )]
-final class SugarNamedInput extends \Flezha\Operator
+final class SugarNamedInput extends \Flezha\Relay
 {
     use PassesThrough;
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'sugar_steps',
     run: 'steps',
     durable: FIXTURE_DURABLE,
@@ -294,27 +294,27 @@ final class SugarNamedInput extends \Flezha\Operator
     input: 'order',
     codec: ChannelCodec::Text,
 )]
-final class SugarSteps extends \Flezha\Operator
+final class SugarSteps extends \Flezha\Relay
 {
     use PassesThrough;
 }
 
 /** The loop mode, the one class-level setting a short form keeps. */
-#[Operator(
+#[Relay(
     factoryId: 'sugar_steps_per_input',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     sink: 'sugar_steps_per_input_out',
     codec: ChannelCodec::Text,
 )]
-final class SugarStepsPerInput extends \Flezha\Operator
+final class SugarStepsPerInput extends \Flezha\Relay
 {
     use PassesThrough;
 }
 
 /** No `sink`: the tasklet only keeps what it is sent, and answers nothing. */
-#[Operator(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
-final class SugarStateOnly extends \Flezha\Operator
+#[Relay(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
+final class SugarStateOnly extends \Flezha\Relay
 {
     public function initState(?string $cellKey): mixed
     {
@@ -366,8 +366,8 @@ final class HybridConsumer extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'hybrid_channel')]
-final class HybridChannelOperator extends \Flezha\Operator
+#[Relay(factoryId: 'hybrid_channel')]
+final class HybridChannelRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -401,8 +401,8 @@ final class MergeLabel extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'merged_input')]
-final class MergedInputOperator extends \Flezha\Operator
+#[Relay(factoryId: 'merged_input')]
+final class MergedInputRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -438,8 +438,8 @@ final class TransformLabel extends PassThrough
 {
 }
 
-#[Operator(factoryId: 'transform_chain')]
-final class TransformChainOperator extends \Flezha\Operator
+#[Relay(factoryId: 'transform_chain')]
+final class TransformChainRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -499,8 +499,8 @@ final class StressD extends StressToP0
 {
 }
 
-#[Operator(factoryId: 'cell_stress')]
-final class CellStressOperator extends \Flezha\Operator
+#[Relay(factoryId: 'cell_stress')]
+final class CellStressRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -552,8 +552,8 @@ final class Candle extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'candle', run: ['flow' => ['exactly' => ['effectively_once' => ['correction_ms' => 600_000]]]])]
-final class CandleOperator extends \Flezha\Operator
+#[Relay(factoryId: 'candle', run: ['flow' => ['exactly' => ['effectively_once' => ['correction_ms' => 600_000]]]])]
+final class CandleRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -602,8 +602,8 @@ final class SessionTimeout extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'session_timeout')]
-final class SessionTimeoutOperator extends \Flezha\Operator
+#[Relay(factoryId: 'session_timeout')]
+final class SessionTimeoutRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -652,8 +652,8 @@ final class DropOldestMailbox extends BoundedMailbox
 {
 }
 
-#[Operator(factoryId: 'bounded_mailbox_drop_nothing')]
-final class BoundedMailboxDropNothingOperator extends \Flezha\Operator
+#[Relay(factoryId: 'bounded_mailbox_drop_nothing')]
+final class BoundedMailboxDropNothingRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -663,8 +663,8 @@ final class BoundedMailboxDropNothingOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'bounded_mailbox_drop_newest')]
-final class BoundedMailboxDropNewestOperator extends \Flezha\Operator
+#[Relay(factoryId: 'bounded_mailbox_drop_newest')]
+final class BoundedMailboxDropNewestRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -674,8 +674,8 @@ final class BoundedMailboxDropNewestOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'bounded_mailbox_drop_oldest')]
-final class BoundedMailboxDropOldestOperator extends \Flezha\Operator
+#[Relay(factoryId: 'bounded_mailbox_drop_oldest')]
+final class BoundedMailboxDropOldestRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -685,16 +685,16 @@ final class BoundedMailboxDropOldestOperator extends \Flezha\Operator
     }
 }
 
-// -- partition_relay ---------------------------------------------------------
+// -- partition_pass ---------------------------------------------------------
 //
-// The partitioned-operators upstream: keyed on the wiring so it can be
+// The partitioned-relays upstream: keyed on the wiring so it can be
 // partitioned at all, and emitting keyed so a partitioned forward target can
 // resolve the owning member. The plugin channel is named `input` because a
 // forwarded frame keeps its producing channel's name, and that is what selects
-// the receiving operator's entry channel — so the entry here is `in`.
+// the receiving relay's entry channel — so the entry here is `in`.
 
-#[Task(name: 'partition_relay_tasklet')]
-final class PartitionRelay extends Tasklet
+#[Task(name: 'partition_pass_tasklet')]
+final class PartitionPass extends Tasklet
 {
     public function initState(?string $cellKey): mixed
     {
@@ -713,13 +713,13 @@ final class PartitionRelay extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'partition_relay')]
-final class PartitionRelayOperator extends \Flezha\Operator
+#[Relay(factoryId: 'partition_pass')]
+final class PartitionPassRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
-            ->into(PartitionRelay::class)->keyed()
+            ->into(PartitionPass::class)->keyed()
             ->sink('input');
     }
 }
@@ -750,8 +750,8 @@ final class DynamicCell extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'dynamic_cell')]
-final class DynamicCellOperator extends \Flezha\Operator
+#[Relay(factoryId: 'dynamic_cell')]
+final class DynamicCellRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -767,7 +767,7 @@ final class DynamicCellOperator extends \Flezha\Operator
 
 // -- call_response -------------------------------------------------------------
 //
-// Operators an outside caller calls and whose graph answers it through
+// Relays an outside caller calls and whose graph answers it through
 // `response()`: from the first tasklet, from a downstream one, and from
 // whichever of two filtered paths the input took. `call_turn` is the steps
 // one, in fixtures_steps.php.
@@ -777,8 +777,8 @@ final class CallEchoStep extends PassThrough
 {
 }
 
-#[Operator(factoryId: 'call_echo')]
-final class CallEcho extends \Flezha\Operator
+#[Relay(factoryId: 'call_echo')]
+final class CallEcho extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -800,8 +800,8 @@ final class CallAnswer extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_downstream')]
-final class CallDownstream extends \Flezha\Operator
+#[Relay(factoryId: 'call_downstream')]
+final class CallDownstream extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -836,8 +836,8 @@ final class CallRefuse extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_split')]
-final class CallSplit extends \Flezha\Operator
+#[Relay(factoryId: 'call_split')]
+final class CallSplit extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -851,51 +851,51 @@ final class CallSplit extends \Flezha\Operator
     }
 }
 
-/** Every operator this app registers, in declaration order. */
+/** Every relay this app registers, in declaration order. */
 final class Fixtures
 {
-    /** @return list<class-string<\Flezha\Operator>> */
+    /** @return list<class-string<\Flezha\Relay>> */
     public static function all(): array
     {
         return [
-            DoNothingOperator::class,
-            BenchEchoOperator::class,
-            CompareFilterOperator::class,
-            StaticCellOperator::class,
-            SugarStaticCellOperator::class,
-            MixedOperator::class,
-            HybridChannelOperator::class,
-            MergedInputOperator::class,
-            TransformChainOperator::class,
-            CellStressOperator::class,
-            BenchKeyedNoPersistOperator::class,
-            StoreInputOperator::class,
-            StatefulCounterOperator::class,
-            PersistenceOffCounterOperator::class,
-            SleepingCounterOperator::class,
-            CoalescingCounterOperator::class,
-            ResumeProbeOperator::class,
-            BenchKeyedOperator::class,
-            SchemaEvolutionV1Operator::class,
-            SchemaEvolutionV2Operator::class,
-            TierStoreOperator::class,
-            RemoteTierStoreOperator::class,
-            TierChainOperator::class,
-            CheckpointStoreOperator::class,
-            CheckpointBatchedOperator::class,
-            BenchCheckpointOperator::class,
-            CandleOperator::class,
-            PoisonProbeOperator::class,
-            WedgeProbeOperator::class,
-            SessionTimeoutOperator::class,
-            BoundedMailboxDropNothingOperator::class,
-            BoundedMailboxDropNewestOperator::class,
-            BoundedMailboxDropOldestOperator::class,
-            PartitionRelayOperator::class,
-            DynamicCellOperator::class,
-            SpawnRequesterOperator::class,
-            SpawnHoldRequesterOperator::class,
-            SpawnOnceRequesterOperator::class,
+            DoNothingRelay::class,
+            BenchEchoRelay::class,
+            CompareFilterRelay::class,
+            StaticCellRelay::class,
+            SugarStaticCellRelay::class,
+            MixedRelay::class,
+            HybridChannelRelay::class,
+            MergedInputRelay::class,
+            TransformChainRelay::class,
+            CellStressRelay::class,
+            BenchKeyedNoPersistRelay::class,
+            StoreInputRelay::class,
+            StatefulCounterRelay::class,
+            PersistenceOffCounterRelay::class,
+            SleepingCounterRelay::class,
+            CoalescingCounterRelay::class,
+            ResumeProbeRelay::class,
+            BenchKeyedRelay::class,
+            SchemaEvolutionV1Relay::class,
+            SchemaEvolutionV2Relay::class,
+            TierStoreRelay::class,
+            RemoteTierStoreRelay::class,
+            TierChainRelay::class,
+            CheckpointStoreRelay::class,
+            CheckpointBatchedRelay::class,
+            BenchCheckpointRelay::class,
+            CandleRelay::class,
+            PoisonProbeRelay::class,
+            WedgeProbeRelay::class,
+            SessionTimeoutRelay::class,
+            BoundedMailboxDropNothingRelay::class,
+            BoundedMailboxDropNewestRelay::class,
+            BoundedMailboxDropOldestRelay::class,
+            PartitionPassRelay::class,
+            DynamicCellRelay::class,
+            SpawnRequesterRelay::class,
+            SpawnHoldRequesterRelay::class,
+            SpawnOnceRequesterRelay::class,
             CallEcho::class,
             CallDownstream::class,
             CallSplit::class,

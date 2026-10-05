@@ -30,43 +30,43 @@ final class Control
     }
 
     /**
-     * Start an operator of `$factoryId`, on the specification `flz operator
+     * Start a relay of `$factoryId`, on the specification `flz relay
      * start` takes.
      *
      * Without an `$id` the controller generates one, so a start retried after a
-     * lost answer starts a second operator. With one, a start of an id already
-     * running leaves that operator untouched and answers `already_running`.
+     * lost answer starts a second relay. With one, a start of an id already
+     * running leaves that relay untouched and answers `already_running`.
      *
      * @throws FlezhaException the controller's refusal, as for every call here
      */
-    public function startOperator(
+    public function startRelay(
         string $factoryId,
         ?string $id = null,
         mixed $initValues = null,
         mixed $opts = null,
     ): StartResult {
-        $answer = $this->call('Operator.start', self::given(
+        $answer = $this->call('Relay.start', self::given(
             ['factory_id' => $factoryId, 'id' => $id, 'init_values' => $initValues, 'opts' => $opts],
         ));
         $outcome = StartOutcome::tryFrom((string) ($answer['outcome'] ?? ''));
         if ($outcome === null || !is_string($answer['id'] ?? null)) {
-            throw new FlezhaException('control.unreadable_answer', ['verb' => 'Operator.start']);
+            throw new FlezhaException('control.unreadable_answer', ['verb' => 'Relay.start']);
         }
 
         return new StartResult($answer['id'], $outcome);
     }
 
-    /** Stop an operator, or the whole partition group it names. */
-    public function stopOperator(string $operatorId): mixed
+    /** Stop a relay, or the whole partition group it names. */
+    public function stopRelay(string $relayId): mixed
     {
-        return $this->call('Operator.stop', $operatorId);
+        return $this->call('Relay.stop', $relayId);
     }
 
     /**
      * Enable the plugin `$name` in this namespace, of the provider `$provider`
-     * (for example `operator_websocket`), on its `$opts`. `$single` runs one
-     * copy in the whole cluster; `$operatorId` with `$hooks` binds that
-     * operator in the same call.
+     * (for example `relay_websocket`), on its `$opts`. `$single` runs one
+     * copy in the whole cluster; `$relayId` with `$hooks` binds that
+     * relay in the same call.
      *
      * @param array<string, mixed> $opts
      * @param list<mixed>|null $hooks names or `[name, opts]` pairs
@@ -76,37 +76,37 @@ final class Control
         string $provider,
         array $opts = [],
         bool $single = false,
-        ?string $operatorId = null,
+        ?string $relayId = null,
         ?array $hooks = null,
     ): mixed {
         return $this->call('PluginManager.enable', $name, self::given([
             'provider' => $provider,
             'opts' => (object) $opts,
             'single' => $single ?: null,
-            'operator_id' => $operatorId,
+            'relay_id' => $relayId,
             'hooks' => $hooks,
         ]));
     }
 
     /**
-     * Bind the operator `$operatorId` to the enabled plugin `$name`, with the
+     * Bind the relay `$relayId` to the enabled plugin `$name`, with the
      * optional `$hooks` and `$channel`.
      *
      * @param list<mixed>|null $hooks names or `[name, opts]` pairs
      */
-    public function bindPlugin(string $name, string $operatorId, ?array $hooks = null, ?string $channel = null): mixed
+    public function bindPlugin(string $name, string $relayId, ?array $hooks = null, ?string $channel = null): mixed
     {
         return $this->call(
             'PluginManager.bind',
             $name,
-            self::given(['operator_id' => $operatorId, 'hooks' => $hooks, 'channel' => $channel]),
+            self::given(['relay_id' => $relayId, 'hooks' => $hooks, 'channel' => $channel]),
         );
     }
 
-    /** Unbind the operator `$operatorId` from the plugin `$name`, which stays enabled. */
-    public function unbindPlugin(string $name, string $operatorId): mixed
+    /** Unbind the relay `$relayId` from the plugin `$name`, which stays enabled. */
+    public function unbindPlugin(string $name, string $relayId): mixed
     {
-        return $this->call('PluginManager.unbind', $name, ['operator_id' => $operatorId]);
+        return $this->call('PluginManager.unbind', $name, ['relay_id' => $relayId]);
     }
 
     /** Disable the plugin `$name`, stopping it wherever it runs. */
@@ -115,22 +115,22 @@ final class Control
         return $this->call('PluginManager.disable', $name, new \stdClass());
     }
 
-    /** The operator ids running in this namespace. */
-    public function listOperators(): mixed
+    /** The relay ids running in this namespace. */
+    public function listRelays(): mixed
     {
-        return $this->call('Operator.list_operators');
+        return $this->call('Relay.list_relays');
     }
 
-    /** The plugins enabled in this namespace: name, provider, single, bound operators. */
+    /** The plugins enabled in this namespace: name, provider, single, bound relays. */
     public function listPlugins(): mixed
     {
         return $this->call('PluginManager.list');
     }
 
     /** One cell's live state, and the change sequence it was read at. */
-    public function cellState(string $operatorId, string $cellKey): mixed
+    public function cellState(string $relayId, string $cellKey): mixed
     {
-        return $this->call('Operator.cell_state', $operatorId, $cellKey);
+        return $this->call('Relay.cell_state', $relayId, $cellKey);
     }
 
     /**

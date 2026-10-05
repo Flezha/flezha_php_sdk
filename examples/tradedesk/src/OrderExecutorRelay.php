@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
 
 /**
- * The desk's steps operator: one instance per order, which runs its steps and then ends.
+ * The desk's steps relay: one instance per order, which runs its steps and then ends.
  *
- * A steps operator declares its steps the way a flow operator declares its graph, on the
+ * A steps relay declares its steps the way a flow relay declares its graph, on the
  * same builder, and the controller schedules, restarts and relocates it in the same way. What
  * differs is the lifecycle: each step's output is written down as it commits, so an instance that
  * is interrupted resumes at the step it reached rather than from the beginning.
@@ -31,8 +31,8 @@ use Flezha\Graph\Edge;
  */
 // one instance per order; it stays until confirm_fill completes it
 // a failed step undoes the finished ones
-#[Operator(factoryId: 'order_executor', run: ['steps' => ['each' => 'per_input', 'on_failure' => 'undo_all']])]
-final class OrderExecutorOperator extends \Flezha\Operator
+#[Relay(factoryId: 'order_executor', run: ['steps' => ['each' => 'per_input', 'on_failure' => 'undo_all']])]
+final class OrderExecutorRelay extends \Flezha\Relay
 {
     /**
      * Two steps in order, then a fan-out: confirming the fill and booking the order are two

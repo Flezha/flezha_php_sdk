@@ -16,7 +16,7 @@ namespace Flezha\Examples\E02;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Codable;
 use Flezha\Ctx;
@@ -64,8 +64,8 @@ final class Counter extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'order_totals')]
-final class OrderTotalsOperator extends \Flezha\Operator
+#[Relay(factoryId: 'order_totals')]
+final class OrderTotalsRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -77,5 +77,5 @@ final class OrderTotalsOperator extends \Flezha\Operator
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(OrderTotalsOperator::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(OrderTotalsRelay::class)->run();
 }

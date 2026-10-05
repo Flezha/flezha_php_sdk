@@ -6,18 +6,18 @@ namespace Flezha\Tests;
 
 require_once __DIR__ . '/../examples/E07_LocalMode.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
-use Flezha\Examples\E07\WordCountOperator;
+use Flezha\Examples\E07\WordCountRelay;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
-use Flezha\LocalOperator;
+use Flezha\LocalRelay;
 use Flezha\Tasklet;
 use Flezha\SinkOutput;
 
 /**
- * The PHP SDK's local mode: the shipped example's operator class, its
+ * The PHP SDK's local mode: the shipped example's relay class, its
  * declared two-tasklet graph, and no controller anywhere.
  *
  * The example is what is asserted rather than a copy of it, so the file a
@@ -56,7 +56,7 @@ final class LocalModeTest extends RepositoryTestCase
     {
         [$lines, $expected] = $this->scenario();
         $released = [];
-        $run = LocalOperator::start(WordCountOperator::class);
+        $run = LocalRelay::start(WordCountRelay::class);
 
         try {
             $run->onSink('totals', static function (SinkOutput $out) use (&$released): void {
@@ -90,7 +90,7 @@ final class LocalModeTest extends RepositoryTestCase
 
     public function testAChannelTheClassDoesNotDeclareIsRefusedByName(): void
     {
-        $run = LocalOperator::start(WordCountOperator::class);
+        $run = LocalRelay::start(WordCountRelay::class);
 
         try {
             $this->expectException(FlezhaException::class);
@@ -105,7 +105,7 @@ final class LocalModeTest extends RepositoryTestCase
     public function testAnUndeclaredEntryReadsJsonAndAnUndeclaredSinkFollowsTheValue(): void
     {
         $released = [];
-        $run = LocalOperator::start(DefaultCodecs::class);
+        $run = LocalRelay::start(DefaultCodecs::class);
 
         try {
             $run->onSink('out', static function (SinkOutput $out) use (&$released): void {
@@ -132,8 +132,8 @@ final class DefaultCodecsTasklet extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'local_default_codecs_php')]
-final class DefaultCodecs extends \Flezha\Operator
+#[Relay(factoryId: 'local_default_codecs_php')]
+final class DefaultCodecs extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

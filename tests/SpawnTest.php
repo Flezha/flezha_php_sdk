@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\ActivationCodec;
@@ -51,8 +51,8 @@ final class Spawner extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'spawner')]
-final class SpawnerOperator extends \Flezha\Operator
+#[Relay(factoryId: 'spawner')]
+final class SpawnerRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -182,9 +182,9 @@ final class SpawnTest extends TestCase
     /** @return iterable<string, array{string, array<string, mixed>}> */
     public static function failures(): iterable
     {
-        yield 'the error policy' => ['operator.already_running', ['operator' => 'w1']];
-        yield 'an unknown factory' => ['operator.factory_unknown', ['namespace' => 'default', 'factory' => 'worker']];
-        yield 'a flow factory' => ['operator.factory_not_steps', ['factory' => 'worker', 'namespace' => 'default']];
+        yield 'the error policy' => ['relay.already_running', ['relay' => 'w1']];
+        yield 'an unknown factory' => ['relay.factory_unknown', ['namespace' => 'default', 'factory' => 'worker']];
+        yield 'a flow factory' => ['relay.factory_not_steps', ['factory' => 'worker', 'namespace' => 'default']];
         yield 'a refusal' => ['authz.no_role_binding', []];
         yield 'a timeout' => ['spawn.timeout', ['seconds' => 30]];
         yield 'no control plane' => ['spawn.unavailable', []];
@@ -311,10 +311,10 @@ final class SpawnTest extends TestCase
     /** Run `$call` against a real `Ctx` over `$bridge`, the way the dispatcher runs one item. */
     private static function spawn(SpawnBridge $bridge, callable $call): SpawnHandle
     {
-        $spec = SpawnerOperator::spec();
+        $spec = SpawnerRelay::spec();
         $handle = null;
         Dispatcher::invoke(
-            ['token' => self::TOKEN, 'operator' => 'op', 'cell_key' => null, 'change_seq' => 0],
+            ['token' => self::TOKEN, 'relay' => 'op', 'cell_key' => null, 'change_seq' => 0],
             new RegisteredClass($spec),
             $spec->tasklets[0],
             $bridge,
@@ -343,7 +343,7 @@ final class SpawnTest extends TestCase
         $core = Core::create();
 
         try {
-            $spec = SpawnerOperator::spec();
+            $spec = SpawnerRelay::spec();
             Validate::spec($spec, $core);
             $registry = new Registry();
             $registry->add($spec);

@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Agentdesk;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Graph\Builder;
 
 /**
- * The HTTP side of the desk: a flow operator that carries the HTTP plugin, answers every
+ * The HTTP side of the desk: a flow relay that carries the HTTP plugin, answers every
  * request, and calls the session a message is for.
  */
-#[Operator(
+#[Relay(
     factoryId: 'gateway',
     run: ['flow' => ['exactly' => 'effectively_once']], // each request and answer on disk before it runs
 )]
-final class GatewayOperator extends \Flezha\Operator
+final class GatewayRelay extends \Flezha\Relay
 {
     private const DEADLINE_MS = 60_000;
 
@@ -41,7 +41,7 @@ final class GatewayOperator extends \Flezha\Operator
         $verdicts->filter(Budget::admitted(...))
             ->map(fn (array $verdict) => $verdict['message'])
             ->keyBy($user)                           // the user's session
-            // call the "agent" operator; its answer comes back here
+            // call the "agent" relay; its answer comes back here
             ->call(factory: 'agent', channel: 'message', deadlineMs: self::DEADLINE_MS)
             ->map(Budget::used(...))                 // the session's answer, as tokens used
             ->keyBy($user)

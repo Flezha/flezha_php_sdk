@@ -27,7 +27,7 @@ final class SpawnHandle
      * Wait for the controller's answer.
      *
      * @throws FlezhaException the failure, its code the controller's (such as
-     *                         `operator.already_running`) or the core's
+     *                         `relay.already_running`) or the core's
      *                         (`spawn.timeout`, `spawn.unavailable`)
      */
     public function wait(): SpawnResult
@@ -42,7 +42,7 @@ final class SpawnHandle
      * The answer if it has arrived, or null while it is pending. Never waits.
      *
      * @throws FlezhaException the failure, its code the controller's (such as
-     *                         `operator.already_running`) or the core's
+     *                         `relay.already_running`) or the core's
      *                         (`spawn.timeout`, `spawn.unavailable`)
      */
     public function tryResult(): ?SpawnResult

@@ -28,7 +28,7 @@ use Flezha\Graph\Validate;
  * ## One runner per process
  *
  * The SDK never forks, spawns or supervises. N processes are N runners, which
- * is what the controller's placement already spreads operators across, and it
+ * is what the controller's placement already spreads relays across, and it
  * keeps this layer agnostic between Kubernetes, systemd and a supervisor's own
  * process management. Threads inside one process are the executor's business,
  * not this class's.
@@ -58,7 +58,7 @@ final class Runner
      */
     private static ?array $attachment = null;
 
-    /** @var list<class-string<Operator>> */
+    /** @var list<class-string<Relay>> */
     private array $classes = [];
     private readonly Registry $registry;
     private ?Core $core = null;
@@ -87,15 +87,15 @@ final class Runner
     }
 
     /**
-     * Register an operator class, a full form or a §5 short form alike.
+     * Register a relay class, a full form or a §5 short form alike.
      *
-     * @param class-string<Operator> $class
+     * @param class-string<Relay> $class
      */
     public function registerFactory(string $class): self
     {
         // Resolved here so a malformed declaration is refused at the call the
         // author wrote, not at the first connection.
-        Operator::specFor($class);
+        Relay::specFor($class);
         $this->classes[] = $class;
 
         return $this;
@@ -109,7 +109,7 @@ final class Runner
      * from a registry the executor already holds, and it cannot stop serving
      * one. Saying so is what makes the call honest rather than ignored.
      *
-     * @param class-string<Operator> $class
+     * @param class-string<Relay> $class
      */
     public function unregisterFactory(string $class): self
     {
@@ -144,7 +144,7 @@ final class Runner
 
     /**
      * Administer this namespace from ordinary application code: start and
-     * stop operators, enable and disable plugins, read what is running.
+     * stop relays, enable and disable plugins, read what is running.
      *
      * The controller judges every call as the identity this connection proved,
      * so no credential is held here and nothing expires. A user grants a
@@ -158,42 +158,42 @@ final class Runner
     }
 
     /**
-     * Send `$message` to the entry channel `$channel` of `$operatorId`, through
+     * Send `$message` to the entry channel `$channel` of `$relayId`, through
      * the controller under the same role check as {@see control()}, answering
-     * its verdict: `['to' => operator, 'verdict' => 'delivered' | 'absorbed' |
-     * 'suspended']`. `$msgId` is stamped as `flz.msg_id`, so an operator whose
+     * its verdict: `['to' => relay, 'verdict' => 'delivered' | 'absorbed' |
+     * 'suspended']`. `$msgId` is stamped as `flz.msg_id`, so a relay whose
      * input log still holds that id absorbs the repeat; `$key` reaches the
      * partition group member whose range owns it.
      *
      * `$local`: in process, without the controller: the message is on no disk,
-     * is lost if the runner stops before handling it, and an operator's input
+     * is lost if the runner stops before handling it, and a relay's input
      * log does not cover it. It answers null.
      *
      * @throws FlezhaException
      */
     public function send(
-        string $operatorId,
+        string $relayId,
         string $message,
         string $channel,
         ?string $msgId = null,
         ?string $key = null,
         bool $local = false,
     ): mixed {
-        $answer = $this->core()->sendMessage($operatorId, $channel, $message, $msgId, $key, $local);
+        $answer = $this->core()->sendMessage($relayId, $channel, $message, $msgId, $key, $local);
 
         return json_decode($answer, true, 512, JSON_THROW_ON_ERROR);
     }
 
     /**
-     * The ids of the operator instances bound on this runner now, read without
+     * The ids of the relay instances bound on this runner now, read without
      * the controller.
      *
      * @return list<string>
      * @throws FlezhaException `runtime.runner_not_started` before it starts
      */
-    public function operators(): array
+    public function relays(): array
     {
-        return ($this->core ?? throw new FlezhaException('runtime.runner_not_started'))->operators();
+        return ($this->core ?? throw new FlezhaException('runtime.runner_not_started'))->relays();
     }
 
     /**
@@ -262,7 +262,7 @@ final class Runner
         }
 
         Logger::current()->info(sprintf(
-            'runner up on namespace %s: %s executor, %d operator class(es)',
+            'runner up on namespace %s: %s executor, %d relay class(es)',
             $this->namespace,
             $this->executor->name(),
             count($this->classes),
@@ -419,11 +419,11 @@ final class Runner
         $this->core = null;
     }
 
-    /** @param class-string<Operator> $class */
+    /** @param class-string<Relay> $class */
     private function buildRegistry(): void
     {
         foreach ($this->classes as $class) {
-            $spec = Operator::specFor($class);
+            $spec = Relay::specFor($class);
             // The verdict before the registration: the core judges the record
             // and this package renders it, so an author meets a declaration
             // refusal rather than a native failure at the first connection.

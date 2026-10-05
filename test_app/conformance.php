@@ -9,7 +9,7 @@ declare(strict_types=1);
  * `flz_core/src/host/check_tests.rs` is the same table driven against the
  * record directly, because the core has no builder. This one maps the same
  * step vocabulary onto the PHP graph builder, so what is measured here is what
- * an author of a PHP operator actually writes.
+ * an author of a PHP relay actually writes.
  *
  * Two entry points, both off `runner.php`:
  *
@@ -28,7 +28,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator as OperatorAttribute;
+use Flezha\Attribute\Relay as RelayAttribute;
 use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
@@ -40,7 +40,7 @@ use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
 use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
-use Flezha\Operator;
+use Flezha\Relay;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 use Flezha\Runner;
@@ -381,22 +381,22 @@ final class RowInterpreter
 // registers them but a row that names them.
 
 /** Half of the duplicate row's pair. */
-#[OperatorAttribute(factoryId: 'plain', sink: 'out')]
-final class ShorthandDupFlow extends Operator
+#[RelayAttribute(factoryId: 'plain', sink: 'out')]
+final class ShorthandDupFlow extends Relay
 {
     use PassesThrough;
 }
 
-/** The other half: a steps operator claiming the id the flow holds. */
-#[OperatorAttribute(factoryId: 'plain', run: 'steps', sink: 'twin_sink')]
-final class ShorthandDupSteps extends Operator
+/** The other half: a steps relay claiming the id the flow holds. */
+#[RelayAttribute(factoryId: 'plain', run: 'steps', sink: 'twin_sink')]
+final class ShorthandDupSteps extends Relay
 {
     use PassesThrough;
 }
 
 /** A short form that also carries a topology body. */
-#[OperatorAttribute(factoryId: 'plain', sink: 'out')]
-final class ShorthandWithTopology extends Operator
+#[RelayAttribute(factoryId: 'plain', sink: 'out')]
+final class ShorthandWithTopology extends Relay
 {
     use PassesThrough;
 
@@ -407,7 +407,7 @@ final class ShorthandWithTopology extends Operator
 }
 
 /**
- * A row's operator class: one per class-level spelling a row can need, each
+ * A row's relay class: one per class-level spelling a row can need, each
  * declaring whichever row is loaded.
  *
  * Not one class per row: PHP reads a factory id off a class attribute, which
@@ -427,11 +427,11 @@ trait DeclaresTheLoadedRow
         RowInterpreter::loaded()->declare($c);
     }
 
-    public static function declaration(): OperatorAttribute
+    public static function declaration(): RelayAttribute
     {
         $row = RowInterpreter::loaded();
 
-        return new OperatorAttribute(
+        return new RelayAttribute(
             factoryId: $row->factoryId,
             run: $row->settings['run'] ?? null,
             durable: $row->settings['durable'] ?? null,
@@ -439,7 +439,7 @@ trait DeclaresTheLoadedRow
     }
 }
 
-final class ConformanceRow extends Operator
+final class ConformanceRow extends Relay
 {
     use DeclaresTheLoadedRow;
 }
@@ -475,8 +475,8 @@ final class Conformance
      *
      * Keyed by `<run> <id>|<sink>|<input>` with `-` for an unwritten field,
      * then the step's modifier: `.topology` for a declaration that also
-     * carries a topology body. A row's first step is a flow operator and its
-     * second a steps operator, so a collision crosses runs.
+     * carries a topology body. A row's first step is a flow relay and its
+     * second a steps relay, so a collision crosses runs.
      */
     private const SHORTHAND_PALETTE = [
         'flow plain|out|-' => ShorthandDupFlow::class,
@@ -489,7 +489,7 @@ final class Conformance
      * own fixtures, the twins of its seven-column table.
      */
     private const CITED = [
-        'hybrid_channel' => HybridChannelOperator::class,
+        'hybrid_channel' => HybridChannelRelay::class,
         'commit_block_chain' => TierCommitBlockSteps::class,
     ];
 
@@ -525,7 +525,7 @@ final class Conformance
      * resolved to the palette class whose attribute is that declaration.
      *
      * @param array{steps: string} $row
-     * @return list<class-string<Operator>>
+     * @return list<class-string<Relay>>
      */
     private static function shorthandSteps(array $row): array
     {
@@ -556,7 +556,7 @@ final class Conformance
      * for real.
      *
      * @param array{topology: string} $row
-     * @param list<class-string<Operator>> $classes
+     * @param list<class-string<Relay>> $classes
      * @return array<string, mixed>
      */
     private static function judgeShorthand(array $row, array $classes): array
@@ -568,7 +568,7 @@ final class Conformance
             // reads.
             $registry = new Registry();
             foreach ($classes as $class) {
-                $registry->add(Operator::specFor($class));
+                $registry->add(Relay::specFor($class));
             }
         } catch (FlezhaException $e) {
             return ['topology' => $row['topology'], 'outcome' => 'refused', 'names' => self::codesOf($e)];
@@ -651,7 +651,7 @@ final class Conformance
 
     /**
      * @param array{topology: string, steps: string} $row
-     * @return class-string<\Flezha\Operator>
+     * @return class-string<\Flezha\Relay>
      */
     private static function classFor(array $row): string
     {

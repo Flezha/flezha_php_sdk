@@ -24,7 +24,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -219,8 +219,8 @@ final class EchoArgs extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'echo_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class EchoSteps extends \Flezha\Operator
+#[Relay(factoryId: 'echo_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class EchoSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -232,7 +232,7 @@ final class EchoSteps extends \Flezha\Operator
 
 // -- typed_once_steps -----------------------------------------------------
 //
-// The KB-381 shape: a `once` steps operator whose entry channel decodes the
+// The KB-381 shape: a `once` steps relay whose entry channel decodes the
 // payload's type. Its one tasklet prints what the entry decoded and completes
 // with it, because the runner's stdout and the completion record are the two
 // places the scenario can read.
@@ -250,8 +250,8 @@ final class OncePlaced extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'typed_once_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class TypedOnceSteps extends \Flezha\Operator
+#[Relay(factoryId: 'typed_once_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class TypedOnceSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -283,7 +283,7 @@ final class BlockB extends Tasklet
     }
 }
 
-abstract class CommitBlockChain extends \Flezha\Operator
+abstract class CommitBlockChain extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -293,12 +293,12 @@ abstract class CommitBlockChain extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+#[Relay(factoryId: 'commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class CommitBlockSteps extends CommitBlockChain
 {
 }
 
-#[Operator(factoryId: 'sync_durable_steps', run: 'steps', durable: 'remote')]
+#[Relay(factoryId: 'sync_durable_steps', run: 'steps', durable: 'remote')]
 final class SyncDurableSteps extends CommitBlockChain
 {
 }
@@ -310,8 +310,8 @@ final class SyncDurableSteps extends CommitBlockChain
 // durable state. A crash re-runs the chain from the top, so the sink sees A's
 // marker once per run and no journal file exists.
 
-#[Operator(factoryId: 'optout_commit_block', run: 'steps', durable: false)]
-final class OptoutCommitBlock extends \Flezha\Operator
+#[Relay(factoryId: 'optout_commit_block', run: 'steps', durable: false)]
+final class OptoutCommitBlock extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -326,7 +326,7 @@ final class OptoutCommitBlock extends \Flezha\Operator
 //
 // Task A commits durable state AND emits `committed:<input>` under a stable
 // key on a keyed hybrid channel; task B parks, so a SIGKILL lands with A's
-// stage committed and B unfinished. A steps operator commits stage by stage, so the
+// stage committed and B unfinished. A steps relay commits stage by stage, so the
 // class declares no tier of its own.
 
 #[Task(name: 'tier_commit_a')]
@@ -338,8 +338,8 @@ final class TierCommitA extends DurableStep
     }
 }
 
-#[Operator(factoryId: 'tier_commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class TierCommitBlockSteps extends \Flezha\Operator
+#[Relay(factoryId: 'tier_commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class TierCommitBlockSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -376,8 +376,8 @@ final class SagaC extends FailingStep
 {
 }
 
-#[Operator(factoryId: 'saga_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class SagaBlockSteps extends \Flezha\Operator
+#[Relay(factoryId: 'saga_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class SagaBlockSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -417,7 +417,7 @@ final class KeyedFail extends FailingStep
 {
 }
 
-abstract class KeyedCommits extends \Flezha\Operator
+abstract class KeyedCommits extends \Flezha\Relay
 {
     protected static function keyedCommits(Builder $c): Edge
     {
@@ -428,7 +428,7 @@ abstract class KeyedCommits extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'keyed_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+#[Relay(factoryId: 'keyed_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class KeyedBlockSteps extends KeyedCommits
 {
     public static function channels(Builder $c): void
@@ -437,7 +437,7 @@ final class KeyedBlockSteps extends KeyedCommits
     }
 }
 
-#[Operator(factoryId: 'keyed_saga_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+#[Relay(factoryId: 'keyed_saga_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class KeyedSagaSteps extends KeyedCommits
 {
     public static function channels(Builder $c): void
@@ -462,8 +462,8 @@ final class OutboxA extends DurableStep
     }
 }
 
-#[Operator(factoryId: 'outbox_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class OutboxBlockSteps extends \Flezha\Operator
+#[Relay(factoryId: 'outbox_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class OutboxBlockSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -503,8 +503,8 @@ final class UndoOutboxC extends FailingStep
 {
 }
 
-#[Operator(factoryId: 'undo_outbox_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class UndoOutboxSteps extends \Flezha\Operator
+#[Relay(factoryId: 'undo_outbox_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class UndoOutboxSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -534,8 +534,8 @@ final class FailedStage extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'failed_stage_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class FailedStageSteps extends \Flezha\Operator
+#[Relay(factoryId: 'failed_stage_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class FailedStageSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -613,8 +613,8 @@ final class BranchD extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'branch_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class BranchSteps extends \Flezha\Operator
+#[Relay(factoryId: 'branch_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class BranchSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -694,8 +694,8 @@ final class DiamJoin extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'diamond_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class DiamondSteps extends \Flezha\Operator
+#[Relay(factoryId: 'diamond_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class DiamondSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -758,8 +758,8 @@ final class RetryFlaky extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'retry_steps', run: 'steps', durable: FIXTURE_DURABLE)]
-final class RetrySteps extends \Flezha\Operator
+#[Relay(factoryId: 'retry_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class RetrySteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -773,12 +773,12 @@ final class RetrySteps extends \Flezha\Operator
 
 // -- timer_loop_steps -----------------------------------------------------
 //
-// `in -> tick -> relay -> out`, a per-input loop whose `tick` arms a
+// `in -> tick -> tock -> out`, a per-input loop whose `tick` arms a
 // processing-time timer of the delay `after:<ms>` names and emits `armed:<at>`;
 // its firing emits `fired:<at>` and opens a pass of its own. `slow:<ms>` holds
 // `tick` that long, for a firing due mid-pass (steps.rs). On a runner booted
 // with `FLEZHA_STEPS_E2E_HOLD` the firing parks at the gate: `timer` inside
-// `on_timer`, before `tick` commits; `relay` in `relay`, after.
+// `on_timer`, before `tick` commits; `tock` in `tock`, after.
 
 #[Task(name: 'tick')]
 final class TimerTick extends DurableStep
@@ -806,31 +806,31 @@ final class TimerTick extends DurableStep
     }
 }
 
-#[Task(name: 'relay')]
-final class TimerRelay extends Tasklet
+#[Task(name: 'tock')]
+final class TimerTock extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
         if (str_starts_with((string) $input, 'fired:')) {
-            StepsGate::holdAt('relay');
+            StepsGate::holdAt('tock');
         }
-        $ctx->emit("relay:$input");
+        $ctx->emit("tock:$input");
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'timer_loop_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class TimerLoopSteps extends \Flezha\Operator
+final class TimerLoopSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(TimerTick::class)->named('ticked')
-            ->into(TimerRelay::class)
+            ->into(TimerTock::class)
             ->sink('out');
     }
 }
@@ -862,13 +862,13 @@ final class EventTick extends DurableStep
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'event_timer_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class EventTimerSteps extends \Flezha\Operator
+final class EventTimerSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -883,13 +883,13 @@ final class CallTurnStep extends PassThrough
 {
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'call_turn',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class CallTurn extends \Flezha\Operator
+final class CallTurn extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -901,7 +901,7 @@ final class CallTurn extends \Flezha\Operator
 
 final class StepsFixtures
 {
-    /** @return list<class-string<\Flezha\Operator>> */
+    /** @return list<class-string<\Flezha\Relay>> */
     public static function all(): array
     {
         return [
@@ -936,7 +936,7 @@ final class StepsFixtures
             TimerLoopSteps::class,
             EventTimerSteps::class,
             CallTurn::class,
-            CompleteFlowOperator::class,
+            CompleteFlowRelay::class,
             ChainedSteps::class,
         ];
     }

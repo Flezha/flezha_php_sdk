@@ -15,7 +15,7 @@ use Flezha\Tasklet;
  * function of one value, and a restart costs this stage nothing because there is nothing to bring
  * back. That is why it writes no `initState`, beside {@see TrackPrices}, which keeps the window.
  *
- * It does two things per input, both through the context: it starts a steps operator and it
+ * It does two things per input, both through the context: it starts a steps relay and it
  * emits.
  */
 #[Task(name: 'buy_above_average')]
@@ -33,7 +33,7 @@ final class BuyAboveAverage extends Tasklet
         $quantity = (int) round($percent * self::UNITS_PER_PERCENT);   // a stronger move buys more
 
         $order = ['symbol' => $input['symbol'], 'quantity' => $quantity];
-        $ctx->spawnSteps('order_executor', $order);        // one steps operator per order
+        $ctx->spawnSteps('order_executor', $order);        // one steps relay per order
 
         $ctx->emit(sprintf(
             '%s %.4f is %.2f%% above its average of %.4f, buying %d',

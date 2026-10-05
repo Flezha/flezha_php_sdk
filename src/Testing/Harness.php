@@ -15,7 +15,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\TaskNode;
-use Flezha\Operator;
+use Flezha\Relay;
 use Flezha\Tasklet;
 use Flezha\SpawnBridge;
 use Flezha\Timer;
@@ -49,11 +49,11 @@ final class Harness implements SpawnBridge
 
     private int $spawnCount = 0;
 
-    /** @param class-string<Tasklet>|class-string<Operator> $taskletClass */
+    /** @param class-string<Tasklet>|class-string<Relay> $taskletClass */
     public function __construct(
         string $taskletClass,
         private readonly ?string $cellKey = null,
-        private readonly string $operator = 'harness',
+        private readonly string $relay = 'harness',
     ) {
         $this->definition = Definition::of($taskletClass);
 
@@ -85,7 +85,7 @@ final class Harness implements SpawnBridge
     /** The cell's live state, as the dispatcher left it. */
     public function state(): mixed
     {
-        return $this->registered->stateOf($this->node, $this->operator, $this->cellKey);
+        return $this->registered->stateOf($this->node, $this->relay, $this->cellKey);
     }
 
     /** Run the tasklet against one input. */
@@ -130,7 +130,7 @@ final class Harness implements SpawnBridge
      */
     public function restore(?string $snapshot = null, array $changes = []): void
     {
-        $this->registered->setState($this->node, $this->operator, $this->cellKey, Restore::fold(
+        $this->registered->setState($this->node, $this->relay, $this->cellKey, Restore::fold(
             $this->definition,
             [
                 'snapshot' => $snapshot === null ? null : ['bytes' => $snapshot, 'from_version' => null],
@@ -217,7 +217,7 @@ final class Harness implements SpawnBridge
     /**
      * Drive `tasklet_class` over `$inputs` and assert the replay agrees.
      *
-     * @param class-string<Tasklet>|class-string<Operator> $taskletClass
+     * @param class-string<Tasklet>|class-string<Relay> $taskletClass
      * @param list<mixed>                                     $inputs
      */
     public static function replayEquals(string $taskletClass, array $inputs, ?string $cellKey = null): bool
@@ -236,7 +236,7 @@ final class Harness implements SpawnBridge
             $ctx = Dispatcher::invoke(
                 [
                     'token' => 0,
-                    'operator' => $this->operator,
+                    'relay' => $this->relay,
                     'cell_key' => $this->cellKey,
                     'change_seq' => $this->changeSeq,
                 ],

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -18,7 +18,7 @@ use Flezha\Tasklet;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * `call(...)`: a chain's end on another operator. The builder records the
+ * `call(...)`: a chain's end on another relay. The builder records the
  * `call` link and declares the Response channel `<channel>.response`; an emit
  * on the calling channel leaves as one plugin output per request, with the
  * call chain's transforms and key applied here; each outcome arrives as a
@@ -66,7 +66,7 @@ final class CallTest extends RepositoryTestCase
         );
     }
 
-    /** @return iterable<string, array{string, class-string<\Flezha\Operator>}> */
+    /** @return iterable<string, array{string, class-string<\Flezha\Relay>}> */
     public static function refusals(): iterable
     {
         yield 'beside a sink' => ['topology.channel_ends_twice', CallingBesideSink::class];
@@ -76,13 +76,13 @@ final class CallTest extends RepositoryTestCase
         yield 'once loop' => ['topology.call_outside_per_input_loop', CallingOnce::class];
     }
 
-    /** @param class-string<\Flezha\Operator> $operator */
+    /** @param class-string<\Flezha\Relay> $relay */
     #[DataProvider('refusals')]
-    public function testTheRefusalsAreTheCores(string $code, string $operator): void
+    public function testTheRefusalsAreTheCores(string $code, string $relay): void
     {
         try {
-            self::derive($operator::spec());
-            self::fail("$operator was accepted");
+            self::derive($relay::spec());
+            self::fail("$relay was accepted");
         } catch (FlezhaException $e) {
             self::assertContains($code, array_column($e->details['issues'] ?? [['code' => $e->getCode()]], 'code'));
         }
@@ -188,8 +188,8 @@ final class CallAsk extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'call_back')]
-final class CallingBack extends \Flezha\Operator
+#[Relay(factoryId: 'call_back')]
+final class CallingBack extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -197,8 +197,8 @@ final class CallingBack extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_factory')]
-final class CallingFactory extends \Flezha\Operator
+#[Relay(factoryId: 'call_factory')]
+final class CallingFactory extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -211,8 +211,8 @@ final class CallingFactory extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_beside_sink')]
-final class CallingBesideSink extends \Flezha\Operator
+#[Relay(factoryId: 'call_beside_sink')]
+final class CallingBesideSink extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -220,8 +220,8 @@ final class CallingBesideSink extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_zero')]
-final class CallingZero extends \Flezha\Operator
+#[Relay(factoryId: 'call_zero')]
+final class CallingZero extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -229,8 +229,8 @@ final class CallingZero extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_unkeyed')]
-final class CallingUnkeyed extends \Flezha\Operator
+#[Relay(factoryId: 'call_unkeyed')]
+final class CallingUnkeyed extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -238,8 +238,8 @@ final class CallingUnkeyed extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_unread')]
-final class CallingUnread extends \Flezha\Operator
+#[Relay(factoryId: 'call_unread')]
+final class CallingUnread extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -247,8 +247,8 @@ final class CallingUnread extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_once', run: 'steps')]
-final class CallingOnce extends \Flezha\Operator
+#[Relay(factoryId: 'call_once', run: 'steps')]
+final class CallingOnce extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -256,8 +256,8 @@ final class CallingOnce extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'call_per_input', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 60_000)]
-final class CallingPerInput extends \Flezha\Operator
+#[Relay(factoryId: 'call_per_input', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 60_000)]
+final class CallingPerInput extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

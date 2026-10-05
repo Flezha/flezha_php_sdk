@@ -16,7 +16,7 @@ namespace Flezha\Examples\E03;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
@@ -51,11 +51,11 @@ final class Ledger extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'ledger',
     run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => ['checkpoint' => ['every' => 4]]]]]],
 )]
-final class LedgerOperator extends \Flezha\Operator
+final class LedgerRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -67,5 +67,5 @@ final class LedgerOperator extends \Flezha\Operator
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(LedgerOperator::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(LedgerRelay::class)->run();
 }

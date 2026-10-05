@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -37,8 +37,8 @@ final class PoisonProbe extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'poison_probe')]
-final class PoisonProbeOperator extends \Flezha\Operator
+#[Relay(factoryId: 'poison_probe')]
+final class PoisonProbeRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -50,7 +50,7 @@ final class PoisonProbeOperator extends \Flezha\Operator
 
 /**
  * The `pool_wedge` fixture: the two ways a runner stops doing work, on one
- * operator.
+ * relay.
  *
  *   "wedge" — blocks the dispatch inside user code forever, so the SDK's
  *     dispatch counter stops advancing while the heartbeat keeps reporting the
@@ -83,8 +83,8 @@ final class WedgeProbe extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'wedge_probe')]
-final class WedgeProbeOperator extends \Flezha\Operator
+#[Relay(factoryId: 'wedge_probe')]
+final class WedgeProbeRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

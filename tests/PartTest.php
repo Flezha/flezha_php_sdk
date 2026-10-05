@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -12,7 +12,7 @@ use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\RegisteredClass;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
-use Flezha\LocalOperator;
+use Flezha\LocalRelay;
 use Flezha\SinkOutput;
 use Flezha\SpawnBridge;
 use Flezha\Tasklet;
@@ -31,8 +31,8 @@ final class Previewer extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'preview_op')]
-final class PreviewOperator extends \Flezha\Operator
+#[Relay(factoryId: 'preview_op')]
+final class PreviewRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -59,8 +59,8 @@ final class PartFeeder extends Tasklet
     }
 }
 
-#[Task(name: 'part_relay')]
-final class PartRelay extends Tasklet
+#[Task(name: 'part_pass')]
+final class PartPass extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -68,18 +68,18 @@ final class PartRelay extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'part_feeder_op')]
-final class PartFeederOperator extends \Flezha\Operator
+#[Relay(factoryId: 'part_feeder_op')]
+final class PartFeederRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(PartFeeder::class)
-            ->into(PartRelay::class)->sink('answer');
+            ->into(PartPass::class)->sink('answer');
     }
 }
 
-#[Operator(factoryId: 'part_answerer_op')]
-final class PartAnswererOperator extends \Flezha\Operator
+#[Relay(factoryId: 'part_answerer_op')]
+final class PartAnswererRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -137,8 +137,8 @@ final class PartTest extends TestCase
     public function testAChannelWithoutASinkRefusesThePart(): void
     {
         PartFeeder::$refusals = [];
-        self::assertSame(['x'], self::released(PartFeederOperator::class, ['x']));
-        self::assertSame(['y'], self::released(PartAnswererOperator::class, ['y'], 'part_feeder'));
+        self::assertSame(['x'], self::released(PartFeederRelay::class, ['x']));
+        self::assertSame(['y'], self::released(PartAnswererRelay::class, ['y'], 'part_feeder'));
 
         self::assertSame(
             ['part.no_sink', 'part.no_sink'],
@@ -150,9 +150,9 @@ final class PartTest extends TestCase
     /** Run `Previewer` on `$input` as the dispatcher runs item `$item` of activation 9. */
     private static function invoke(SpawnBridge $bridge, string $input, int $item): void
     {
-        $spec = PreviewOperator::spec();
+        $spec = PreviewRelay::spec();
         Dispatcher::invoke(
-            ['token' => 9, 'operator' => 'op', 'cell_key' => null, 'change_seq' => 0],
+            ['token' => 9, 'relay' => 'op', 'cell_key' => null, 'change_seq' => 0],
             new RegisteredClass($spec),
             $spec->tasklets[0],
             $bridge,
@@ -205,14 +205,14 @@ final class PartTest extends TestCase
     /**
      * What `$sink` released for `$inputs` fed on `in`.
      *
-     * @param class-string<\Flezha\Operator> $class
+     * @param class-string<\Flezha\Relay> $class
      * @param list<string>                   $inputs
      * @return list<string>
      */
     private static function released(string $class, array $inputs, string $sink = 'answer'): array
     {
         $released = [];
-        $run = LocalOperator::start($class);
+        $run = LocalRelay::start($class);
 
         try {
             $run->onSink($sink, static function (SinkOutput $out) use (&$released): void {

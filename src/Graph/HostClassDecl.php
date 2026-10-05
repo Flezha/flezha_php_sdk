@@ -85,7 +85,7 @@ final class HostClassDecl
     /**
      * The tasklets some chain keys its values for: a `key` link before the
      * `into` or merge that names the tasklet. The cell mode belongs to the
-     * node, not the class, since one class may be wired keyed in one operator
+     * node, not the class, since one class may be wired keyed in one relay
      * and unkeyed in another.
      *
      * @param list<ChannelSpec> $channels

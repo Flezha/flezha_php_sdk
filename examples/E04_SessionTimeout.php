@@ -16,7 +16,7 @@ namespace Flezha\Examples\E04;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Flezha;
@@ -64,8 +64,8 @@ final class Session extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'sessions')]
-final class SessionOperator extends \Flezha\Operator
+#[Relay(factoryId: 'sessions')]
+final class SessionRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -77,5 +77,5 @@ final class SessionOperator extends \Flezha\Operator
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(SessionOperator::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(SessionRelay::class)->run();
 }

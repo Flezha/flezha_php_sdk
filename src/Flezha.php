@@ -19,8 +19,8 @@ namespace Flezha;
  *         public function run(mixed $input, Ctx $ctx): void { $ctx->emit($input); }
  *     }
  *
- *     #[Operator(factoryId: 'echo')]
- *     final class EchoOperator extends Operator
+ *     #[Relay(factoryId: 'echo')]
+ *     final class EchoRelay extends Relay
  *     {
  *         public static function channels(Builder $c): void
  *         {
@@ -28,7 +28,7 @@ namespace Flezha;
  *         }
  *     }
  *
- *     Flezha::createRunner('default')->registerFactory(EchoOperator::class)->run();
+ *     Flezha::createRunner('default')->registerFactory(EchoRelay::class)->run();
  */
 final class Flezha
 {

@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\Json;
@@ -99,7 +99,7 @@ final class BenchCheckpoint extends KeyedUpsert
  * The same keyed upsert under both durability postures, so the round-trip
  * bench can isolate the cost of per-Cell persistence.
  */
-abstract class KeyedUpsertOperator extends \Flezha\Operator
+abstract class KeyedUpsertRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -113,25 +113,25 @@ abstract class KeyedUpsertOperator extends \Flezha\Operator
  * Per-cell persistence off: the heap-only posture the bench isolates against
  * the durable one.
  */
-#[Operator(factoryId: 'bench_keyed_nopersist', durable: false)]
-final class BenchKeyedNoPersistOperator extends KeyedUpsertOperator
+#[Relay(factoryId: 'bench_keyed_nopersist', durable: false)]
+final class BenchKeyedNoPersistRelay extends KeyedUpsertRelay
 {
 }
 
-#[Operator(factoryId: 'bench_keyed')]
-final class BenchKeyedOperator extends KeyedUpsertOperator
+#[Relay(factoryId: 'bench_keyed')]
+final class BenchKeyedRelay extends KeyedUpsertRelay
 {
 }
 
 /**
  * The effectively-once reference: a keyed upsert under the tier. A 300 ms
  * backoff base keeps the min-watermark freeze observable in the DLQ e2e.
- * Declared DropNothing: a durable-input-log operator that shed at its mailbox
+ * Declared DropNothing: a durable-input-log relay that shed at its mailbox
  * would hold the min-watermark on the shed offset forever while the log behind
  * it kept growing.
  */
-#[Operator(factoryId: 'tier_store', run: ['flow' => ['exactly' => 'effectively_once']])]
-final class TierStoreOperator extends \Flezha\Operator
+#[Relay(factoryId: 'tier_store', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class TierStoreRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -142,21 +142,21 @@ final class TierStoreOperator extends \Flezha\Operator
 }
 
 /** `tier_store` kept `durable: remote`: an input is acknowledged only once the backend holds its records. */
-#[Operator(factoryId: 'remote_tier_store', run: ['flow' => ['exactly' => 'effectively_once']], durable: 'remote')]
-final class RemoteTierStoreOperator extends \Flezha\Operator
+#[Relay(factoryId: 'remote_tier_store', run: ['flow' => ['exactly' => 'effectively_once']], durable: 'remote')]
+final class RemoteTierStoreRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        TierStoreOperator::channels($c);
+        TierStoreRelay::channels($c);
     }
 }
 
 // -- tier_chain --------------------------------------------------------------
 //
-// An effectively-once stream of two tasklets. `tier_relay` counts what it
-// relays and passes each `key:value` on; `tier_tally` counts each key's inputs
+// An effectively-once stream of two tasklets. `tier_pass` counts what it
+// forwards and passes each `key:value` on; `tier_tally` counts each key's inputs
 // and emits `key=count`. Until the release env is set the tally fails the value
-// `hold` and keeps retrying it, so a runner killed there has made the relay's
+// `hold` and keeps retrying it, so a runner killed there has made the forward's
 // record durable and not the tally's.
 
 #[Task]
@@ -173,8 +173,8 @@ abstract class Counting extends Tasklet
     }
 }
 
-#[Task(name: 'tier_relay')]
-final class TierRelay extends Counting
+#[Task(name: 'tier_pass')]
+final class TierPass extends Counting
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -197,24 +197,24 @@ final class TierTally extends Counting
     }
 }
 
-#[Operator(factoryId: 'tier_chain', run: ['flow' => ['exactly' => 'effectively_once']])]
-final class TierChainOperator extends \Flezha\Operator
+#[Relay(factoryId: 'tier_chain', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class TierChainRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
-            ->into(TierRelay::class)
+            ->into(TierPass::class)
             ->keyBy(Wire::prefix(...))->retryMax(1_000)
             ->into(TierTally::class)->keyed()
             ->sink('sink');
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'checkpoint_store',
     run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => 'checkpoint']]]],
 )]
-final class CheckpointStoreOperator extends \Flezha\Operator
+final class CheckpointStoreRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -231,13 +231,13 @@ final class CheckpointStoreOperator extends \Flezha\Operator
  * — with `commit:` for the batch case, and with the delay alone for the
  * quiet-Cell case.
  */
-#[Operator(
+#[Relay(
     factoryId: 'checkpoint_batched_store',
     run: ['flow' => ['exactly' => ['effectively_once' => [
         'ack' => ['checkpoint' => ['outputs' => 'at_checkpoint', 'max_delay_ms' => 1_500]],
     ]]]],
 )]
-final class CheckpointBatchedOperator extends \Flezha\Operator
+final class CheckpointBatchedRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -254,11 +254,11 @@ final class CheckpointBatchedOperator extends \Flezha\Operator
  * `FLEZHA_BENCH_CHECKPOINT_DELAY_MS`) additionally holds the interval's outputs
  * until it closes.
  */
-#[Operator(
+#[Relay(
     factoryId: 'bench_checkpoint',
     run: ['flow' => ['exactly' => ['effectively_once' => ['ack' => BENCH_CHECKPOINT]]]],
 )]
-final class BenchCheckpointOperator extends \Flezha\Operator
+final class BenchCheckpointRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -292,8 +292,8 @@ final class StoreInput extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'store_input')]
-final class StoreInputOperator extends \Flezha\Operator
+#[Relay(factoryId: 'store_input')]
+final class StoreInputRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -333,8 +333,8 @@ final class Counter extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'stateful_counter')]
-final class StatefulCounterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'stateful_counter')]
+final class StatefulCounterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -348,8 +348,8 @@ final class StatefulCounterOperator extends \Flezha\Operator
  * The same topology with per-Cell persistence off, under the reference's
  * node names: the toggle is a class property, not a different computation.
  */
-#[Operator(factoryId: 'persistence_off_counter', durable: false)]
-final class PersistenceOffCounterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'persistence_off_counter', durable: false)]
+final class PersistenceOffCounterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -361,7 +361,7 @@ final class PersistenceOffCounterOperator extends \Flezha\Operator
 
 // -- sleeping_counter --------------------------------------------------------
 //
-// A flow operator that sleeps when idle: `key:delta` inputs fold into one running
+// A flow relay that sleeps when idle: `key:delta` inputs fold into one running
 // total per key, and every input emits `key=total` on the `totals` sink. The
 // sleep e2e reads the total after a wake to prove the Cell came back with the
 // state it slept with.
@@ -388,8 +388,8 @@ final class SleepingCounter extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'sleeping_counter', durable: FIXTURE_DURABLE)]
-final class SleepingCounterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'sleeping_counter', durable: FIXTURE_DURABLE)]
+final class SleepingCounterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -440,8 +440,8 @@ final class Tick extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'coalescing_counter')]
-final class CoalescingCounterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'coalescing_counter')]
+final class CoalescingCounterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -480,8 +480,8 @@ final class ResumeProbe extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'resume_probe')]
-final class ResumeProbeOperator extends \Flezha\Operator
+#[Relay(factoryId: 'resume_probe')]
+final class ResumeProbeRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -494,7 +494,7 @@ final class ResumeProbeOperator extends \Flezha\Operator
 // -- schema_evolution_v1 / schema_evolution_v2 -------------------------------
 //
 // The same class either side of a deploy that edits its own state type. Both
-// halves declare the SAME tasklet name, so an operator started under v1 and
+// halves declare the SAME tasklet name, so a relay started under v1 and
 // restarted under v2 restores from the very WAL v1 wrote — which is what a
 // deploy does, with the two binaries collapsed into one fixture file.
 //
@@ -569,8 +569,8 @@ final class EvolvingCartV2 extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'schema_evolution_v1')]
-final class SchemaEvolutionV1Operator extends \Flezha\Operator
+#[Relay(factoryId: 'schema_evolution_v1')]
+final class SchemaEvolutionV1Relay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -580,8 +580,8 @@ final class SchemaEvolutionV1Operator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'schema_evolution_v2')]
-final class SchemaEvolutionV2Operator extends \Flezha\Operator
+#[Relay(factoryId: 'schema_evolution_v2')]
+final class SchemaEvolutionV2Relay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

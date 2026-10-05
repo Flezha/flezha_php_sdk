@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Dispatch\Dispatcher;
@@ -38,8 +38,8 @@ final class Kept extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'kept_operator')]
-final class KeptOperator extends \Flezha\Operator
+#[Relay(factoryId: 'kept_relay')]
+final class KeptRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -48,17 +48,17 @@ final class KeptOperator extends \Flezha\Operator
 }
 
 /**
- * A cell belongs to one operator: two operators of one factory on one runner,
- * such as two instances of a steps operator, each keep their own state for
+ * A cell belongs to one relay: two relays of one factory on one runner,
+ * such as two instances of a steps relay, each keep their own state for
  * the same tasklet and cell key, on every path that reads or writes it.
  */
 final class CellStateTest extends TestCase
 {
     use Dispatches;
 
-    public function testTwoOperatorsOfOneFactoryKeepTheirOwnCell(): void
+    public function testTwoRelaysOfOneFactoryKeepTheirOwnCell(): void
     {
-        [$dispatcher, $core] = self::dispatcherFor(KeptOperator::class);
+        [$dispatcher, $core] = self::dispatcherFor(KeptRelay::class);
         try {
             self::work($dispatcher, 'order_a', '"a"');
             self::work($dispatcher, 'order_b', '"b"');
@@ -71,15 +71,15 @@ final class CellStateTest extends TestCase
         }
     }
 
-    public function testARestoreAndAnAppliedStateReachOnlyTheirOwnOperator(): void
+    public function testARestoreAndAnAppliedStateReachOnlyTheirOwnRelay(): void
     {
-        [$dispatcher, $core] = self::dispatcherFor(KeptOperator::class);
+        [$dispatcher, $core] = self::dispatcherFor(KeptRelay::class);
         try {
-            $restored = $dispatcher->answer(self::activation('kept_operator', 'restore_fold', 'order_a') + [
+            $restored = $dispatcher->answer(self::activation('kept_relay', 'restore_fold', 'order_a') + [
                 'snapshot' => null,
                 'changes' => [['bytes' => '"r"', 'from_version' => null]],
             ]);
-            $applied = $dispatcher->answer(self::activation('kept_operator', 'apply_state', 'order_b') + [
+            $applied = $dispatcher->answer(self::activation('kept_relay', 'apply_state', 'order_b') + [
                 'state_json' => '{"seen":["m"]}',
             ]);
 
@@ -93,15 +93,15 @@ final class CellStateTest extends TestCase
         }
     }
 
-    public function testACompensationReadsItsOwnOperatorsCell(): void
+    public function testACompensationReadsItsOwnRelaysCell(): void
     {
-        [$dispatcher, $core] = self::dispatcherFor(KeptOperator::class);
+        [$dispatcher, $core] = self::dispatcherFor(KeptRelay::class);
         try {
             self::work($dispatcher, 'order_a', '"a"');
             self::work($dispatcher, 'order_b', '"b"');
 
             $undo = $dispatcher->answer(
-                self::activation('kept_operator', 'compensate_run', 'order_b') + ['outputs' => []],
+                self::activation('kept_relay', 'compensate_run', 'order_b') + ['outputs' => []],
             );
 
             self::assertSame('["b"]', $undo['effects'][0]['outputs'][0]['payload']);
@@ -112,22 +112,22 @@ final class CellStateTest extends TestCase
 
     public function testAHarnessRestoreFillsTheCellItReads(): void
     {
-        $harness = new Harness(Kept::class, operator: 'order_a');
+        $harness = new Harness(Kept::class, relay: 'order_a');
         $harness->restore(changes: ['"r"']);
 
         self::assertSame(['seen' => ['r']], $harness->state());
     }
 
-    private static function work(Dispatcher $dispatcher, string $operator, string $payload): void
+    private static function work(Dispatcher $dispatcher, string $relay, string $payload): void
     {
         $answer = $dispatcher->answer(
-            self::activation('kept_operator', 'work', $operator) + ['items' => [self::input($payload)]],
+            self::activation('kept_relay', 'work', $relay) + ['items' => [self::input($payload)]],
         );
         self::assertSame('ok', $answer['effects'][0]['verdict']);
     }
 
-    private static function read(Dispatcher $dispatcher, string $operator): string
+    private static function read(Dispatcher $dispatcher, string $relay): string
     {
-        return $dispatcher->answer(self::activation('kept_operator', 'live_state_read', $operator))['json'];
+        return $dispatcher->answer(self::activation('kept_relay', 'live_state_read', $relay))['json'];
     }
 }

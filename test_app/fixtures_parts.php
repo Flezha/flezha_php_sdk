@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -50,8 +50,8 @@ final class PartEchoStep extends PartSender
 {
 }
 
-#[Operator(factoryId: 'part_echo')]
-final class PartEcho extends \Flezha\Operator
+#[Relay(factoryId: 'part_echo')]
+final class PartEcho extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -66,13 +66,13 @@ final class PartEchoTurn extends PartSender
 {
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'part_echo_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class PartEchoSteps extends \Flezha\Operator
+final class PartEchoSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -84,7 +84,7 @@ final class PartEchoSteps extends \Flezha\Operator
 
 final class PartFixtures
 {
-    /** @return list<class-string<\Flezha\Operator>> */
+    /** @return list<class-string<\Flezha\Relay>> */
     public static function all(): array
     {
         return [PartEcho::class, PartEchoSteps::class];

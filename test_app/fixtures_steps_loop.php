@@ -12,7 +12,7 @@ declare(strict_types=1);
 
 namespace Flezha\TestApp;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -125,7 +125,7 @@ final class ChatReplyUndoable extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'chat_loop_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
@@ -133,7 +133,7 @@ final class ChatReplyUndoable extends Tasklet
 )]
 // A chat session ends on the turn `bye`; the duration backstop keeps a stray
 // instance from outliving the test run.
-final class ChatLoopSteps extends \Flezha\Operator
+final class ChatLoopSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -144,13 +144,13 @@ final class ChatLoopSteps extends \Flezha\Operator
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'stateless_loop_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class StatelessLoopSteps extends \Flezha\Operator
+final class StatelessLoopSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -162,7 +162,7 @@ final class StatelessLoopSteps extends \Flezha\Operator
 
 // keyed_loop_steps is a durable per-input loop keyed on its entry edge by
 // the text before the first `:`, so one Cell counts one symbol's messages and
-// emits `<symbol>:<count>`: the shape a partition group of steps operator members
+// emits `<symbol>:<count>`: the shape a partition group of steps relay members
 // takes.
 
 #[Task(name: 'keyed_loop_count')]
@@ -186,13 +186,13 @@ final class KeyedLoopCount extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'keyed_loop_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class KeyedLoopSteps extends \Flezha\Operator
+final class KeyedLoopSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -202,13 +202,13 @@ final class KeyedLoopSteps extends \Flezha\Operator
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'chat_rewind_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class ChatRewindSteps extends \Flezha\Operator
+final class ChatRewindSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -287,7 +287,7 @@ final class Answer extends Tasklet
     }
 }
 
-abstract class FailingTurnLoop extends \Flezha\Operator
+abstract class FailingTurnLoop extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -298,7 +298,7 @@ abstract class FailingTurnLoop extends \Flezha\Operator
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'failing_turn_loop_steps',
     run: ['steps' => ['each' => 'per_input', 'on_failure' => 'keep_progress']],
     durable: FIXTURE_DURABLE,
@@ -308,7 +308,7 @@ final class FailingTurnLoopSteps extends FailingTurnLoop
 {
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'failing_turn_undo_all_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
@@ -336,13 +336,13 @@ final class BlockingReply extends Tasklet
 
 // The chat loop with the block moved AFTER the root's commit, so a SIGKILL
 // lands between a root's `task_committed` and the pass's `iter_committed`.
-#[Operator(
+#[Relay(
     factoryId: 'reply_block_loop_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class ReplyBlockLoopSteps extends \Flezha\Operator
+final class ReplyBlockLoopSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -385,8 +385,8 @@ final class SpawnRequester extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'spawn_requester')]
-final class SpawnRequesterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'spawn_requester')]
+final class SpawnRequesterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -413,8 +413,8 @@ final class SpawnHoldRequester extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'spawn_hold_requester', run: ['flow' => ['exactly' => 'effectively_once']])]
-final class SpawnHoldRequesterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'spawn_hold_requester', run: ['flow' => ['exactly' => 'effectively_once']])]
+final class SpawnHoldRequesterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -439,8 +439,8 @@ final class SpawnOnceRequester extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'spawn_once_requester')]
-final class SpawnOnceRequesterOperator extends \Flezha\Operator
+#[Relay(factoryId: 'spawn_once_requester')]
+final class SpawnOnceRequesterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -540,7 +540,7 @@ final class BenchS15 extends DurableStep
 }
 
 /** A linear chain `in → BenchS0 → … → bench_sink`, STEPS positions long. */
-abstract class BenchChain extends \Flezha\Operator
+abstract class BenchChain extends \Flezha\Relay
 {
     /** @var list<class-string<DurableStep>> */
     public const STEP_CLASSES = [
@@ -562,25 +562,25 @@ abstract class BenchChain extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'bench_chain_1', run: 'steps', durable: FIXTURE_DURABLE)]
+#[Relay(factoryId: 'bench_chain_1', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BenchChain1 extends BenchChain
 {
     protected const STEPS = 1;
 }
 
-#[Operator(factoryId: 'bench_chain_4', run: 'steps', durable: FIXTURE_DURABLE)]
+#[Relay(factoryId: 'bench_chain_4', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BenchChain4 extends BenchChain
 {
     protected const STEPS = 4;
 }
 
-#[Operator(factoryId: 'bench_chain_16', run: 'steps', durable: FIXTURE_DURABLE)]
+#[Relay(factoryId: 'bench_chain_16', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BenchChain16 extends BenchChain
 {
     protected const STEPS = 16;
 }
 
-#[Operator(factoryId: 'bench_chain_optout_4', run: 'steps', durable: false)]
+#[Relay(factoryId: 'bench_chain_optout_4', run: 'steps', durable: false)]
 final class BenchChainOptout4 extends BenchChain
 {
     protected const STEPS = 4;
@@ -625,13 +625,13 @@ final class BenchTurn extends Tasklet
 }
 
 // A day, not the chat loop's ten minutes: a soak outlives 600 s.
-#[Operator(
+#[Relay(
     factoryId: 'bench_loop_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 24 * 3_600_000,
 )]
-final class BenchLoopSteps extends \Flezha\Operator
+final class BenchLoopSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -662,13 +662,13 @@ final class StaticCellStep extends Tasklet
     }
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'static_cell_steps',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
     maxDurationMs: 600_000,
 )]
-final class StaticCellSteps extends \Flezha\Operator
+final class StaticCellSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -693,8 +693,8 @@ final class CompleteFlow extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'complete_flow')]
-final class CompleteFlowOperator extends \Flezha\Operator
+#[Relay(factoryId: 'complete_flow')]
+final class CompleteFlowRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -721,8 +721,8 @@ final class ChainedCountdown extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'chained_steps', run: ['steps' => ['each' => 'chained']])]
-final class ChainedSteps extends \Flezha\Operator
+#[Relay(factoryId: 'chained_steps', run: ['steps' => ['each' => 'chained']])]
+final class ChainedSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {

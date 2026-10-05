@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Attribute\Operator as OperatorAttribute;
+use Flezha\Attribute\Relay as RelayAttribute;
 use Flezha\Attribute\Task;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
@@ -13,11 +13,11 @@ use LogicException;
 use ReflectionClass;
 
 /**
- * The base an authored operator extends: an `#[Operator]` attribute for the
+ * The base an authored relay extends: an `#[Relay]` attribute for the
  * factory id and the class settings, and either `channels()` for the graph
  * or, as the §5 short form, the one tasklet's `run`.
  */
-abstract class Operator
+abstract class Relay
 {
     /** @var array<class-string, ClassSpec> */
     private static array $cache = [];
@@ -29,7 +29,7 @@ abstract class Operator
 
     /**
      * The body of the one tasklet a §5 short form is, defined instead of
-     * `channels()`: the entry channel its `#[Operator]` names feeds that
+     * `channels()`: the entry channel its `#[Relay]` names feeds that
      * tasklet, named the factory id, whose output reaches the `sink` if one
      * is written. A short form may also define the hooks {@see Tasklet}
      * declares (`initState`, `applyChange`, ...), which that tasklet takes,
@@ -49,20 +49,20 @@ abstract class Operator
         return self::$cache[static::class] ??= static::buildSpec(static::declaration());
     }
 
-    /** The `#[Operator]` attribute, refusing a class that carries none. */
-    public static function declaration(): OperatorAttribute
+    /** The `#[Relay]` attribute, refusing a class that carries none. */
+    public static function declaration(): RelayAttribute
     {
-        // Not inherited on purpose: two operators cannot share a factory id,
+        // Not inherited on purpose: two relays cannot share a factory id,
         // and PHP attributes are per class, which is the behaviour this wants.
-        $attributes = (new ReflectionClass(static::class))->getAttributes(OperatorAttribute::class);
+        $attributes = (new ReflectionClass(static::class))->getAttributes(RelayAttribute::class);
         if ($attributes === []) {
-            throw new FlezhaException('topology.missing_factory_id', ['operator' => static::class]);
+            throw new FlezhaException('topology.missing_factory_id', ['relay' => static::class]);
         }
 
         return $attributes[0]->newInstance();
     }
 
-    protected static function builder(OperatorAttribute $declaration): Builder
+    protected static function builder(RelayAttribute $declaration): Builder
     {
         $builder = new Builder($declaration->factoryId);
         if (self::isShortForm($declaration)) {
@@ -86,7 +86,7 @@ abstract class Operator
      * The graph and the settings tree as written: the core judges the tree
      * and refuses a misplaced setting by name.
      */
-    protected static function buildSpec(OperatorAttribute $declaration): ClassSpec
+    protected static function buildSpec(RelayAttribute $declaration): ClassSpec
     {
         $builder = static::builder($declaration);
         $spec = new ClassSpec(
@@ -108,20 +108,20 @@ abstract class Operator
 
     /**
      * The spec a registration call was handed, refusing a tasklet, which
-     * declares no operator. The one resolver, so the runner and a local run
+     * declares no relay. The one resolver, so the runner and a local run
      * cannot disagree about what a class declares.
      *
-     * @param class-string<Operator> $class
+     * @param class-string<Relay> $class
      */
     public static function specFor(string $class): ClassSpec
     {
         if (is_subclass_of($class, Tasklet::class)) {
-            // Read first, so a tasklet carrying an operator's argument is
+            // Read first, so a tasklet carrying a relay's argument is
             // refused naming it.
             Definition::of($class);
 
-            // A tasklet is registered by the operator that wires it.
-            throw new FlezhaException('topology.no_operator_exported', ['module' => $class]);
+            // A tasklet is registered by the relay that wires it.
+            throw new FlezhaException('topology.no_relay_exported', ['module' => $class]);
         }
 
         return $class::spec();
@@ -131,7 +131,7 @@ abstract class Operator
      * Whether this class is a §5 short form, read from the body it defines:
      * `run` for one tasklet, `channels()` for a topology of its own.
      */
-    private static function isShortForm(OperatorAttribute $declaration): bool
+    private static function isShortForm(RelayAttribute $declaration): bool
     {
         $body = Definition::overrides(static::class, 'run');
         $topology = Definition::overrides(static::class, 'channels');
@@ -140,7 +140,7 @@ abstract class Operator
         }
         if (!$body && !$topology) {
             throw new FlezhaException('topology.missing_body', [
-                'declaration' => "operator '{$declaration->factoryId}'",
+                'declaration' => "relay '{$declaration->factoryId}'",
                 'body' => "`channels()`, or one tasklet's `run` as the short form",
             ]);
         }
@@ -166,7 +166,7 @@ abstract class Operator
     }
 
     /** @param list<string> $fields */
-    private static function refuseFields(string $code, OperatorAttribute $declaration, array $fields): never
+    private static function refuseFields(string $code, RelayAttribute $declaration, array $fields): never
     {
         throw new FlezhaException($code, ['factory_id' => $declaration->factoryId, 'fields' => $fields]);
     }

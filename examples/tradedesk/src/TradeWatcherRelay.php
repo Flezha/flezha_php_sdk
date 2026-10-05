@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Graph\Builder;
 
 /**
  * The desk's stream: trades in, each price compared with its symbol's recent average, and an order
  * started when a price jumps far enough above it.
  *
- * A flow operator runs for as long as the desk does. The exchange sends other messages
+ * A flow relay runs for as long as the desk does. The exchange sends other messages
  * beside its trades and delivers several trades in one message, so the wiring keeps the trade
  * messages, splits each into its trades before anything else sees them, drops what the desk does
  * not follow, and routes the rest to a cell per symbol.
  */
-#[Operator(factoryId: 'trade_watcher')]
-final class TradeWatcherOperator extends \Flezha\Operator
+#[Relay(factoryId: 'trade_watcher')]
+final class TradeWatcherRelay extends \Flezha\Relay
 {
     /**
      * Four transforms on the wiring, then two tasklets, and one place output leaves the desk.

@@ -22,7 +22,7 @@ use Attribute;
  * The cell mode is not declared here: a tasklet fed through `keyBy` is
  * dynamic, one with `cellKeys` static, and any other single.
  *
- * A §5 short form, an operator class defining `run`, carries its tasklet's
+ * A §5 short form, a relay class defining `run`, carries its tasklet's
  * settings here too, all but `name`: that tasklet is named its factory id.
  */
 #[Attribute(Attribute::TARGET_CLASS)]

@@ -9,7 +9,7 @@ use Flezha\Dropped;
 use Flezha\Exception\FlezhaException;
 use Flezha\Fanned;
 use Flezha\Overflow;
-use Flezha\Operator;
+use Flezha\Relay;
 use Flezha\Response;
 use Flezha\Tasklet;
 
@@ -116,9 +116,9 @@ final class Edge
 
     /**
      * Wire this edge into a tasklet: a `Tasklet` subclass, or a short-form
-     * operator class, which is its own.
+     * relay class, which is its own.
      *
-     * @param class-string<Tasklet>|class-string<Operator> $class
+     * @param class-string<Tasklet>|class-string<Relay> $class
      */
     public function into(string $class, ?string $nodeName = null): self
     {
@@ -210,7 +210,7 @@ final class Edge
     }
 
     /**
-     * End this edge's chain in a call to another operator, and answer the
+     * End this edge's chain in a call to another relay, and answer the
      * edge of its Response channel: the entry channel `<channel>.response`,
      * whose values are {@see Response}s. Every value reaching the call, after
      * this chain's transforms and key, is one request. `$target` names an

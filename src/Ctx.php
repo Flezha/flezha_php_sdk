@@ -43,7 +43,7 @@ final class Ctx
         private readonly ClassSpec $spec,
         private readonly TaskNode $node,
         private readonly array $outgoing,
-        private readonly string $operator,
+        private readonly string $relay,
         public readonly ?string $cellKey,
         private readonly int $changeSeq,
         private readonly int $now,
@@ -75,7 +75,7 @@ final class Ctx
         // Lazily, because most invocations never ask and the identity is the
         // one part of the derivation that costs an allocation.
         $this->identity ??= Identity::cell(
-            $this->operator,
+            $this->relay,
             $this->node->name,
             (string) $this->cellKey,
         );
@@ -129,7 +129,7 @@ final class Ctx
      * Send `$value` as a part: a preview of the output this invocation is
      * producing, which leaves the runner now rather than when the handler
      * returns. It previews the tasklet's own output channel and is encoded as
-     * an emit of the same value there would be. The operator's listeners
+     * an emit of the same value there would be. The relay's listeners
      * receive it before the output; a sink never does, and it is never
      * durable or replayed. Parts are numbered from 0 within each attempt, so
      * a retry starts its preview again.
@@ -446,7 +446,7 @@ final class Ctx
      * Output identity for one plugin frame, appended after the user's metadata.
      *
      * Written only when the class records no effects: under the tier, and for
-     * a durable steps operator, the controller derives the identity from the durable
+     * a durable steps relay, the controller derives the identity from the durable
      * effect record, and a second answer here would contradict it. The
      * ordinal advances on every plugin output, stamped or not, so hosts of one
      * topology agree on the sequence, and a `flatMap` fan-out produces
@@ -459,7 +459,7 @@ final class Ctx
         if ($channel->keyed && !$this->spec->recordsEffects()) {
             $pairs['flz.cell'] = sprintf(
                 '%s/%s/%s',
-                $this->operator,
+                $this->relay,
                 $this->node->name,
                 (string) $this->cellKey,
             );

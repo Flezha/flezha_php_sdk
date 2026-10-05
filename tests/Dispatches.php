@@ -8,23 +8,23 @@ use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\Registry;
 use Flezha\Ffi\Core;
 use Flezha\Graph\Validate;
-use Flezha\Operator;
+use Flezha\Relay;
 
 /** Activations as the core hands them, for tests that drive the dispatcher directly. */
 trait Dispatches
 {
     /**
-     * A dispatcher over one declared operator, with a context of its own the
+     * A dispatcher over one declared relay, with a context of its own the
      * caller frees.
      *
-     * @param class-string<Operator> $operator
+     * @param class-string<Relay> $relay
      * @return array{Dispatcher, Core}
      */
-    private static function dispatcherFor(string $operator): array
+    private static function dispatcherFor(string $relay): array
     {
         $core = Core::create();
         $registry = new Registry();
-        $spec = $operator::spec();
+        $spec = $relay::spec();
         Validate::spec($spec, $core);
         $registry->add($spec);
 
@@ -32,10 +32,10 @@ trait Dispatches
     }
 
     /** @return array<string, mixed> */
-    private static function activation(string $factory, string $kind, string $operator = 'op'): array
+    private static function activation(string $factory, string $kind, string $relay = 'op'): array
     {
         return [
-            'token' => 1, 'factory' => $factory, 'tasklet' => 0, 'operator' => $operator,
+            'token' => 1, 'factory' => $factory, 'tasklet' => 0, 'relay' => $relay,
             'cell_key' => null, 'change_seq' => 0, 'kind' => $kind,
         ];
     }

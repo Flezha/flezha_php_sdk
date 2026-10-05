@@ -52,7 +52,7 @@ final class ClassSpec
     /**
      * Whether each invocation's output rides one effect record the controller
      * stamps at flush: under the effectively-once tier, and for a durable
-     * steps operator, whose stage commit names the record.
+     * steps relay, whose stage commit names the record.
      */
     public function recordsEffects(): bool
     {

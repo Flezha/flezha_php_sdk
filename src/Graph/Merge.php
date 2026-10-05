@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
-use Flezha\Operator;
+use Flezha\Relay;
 use Flezha\Tasklet;
 
 /**
@@ -58,7 +58,7 @@ final class Merge
     /**
      * Close every source on one tasklet node, and answer that node's edge.
      *
-     * @param class-string<Tasklet>|class-string<Operator> $class
+     * @param class-string<Tasklet>|class-string<Relay> $class
      */
     public function into(string $class, ?string $nodeName = null): Edge
     {

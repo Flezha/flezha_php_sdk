@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -220,8 +220,8 @@ final class Routed extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'form_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
-final class ShortPlaceOrder extends \Flezha\Operator
+#[Relay(factoryId: 'form_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+final class ShortPlaceOrder extends \Flezha\Relay
 {
     public function run(mixed $input, Ctx $ctx): void
     {
@@ -229,8 +229,8 @@ final class ShortPlaceOrder extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'form_emits')]
-final class EmitsOperator extends \Flezha\Operator
+#[Relay(factoryId: 'form_emits')]
+final class EmitsRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -238,8 +238,8 @@ final class EmitsOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'form_sessions')]
-final class SessionsOperator extends \Flezha\Operator
+#[Relay(factoryId: 'form_sessions')]
+final class SessionsRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -247,8 +247,8 @@ final class SessionsOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'form_unkeyed')]
-final class UnkeyedSessionsOperator extends \Flezha\Operator
+#[Relay(factoryId: 'form_unkeyed')]
+final class UnkeyedSessionsRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -256,8 +256,8 @@ final class UnkeyedSessionsOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'form_clocks')]
-final class ClocksOperator extends \Flezha\Operator
+#[Relay(factoryId: 'form_clocks')]
+final class ClocksRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -268,8 +268,8 @@ final class ClocksOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'form_stateless_logical')]
-final class StatelessLogicalOperator extends \Flezha\Operator
+#[Relay(factoryId: 'form_stateless_logical')]
+final class StatelessLogicalRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -277,8 +277,8 @@ final class StatelessLogicalOperator extends \Flezha\Operator
     }
 }
 
-#[Operator(factoryId: 'form_keyed_static')]
-final class KeyedStaticOperator extends \Flezha\Operator
+#[Relay(factoryId: 'form_keyed_static')]
+final class KeyedStaticRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -358,7 +358,7 @@ final class TaskletFormTest extends TestCase
 
     public function testTheIdleTtlIsWholeSecondsAndKeyByAloneMakesATaskletDynamic(): void
     {
-        $tasklet = self::record(SessionsOperator::class, 'sessions');
+        $tasklet = self::record(SessionsRelay::class, 'sessions');
 
         self::assertSame(3_600_000, $tasklet['idle_ttl_ms']);
         self::assertSame('dynamic', $tasklet['cell_mode']);
@@ -366,22 +366,22 @@ final class TaskletFormTest extends TestCase
 
     public function testOneClassTakesItsModeFromEachWiring(): void
     {
-        self::assertSame('dynamic', self::record(SessionsOperator::class, 'sessions')['cell_mode']);
-        self::assertSame('single', self::record(UnkeyedSessionsOperator::class, 'sessions')['cell_mode']);
+        self::assertSame('dynamic', self::record(SessionsRelay::class, 'sessions')['cell_mode']);
+        self::assertSame('single', self::record(UnkeyedSessionsRelay::class, 'sessions')['cell_mode']);
     }
 
     public function testTheClockFollowsFromWhatTheClassWrites(): void
     {
-        self::assertSame('event_time', self::record(ClocksOperator::class, 'stamped')['clock']);
-        self::assertSame('logical', self::record(ClocksOperator::class, 'ledger')['clock']);
-        self::assertSame('wall', self::record(ClocksOperator::class, 'seeded')['clock']);
-        self::assertArrayNotHasKey('idle_ttl_ms', self::record(ClocksOperator::class, 'seeded'));
+        self::assertSame('event_time', self::record(ClocksRelay::class, 'stamped')['clock']);
+        self::assertSame('logical', self::record(ClocksRelay::class, 'ledger')['clock']);
+        self::assertSame('wall', self::record(ClocksRelay::class, 'seeded')['clock']);
+        self::assertArrayNotHasKey('idle_ttl_ms', self::record(ClocksRelay::class, 'seeded'));
     }
 
     /** The prepare crossing answers what `eventTime()` extracted, which the core serves as `now()`. */
     public function testAnEventTimeTaskletAnswersItsExtractedTime(): void
     {
-        [$dispatcher, $core] = self::dispatcherFor(ClocksOperator::class);
+        [$dispatcher, $core] = self::dispatcherFor(ClocksRelay::class);
         try {
             $prepared = $dispatcher->answer(self::activation('form_clocks', 'key_request') + [
                 'key_request' => [
@@ -408,7 +408,7 @@ final class TaskletFormTest extends TestCase
     public function testALogicalClockOnAStatelessTaskletIsTheCoresUnservableClock(): void
     {
         try {
-            self::validate(StatelessLogicalOperator::class);
+            self::validate(StatelessLogicalRelay::class);
             self::fail('a logical clock over no state is refused');
         } catch (FlezhaException $e) {
             self::assertSame(['topology.unservable_clock'], array_column($e->details['issues'], 'code'));
@@ -418,7 +418,7 @@ final class TaskletFormTest extends TestCase
     public function testAStaticKeySetFedByKeyByIsTheCoresKeyByOnUnkeyableTarget(): void
     {
         try {
-            self::validate(KeyedStaticOperator::class);
+            self::validate(KeyedStaticRelay::class);
             self::fail('a keyed edge into a static key set is refused');
         } catch (FlezhaException $e) {
             self::assertSame(['topology.key_by_on_unkeyable_target'], array_column($e->details['issues'], 'code'));
@@ -456,7 +456,7 @@ final class TaskletFormTest extends TestCase
 
     public function testAValueLeavesOnlyThroughTheContextUnderTheDispatcher(): void
     {
-        [$dispatcher, $core] = self::dispatcherFor(EmitsOperator::class);
+        [$dispatcher, $core] = self::dispatcherFor(EmitsRelay::class);
         try {
             $result = $dispatcher->answer(self::activation('form_emits', 'work') + [
                 'items' => [self::input('"both"'), self::input('"neither"')],
@@ -531,26 +531,26 @@ final class TaskletFormTest extends TestCase
     }
 
     /**
-     * @param class-string<\Flezha\Operator> $operator
+     * @param class-string<\Flezha\Relay> $relay
      * @return array<string, mixed>
      */
-    private static function record(string $operator, string $tasklet): array
+    private static function record(string $relay, string $tasklet): array
     {
-        foreach (HostClassDecl::of($operator::spec())['tasklets'] as $record) {
+        foreach (HostClassDecl::of($relay::spec())['tasklets'] as $record) {
             if ($record['name'] === $tasklet) {
                 return $record;
             }
         }
 
-        self::fail("$operator declares no tasklet `$tasklet`");
+        self::fail("$relay declares no tasklet `$tasklet`");
     }
 
-    /** @param class-string<\Flezha\Operator> $operator */
-    private static function validate(string $operator): void
+    /** @param class-string<\Flezha\Relay> $relay */
+    private static function validate(string $relay): void
     {
         $core = Core::create();
         try {
-            Validate::spec($operator::spec(), $core);
+            Validate::spec($relay::spec(), $core);
         } finally {
             $core->free();
         }

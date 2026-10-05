@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * The smallest operator: one entry channel, one stateless tasklet, one
+ * The smallest relay: one entry channel, one stateless tasklet, one
  * plugin sink. A value leaves through `$ctx->emit()`, so a pass-through is
  * one call.
  *
@@ -14,7 +14,7 @@ namespace Flezha\Examples\E01;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -31,8 +31,8 @@ final class Echoer extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'echo')]
-final class EchoOperator extends \Flezha\Operator
+#[Relay(factoryId: 'echo')]
+final class EchoRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -41,5 +41,5 @@ final class EchoOperator extends \Flezha\Operator
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(EchoOperator::class)->run();
+    Flezha::createRunner($argv[1] ?? 'default')->registerFactory(EchoRelay::class)->run();
 }

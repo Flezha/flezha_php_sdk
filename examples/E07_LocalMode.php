@@ -20,12 +20,12 @@ namespace Flezha\Examples\E07;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Graph\Builder;
-use Flezha\LocalOperator;
+use Flezha\LocalRelay;
 use Flezha\Tasklet;
 use Flezha\SinkOutput;
 
@@ -64,8 +64,8 @@ final class Tally extends Tasklet
     }
 }
 
-#[Operator(factoryId: 'local_word_count_example')]
-final class WordCountOperator extends \Flezha\Operator
+#[Relay(factoryId: 'local_word_count_example')]
+final class WordCountRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
@@ -80,7 +80,7 @@ final class WordCountOperator extends \Flezha\Operator
 }
 
 if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    $run = LocalOperator::start(WordCountOperator::class);
+    $run = LocalRelay::start(WordCountRelay::class);
 
     try {
         $run->onSink('totals', static fn (SinkOutput $out) => print($out->payload . PHP_EOL));

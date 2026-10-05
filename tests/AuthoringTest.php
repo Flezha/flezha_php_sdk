@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Operator;
+use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
@@ -19,7 +19,7 @@ use Flezha\Graph\ClassSpec;
 use Flezha\Graph\Edge;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
-use Flezha\Operator as OperatorBase;
+use Flezha\Relay as RelayBase;
 use Flezha\Tasklet;
 use Flezha\Runner;
 use Flezha\Testing\Harness;
@@ -29,15 +29,15 @@ use Flezha\Transforms;
 // ---------------------------------------------------------------------------
 // The §5 short form
 
-#[Operator(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
-final class ShortUpcase extends OperatorBase
+#[Relay(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
+final class ShortUpcase extends RelayBase
 {
     use Echoes;
 }
 
 /** `ShortUpcase` as its full form, the tasklet named after the factory id. */
-#[Operator(factoryId: 'sf_upcase')]
-final class ShortUpcaseTwinOperator extends OperatorBase
+#[Relay(factoryId: 'sf_upcase')]
+final class ShortUpcaseTwinRelay extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -47,14 +47,14 @@ final class ShortUpcaseTwinOperator extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
-final class ShortPlace extends OperatorBase
+#[Relay(factoryId: 'sf_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+final class ShortPlace extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_place', run: 'steps')]
-final class ShortPlaceTwinOperator extends OperatorBase
+#[Relay(factoryId: 'sf_place', run: 'steps')]
+final class ShortPlaceTwinRelay extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -65,14 +65,14 @@ final class ShortPlaceTwinOperator extends OperatorBase
 }
 
 /** A steps short form under the id `ShortUpcase` already holds. */
-#[Operator(factoryId: 'sf_upcase', run: 'steps', sink: 'placed')]
-final class ShortUpcaseSteps extends OperatorBase
+#[Relay(factoryId: 'sf_upcase', run: 'steps', sink: 'placed')]
+final class ShortUpcaseSteps extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_both', sink: 'out')]
-final class ShortWithTopology extends OperatorBase
+#[Relay(factoryId: 'sf_both', sink: 'out')]
+final class ShortWithTopology extends RelayBase
 {
     use Echoes;
 
@@ -82,47 +82,47 @@ final class ShortWithTopology extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_no_body')]
-final class ShortNoBody extends OperatorBase
+#[Relay(factoryId: 'sf_no_body')]
+final class ShortNoBody extends RelayBase
 {
 }
 
-final class ShortUnattributed extends OperatorBase
+final class ShortUnattributed extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_renamed')]
+#[Relay(factoryId: 'sf_renamed')]
 #[Task(name: 'elsewhere')]
-final class ShortRenamed extends OperatorBase
+final class ShortRenamed extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_unpersisted', durable: false)]
-final class ShortUnpersisted extends OperatorBase
+#[Relay(factoryId: 'sf_unpersisted', durable: false)]
+final class ShortUnpersisted extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_per_input', run: ['steps' => ['each' => 'per_input']])]
-final class ShortPerInput extends OperatorBase
+#[Relay(factoryId: 'sf_per_input', run: ['steps' => ['each' => 'per_input']])]
+final class ShortPerInput extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(
+#[Relay(
     factoryId: 'sf_per_input_time_limited',
     run: ['steps' => ['each' => 'per_input']],
     maxDurationMs: 60_000,
 )]
-final class ShortPerInputTimeLimited extends OperatorBase
+final class ShortPerInputTimeLimited extends RelayBase
 {
     use Echoes;
 }
 
-#[Operator(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
-final class ShortCodecOnTopology extends OperatorBase
+#[Relay(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
+final class ShortCodecOnTopology extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -130,9 +130,9 @@ final class ShortCodecOnTopology extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_task_on_topology')]
+#[Relay(factoryId: 'sf_task_on_topology')]
 #[Task(mailboxCapacity: 8)]
-final class ShortTaskOnTopology extends OperatorBase
+final class ShortTaskOnTopology extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -141,8 +141,8 @@ final class ShortTaskOnTopology extends OperatorBase
 }
 
 /** A fold taking the state by value, which would fold into a copy. */
-#[Operator(factoryId: 'sf_fold_by_value')]
-final class ShortFoldByValue extends OperatorBase
+#[Relay(factoryId: 'sf_fold_by_value')]
+final class ShortFoldByValue extends RelayBase
 {
     use Echoes;
 
@@ -157,8 +157,8 @@ final class ShortFoldByValue extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_narrowed_key')]
-final class ShortNarrowedKey extends OperatorBase
+#[Relay(factoryId: 'sf_narrowed_key')]
+final class ShortNarrowedKey extends RelayBase
 {
     use Echoes;
 
@@ -168,8 +168,8 @@ final class ShortNarrowedKey extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_wider_keys')]
-final class ShortWiderKeys extends OperatorBase
+#[Relay(factoryId: 'sf_wider_keys')]
+final class ShortWiderKeys extends RelayBase
 {
     use Echoes;
 
@@ -179,8 +179,8 @@ final class ShortWiderKeys extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_void_state')]
-final class ShortVoidState extends OperatorBase
+#[Relay(factoryId: 'sf_void_state')]
+final class ShortVoidState extends RelayBase
 {
     use Echoes;
 
@@ -189,8 +189,8 @@ final class ShortVoidState extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_untyped_return', run: 'steps')]
-final class ShortUntypedReturn extends OperatorBase
+#[Relay(factoryId: 'sf_untyped_return', run: 'steps')]
+final class ShortUntypedReturn extends RelayBase
 {
     use Echoes;
 
@@ -199,8 +199,8 @@ final class ShortUntypedReturn extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_extra_argument')]
-final class ShortExtraArgument extends OperatorBase
+#[Relay(factoryId: 'sf_extra_argument')]
+final class ShortExtraArgument extends RelayBase
 {
     use Echoes;
 
@@ -209,8 +209,8 @@ final class ShortExtraArgument extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_dropped_argument')]
-final class ShortDroppedArgument extends OperatorBase
+#[Relay(factoryId: 'sf_dropped_argument')]
+final class ShortDroppedArgument extends RelayBase
 {
     use Echoes;
 
@@ -219,8 +219,8 @@ final class ShortDroppedArgument extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_intersected_timer')]
-final class ShortIntersectedTimer extends OperatorBase
+#[Relay(factoryId: 'sf_intersected_timer')]
+final class ShortIntersectedTimer extends RelayBase
 {
     use Echoes;
 
@@ -229,8 +229,8 @@ final class ShortIntersectedTimer extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_static_hook')]
-final class ShortStaticHook extends OperatorBase
+#[Relay(factoryId: 'sf_static_hook')]
+final class ShortStaticHook extends RelayBase
 {
     use Echoes;
 
@@ -240,8 +240,8 @@ final class ShortStaticHook extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'sf_hidden_hook', run: 'steps')]
-final class ShortHiddenHook extends OperatorBase
+#[Relay(factoryId: 'sf_hidden_hook', run: 'steps')]
+final class ShortHiddenHook extends RelayBase
 {
     use Echoes;
 
@@ -251,8 +251,8 @@ final class ShortHiddenHook extends OperatorBase
 }
 
 /** Every widening PHP lets an override of these hooks make. */
-#[Operator(factoryId: 'sf_widened_hooks', run: 'steps')]
-final class ShortWidenedHooks extends OperatorBase
+#[Relay(factoryId: 'sf_widened_hooks', run: 'steps')]
+final class ShortWidenedHooks extends RelayBase
 {
     use Echoes;
 
@@ -402,7 +402,7 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
-    public function testAnOperatorWithoutTheAttributeIsRefused(): void
+    public function testARelayWithoutTheAttributeIsRefused(): void
     {
         $this->expectException(FlezhaException::class);
         $this->expectExceptionCode('topology.missing_factory_id');
@@ -436,9 +436,9 @@ final class AuthoringTest extends RepositoryTestCase
 
     /**
      * `named()` is honoured on the inter-task path and was dropped on the
-     * plugin path, so `named('input')->sink('relay_out')` produced a channel
-     * called `relay_out` — and the channel name is what a forwarded frame
-     * carries and what selects the receiving operator's entry channel.
+     * plugin path, so `named('input')->sink('pass_out')` produced a channel
+     * called `pass_out` — and the channel name is what a forwarded frame
+     * carries and what selects the receiving relay's entry channel.
      */
     public function testANamedEdgeTerminatingOnASinkNamesTheChannelToo(): void
     {
@@ -703,7 +703,7 @@ final class AuthoringTest extends RepositoryTestCase
     /** Each source is its own consumer edge into the one node, with its own mapping and the merge's key. */
     public function testTwoSourcesMergeIntoOneNodeThroughEdgesOfTheirOwn(): void
     {
-        $spec = MergeOperator::spec();
+        $spec = MergeRelay::spec();
 
         self::assertSame(
             [['ticks', 'entry', null, [0], null], ['quotes', 'entry', null, [0], null]],
@@ -1063,11 +1063,11 @@ final class AuthoringTest extends RepositoryTestCase
 
     // -- the §5 short form -------------------------------------------------
 
-    /** @return iterable<string, array{class-string<OperatorBase>, class-string<OperatorBase>}> */
+    /** @return iterable<string, array{class-string<RelayBase>, class-string<RelayBase>}> */
     public static function shortFormTwins(): iterable
     {
-        yield 'a flow operator' => [ShortUpcase::class, ShortUpcaseTwinOperator::class];
-        yield 'a steps operator' => [ShortPlace::class, ShortPlaceTwinOperator::class];
+        yield 'a flow relay' => [ShortUpcase::class, ShortUpcaseTwinRelay::class];
+        yield 'a steps relay' => [ShortPlace::class, ShortPlaceTwinRelay::class];
     }
 
     /**
@@ -1077,8 +1077,8 @@ final class AuthoringTest extends RepositoryTestCase
      * grows into its full form.
      *
      * @dataProvider shortFormTwins
-     * @param class-string<OperatorBase> $short
-     * @param class-string<OperatorBase> $hand
+     * @param class-string<RelayBase> $short
+     * @param class-string<RelayBase> $hand
      */
     public function testAShortFormDeclaresWhatItsHandWrittenTwinDeclares(string $short, string $hand): void
     {
@@ -1135,7 +1135,7 @@ final class AuthoringTest extends RepositoryTestCase
 
     public function testAChannelsBodyStillDeclaresAFullForm(): void
     {
-        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinOperator::spec()->tasklets, 'class'));
+        self::assertSame([Echoer::class], array_column(ShortUpcaseTwinRelay::spec()->tasklets, 'class'));
     }
 
     public function testTheRunnerRegistersAShortFormAsTheClassTheAuthorWrote(): void
@@ -1183,15 +1183,15 @@ final class AuthoringTest extends RepositoryTestCase
             'topology.short_form_field_on_full_form',
             'declares #[Task] beside its channels body',
         ];
-        yield 'an operator with no run wired as a tasklet' => [
-            static fn (): mixed => Definition::of(ShortUpcaseTwinOperator::class),
+        yield 'a relay with no run wired as a tasklet' => [
+            static fn (): mixed => Definition::of(ShortUpcaseTwinRelay::class),
             'topology.missing_body',
             'declares no body; it needs `run`',
         ];
-        yield 'a tasklet registered as an operator' => [
+        yield 'a tasklet registered as a relay' => [
             static fn (): mixed => Flezha::createRunner('test')->registerFactory(Echoer::class),
-            'topology.no_operator_exported',
-            'exports no operator declaration',
+            'topology.no_relay_exported',
+            'exports no relay declaration',
         ];
     }
 
@@ -1199,14 +1199,14 @@ final class AuthoringTest extends RepositoryTestCase
     {
         try {
             Flezha::createRunner('test')->registerFactory(ShortWithTopology::class);
-            self::fail('a class carrying both bodies declares two operators in one');
+            self::fail('a class carrying both bodies declares two relays in one');
         } catch (FlezhaException $e) {
             self::assertSame('topology.short_form_with_topology', $e->getCode());
             self::assertSame(['factory_id' => 'sf_both'], $e->details);
         }
     }
 
-    /** @return iterable<string, array{class-string<OperatorBase>, string, string}> */
+    /** @return iterable<string, array{class-string<RelayBase>, string, string}> */
     public static function shortFormsWithAHookATaskletCouldNotDeclare(): iterable
     {
         yield 'a fold by value' => [
@@ -1243,7 +1243,7 @@ final class AuthoringTest extends RepositoryTestCase
      * rule: a fold by value would otherwise fold nothing, silently.
      *
      * @dataProvider shortFormsWithAHookATaskletCouldNotDeclare
-     * @param class-string<OperatorBase> $class
+     * @param class-string<RelayBase> $class
      */
     public function testAShortFormsHookKeepsATaskletsSignature(string $class, string $hook, string $defect): void
     {
@@ -1264,7 +1264,7 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /** @return iterable<string, array{class-string<Tasklet>, string}> */
-    public static function taskletsWithAnOperatorArgument(): iterable
+    public static function taskletsWithARelayArgument(): iterable
     {
         yield 'run' => [TaskWithRun::class, 'run'];
         yield 'sink' => [TaskWithSink::class, 'sink'];
@@ -1273,14 +1273,14 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /**
-     * @dataProvider taskletsWithAnOperatorArgument
+     * @dataProvider taskletsWithARelayArgument
      * @param class-string<Tasklet> $class
      */
-    public function testATaskletCarryingAnOperatorArgumentIsRefusedNamingIt(string $class, string $argument): void
+    public function testATaskletCarryingARelayArgumentIsRefusedNamingIt(string $class, string $argument): void
     {
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionCode('topology.operator_field_on_tasklet');
-        $this->expectExceptionMessageMatches("/declares `$argument` on #\\[Task\\].*#\\[Operator\\]/");
+        $this->expectExceptionCode('topology.relay_field_on_tasklet');
+        $this->expectExceptionMessageMatches("/declares `$argument` on #\\[Task\\].*#\\[Relay\\]/");
 
         Flezha::createRunner('test')->registerFactory($class);
     }
@@ -1305,7 +1305,7 @@ final class AuthoringTest extends RepositoryTestCase
      */
     public function testEveryBodyIsVoid(): void
     {
-        foreach ([Tasklet::class, OperatorBase::class] as $base) {
+        foreach ([Tasklet::class, RelayBase::class] as $base) {
             $returns = (new \ReflectionMethod($base, 'run'))->getReturnType();
             self::assertInstanceOf(\ReflectionNamedType::class, $returns);
             self::assertSame('void', $returns->getName(), $base);
@@ -1313,8 +1313,8 @@ final class AuthoringTest extends RepositoryTestCase
     }
 }
 
-#[Operator(factoryId: 'fan_out')]
-final class FanOut extends OperatorBase
+#[Relay(factoryId: 'fan_out')]
+final class FanOut extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1324,8 +1324,8 @@ final class FanOut extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'branched')]
-final class Branched extends OperatorBase
+#[Relay(factoryId: 'branched')]
+final class Branched extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1336,8 +1336,8 @@ final class Branched extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'hybrid')]
-final class Hybrid extends OperatorBase
+#[Relay(factoryId: 'hybrid')]
+final class Hybrid extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1346,8 +1346,8 @@ final class Hybrid extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'keyed_hybrid')]
-final class KeyedHybrid extends OperatorBase
+#[Relay(factoryId: 'keyed_hybrid')]
+final class KeyedHybrid extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1356,8 +1356,8 @@ final class KeyedHybrid extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'per_edge_transform')]
-final class PerEdgeTransform extends OperatorBase
+#[Relay(factoryId: 'per_edge_transform')]
+final class PerEdgeTransform extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1367,20 +1367,20 @@ final class PerEdgeTransform extends OperatorBase
     }
 }
 
-final class Unattributed extends OperatorBase
+final class Unattributed extends RelayBase
 {
 }
 
-#[Operator(factoryId: 'empty_steps', run: 'steps')]
-final class EmptySteps extends OperatorBase
+#[Relay(factoryId: 'empty_steps', run: 'steps')]
+final class EmptySteps extends RelayBase
 {
     public static function channels(Builder $c): void
     {
     }
 }
 
-#[Operator(factoryId: 'named_sink')]
-final class NamedSink extends OperatorBase
+#[Relay(factoryId: 'named_sink')]
+final class NamedSink extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1388,8 +1388,8 @@ final class NamedSink extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'unnamed_sink')]
-final class UnnamedSink extends OperatorBase
+#[Relay(factoryId: 'unnamed_sink')]
+final class UnnamedSink extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1397,8 +1397,8 @@ final class UnnamedSink extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'named_twice')]
-final class NamedTwice extends OperatorBase
+#[Relay(factoryId: 'named_twice')]
+final class NamedTwice extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1406,8 +1406,8 @@ final class NamedTwice extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'trailing_named')]
-final class TrailingNamed extends OperatorBase
+#[Relay(factoryId: 'trailing_named')]
+final class TrailingNamed extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1415,8 +1415,8 @@ final class TrailingNamed extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'trailing_keyed')]
-final class TrailingKeyed extends OperatorBase
+#[Relay(factoryId: 'trailing_keyed')]
+final class TrailingKeyed extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1424,8 +1424,8 @@ final class TrailingKeyed extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'one_sink_two_channels')]
-final class OneSinkTwoChannels extends OperatorBase
+#[Relay(factoryId: 'one_sink_two_channels')]
+final class OneSinkTwoChannels extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1434,8 +1434,8 @@ final class OneSinkTwoChannels extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'answers')]
-final class Answers extends OperatorBase
+#[Relay(factoryId: 'answers')]
+final class Answers extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1443,8 +1443,8 @@ final class Answers extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'answers_and_feeds')]
-final class AnswersAndFeeds extends OperatorBase
+#[Relay(factoryId: 'answers_and_feeds')]
+final class AnswersAndFeeds extends RelayBase
 {
     public static function channels(Builder $c): void
     {
@@ -1452,8 +1452,8 @@ final class AnswersAndFeeds extends OperatorBase
     }
 }
 
-#[Operator(factoryId: 'diamond')]
-final class Diamond extends OperatorBase
+#[Relay(factoryId: 'diamond')]
+final class Diamond extends RelayBase
 {
     public static function channels(Builder $c): void
     {

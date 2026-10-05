@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Exception\FlezhaException;
-use Flezha\LocalOperator;
+use Flezha\LocalRelay;
 use Flezha\SinkOutput;
-use Flezha\TestApp\BoundedMailboxDropNothingOperator;
-use Flezha\TestApp\DynamicCellOperator;
-use Flezha\TestApp\PartitionRelayOperator;
-use Flezha\TestApp\SessionTimeoutOperator;
+use Flezha\TestApp\BoundedMailboxDropNothingRelay;
+use Flezha\TestApp\DynamicCellRelay;
+use Flezha\TestApp\PartitionPassRelay;
+use Flezha\TestApp\SessionTimeoutRelay;
 use Flezha\TestApp\SugarDoNothing;
-use Flezha\TestApp\TierStoreOperator;
+use Flezha\TestApp\TierStoreRelay;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -22,13 +22,13 @@ use PHPUnit\Framework\TestCase;
  * what passes there cannot be two different graphs.
  *
  * The other ten capabilities in the vocabulary are the controller's:
- * persistence, effectively-once, correction, partitioning, steps operators,
+ * persistence, effectively-once, correction, partitioning, steps relays,
  * liveness, restarts. Local mode refuses them by name rather than
  * approximating them.
  *
  * What each test can assert is what a run with no controller can see. A
  * durable write reaches a null sink, a parked payload has nowhere to park, and
- * a partition member's key range arrives with `AddOperator`, so the
+ * a partition member's key range arrives with `AddRelay`, so the
  * assertions here are the output side of each capability, which is the half
  * the language layer produces.
  */
@@ -68,14 +68,14 @@ final class LocalModeCapabilitiesTest extends TestCase
 
     public function testKeyedChannelsStampTheKeyTheClassResolved(): void
     {
-        // `partition_relay` is the manifest's only keyed-channel class.
+        // `partition_pass` is the manifest's only keyed-channel class.
         // Partitioning itself is the controller's (a member's key-group range
-        // arrives with `AddOperator`), so what is asserted here is the half
+        // arrives with `AddRelay`), so what is asserted here is the half
         // the language layer owns: the key it resolves and the stamps it puts
         // on the released value.
-        $this->declares('keyed_channels', 'partition_relay');
+        $this->declares('keyed_channels', 'partition_pass');
 
-        $released = $this->release(PartitionRelayOperator::class, 'in', 'input', ['a:1', 'b:1', 'a:2']);
+        $released = $this->release(PartitionPassRelay::class, 'in', 'input', ['a:1', 'b:1', 'a:2']);
 
         self::assertSame(
             ['a' => ['a:1', 'a:2'], 'b' => ['b:1']],
@@ -98,14 +98,14 @@ final class LocalModeCapabilitiesTest extends TestCase
     {
         // The class's sink is not keyed, so a released value carries no cell
         // stamp and the per-key minting is not visible on this channel. It is
-        // asserted above, on `partition_relay`, whose tasklet is dynamic too
+        // asserted above, on `partition_pass`, whose tasklet is dynamic too
         // and whose sink IS keyed. What this class shows that that one does
         // not is the declared filter: a value it rejects answers no key, so
         // the core is never asked to mint a Cell for it.
         $this->declares('dynamic_cell', 'dynamic_cell');
 
         $released = $this->release(
-            DynamicCellOperator::class,
+            DynamicCellRelay::class,
             'input',
             'kafka',
             ['a:1', 'b:1', 'drop', 'a:2'],
@@ -136,7 +136,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
         $inputs = array_map(static fn (int $at): string => "n$at", range(0, 23));
         $released = $this->release(
-            BoundedMailboxDropNothingOperator::class,
+            BoundedMailboxDropNothingRelay::class,
             'drop_nothing_input',
             'drop_nothing_echo',
             $inputs,
@@ -162,7 +162,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
         try {
             $released = $this->release(
-                SessionTimeoutOperator::class,
+                SessionTimeoutRelay::class,
                 'input',
                 'kafka',
                 ['open'],
@@ -188,7 +188,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         // release from, so a local run says so instead of running the graph.
         $this->expectException(FlezhaException::class);
         $this->expectExceptionMessageMatches('/effectively_once.*requires a controller/s');
-        LocalOperator::start(TierStoreOperator::class);
+        LocalRelay::start(TierStoreRelay::class);
     }
 
     /**
@@ -212,7 +212,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         int $perDrive = 0,
     ): array {
         $released = [];
-        $run = LocalOperator::start($class);
+        $run = LocalRelay::start($class);
 
         try {
             $run->onSink($sink, static function (SinkOutput $out) use (&$released): void {
