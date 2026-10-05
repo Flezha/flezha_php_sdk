@@ -24,7 +24,7 @@ namespace Flezha;
  *     {
  *         public static function channels(Builder $c): void
  *         {
- *             $c->input('input')->into(EchoTasklet::class)->sink('out');
+ *             $c->input('input')->into(EchoTasklet::class)->output('out');
  *         }
  *     }
  *

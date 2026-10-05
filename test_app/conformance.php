@@ -243,7 +243,7 @@ final class RowInterpreter
             'keyed' => $edge->keyed(),
             'retry_max' => $edge->retryMax((int) $arg),
             'on_full' => $edge->onFull(Overflow::from($arg)),
-            'sink' => $arg === '' ? $edge->sink() : $edge->sink($arg),
+            'output' => $arg === '' ? $edge->output() : $edge->output($arg),
             'into' => $this->wire($edge, $arg),
             // Declared on the tasklet in this SDK, and read as the palette
             // class was bound — one step earlier than the step that names it.
@@ -380,28 +380,28 @@ final class RowInterpreter
 // registers them but a row that names them.
 
 /** Half of the duplicate row's pair. */
-#[RelayAttribute(factoryId: 'plain', sink: 'out')]
+#[RelayAttribute(factoryId: 'plain', output: 'out')]
 final class ShorthandDupFlow extends Relay
 {
     use PassesThrough;
 }
 
 /** The other half: a steps relay claiming the id the flow holds. */
-#[RelayAttribute(factoryId: 'plain', run: 'steps', sink: 'twin_sink')]
+#[RelayAttribute(factoryId: 'plain', run: 'steps', output: 'twin_sink')]
 final class ShorthandDupSteps extends Relay
 {
     use PassesThrough;
 }
 
 /** A short form that also carries a topology body. */
-#[RelayAttribute(factoryId: 'plain', sink: 'out')]
+#[RelayAttribute(factoryId: 'plain', output: 'out')]
 final class ShorthandWithTopology extends Relay
 {
     use PassesThrough;
 
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(PalettePlain::class)->sink('out');
+        $c->input('input')->into(PalettePlain::class)->output('out');
     }
 }
 

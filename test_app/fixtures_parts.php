@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Twins of the reference's part fixtures (test/apps/rust_runner/src/part.rs)
  * under the same factory ids, tasklet names, channel names and payloads: for
  * an input `n` the tasklet sends the parts "1" .. "n" and then emits
- * "done:<n>" on its sink `answer`. `retry:<n>` sends its parts and then fails
+ * "done:<n>" on its output `answer`. `retry:<n>` sends its parts and then fails
  * retryably the first time this process sees it, so the retry's parts number
  * from 0 again under the next attempt.
  */
@@ -57,7 +57,7 @@ final class PartEcho extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)->retryBackoffMs(25)
             ->into(PartEchoStep::class)
-            ->sink('answer');
+            ->output('answer');
     }
 }
 
@@ -78,7 +78,7 @@ final class PartEchoSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)->retryBackoffMs(25)
             ->into(PartEchoTurn::class)
-            ->sink('answer');
+            ->output('answer');
     }
 }
 

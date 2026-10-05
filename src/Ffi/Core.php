@@ -136,7 +136,7 @@ final class Core implements SpawnBridge
 
     /**
      * Judge one class declaration without registering it, and answer the
-     * DERIVED declaration as JSON: the consumers, channel kinds, sink names
+     * DERIVED declaration as JSON: the consumers, channel kinds, output names
      * and acknowledgement granularity the core read off the record's chains.
      *
      * Read-only, so a caller asks for the verdict its author would get with
@@ -178,7 +178,7 @@ final class Core implements SpawnBridge
         $this->check($this->ffi->flz_core_local_start($this->live(), $factoryId, $relayId));
     }
 
-    /** Queue a declared sink for {@see localNextOutput()}. */
+    /** Queue a declared output for {@see localNextOutput()}. */
     public function localOnSink(string $channel): void
     {
         $this->check($this->ffi->flz_core_local_on_sink($this->live(), $channel));
@@ -191,7 +191,7 @@ final class Core implements SpawnBridge
     }
 
     /**
-     * The next value a sink released, in `poll`'s three-way shape: the encoded
+     * The next value an output released, in `poll`'s three-way shape: the encoded
      * `Output` lands in `$bytes` on {@see Binding::POLL_ACTIVATION}.
      */
     public function localNextOutput(int $timeoutMs, ?string &$bytes): int

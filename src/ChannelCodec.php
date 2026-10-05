@@ -11,9 +11,9 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Graph\ChannelSpec;
 
 /**
- * The payload format a channel names on `input` and `sink`.
+ * The payload format a channel names on `input` and `output`.
  *
- * A channel that names none reads its entry payload as JSON, and sends a sink
+ * A channel that names none reads its entry payload as JSON, and sends an output
  * value by what it is: a string as it stands, anything else as JSON. A payload
  * between two tasklets names none either way and stays JSON.
  *
@@ -53,7 +53,7 @@ enum ChannelCodec: string
     }
 
     /**
-     * The encoder of a sink that names no codec: a string is sent as it
+     * The encoder of an output that names no codec: a string is sent as it
      * stands, and any other value as JSON.
      *
      * @return Closure(mixed):string
@@ -64,7 +64,7 @@ enum ChannelCodec: string
     }
 
     /**
-     * What a sink naming no codec sends, and what a steps completion
+     * What an output naming no codec sends, and what a steps completion
      * carries: a string as it stands, any other value as JSON. `$owner` is
      * what a refusal names.
      */

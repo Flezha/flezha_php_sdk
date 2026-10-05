@@ -18,7 +18,7 @@ use Flezha\Graph\Builder;
  * declares it, so one that cannot work is refused at startup.
  *
  * The entry names the text codec, so what `flz relay send --text` sends
- * arrives as that string. The sink names nothing: a string is sent as it
+ * arrives as that string. The output names nothing: a string is sent as it
  * stands, so the output is the text itself, and any other value would be JSON.
  */
 #[Relay(factoryId: 'echo')] // the name `flz relay start` takes
@@ -28,6 +28,6 @@ final class EchoRelay extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text) // messages arrive on the entry channel "in"
             ->into(EchoTasklet::class)             // each one runs through the echo tasklet
-            ->sink('out');                         // the result leaves on "out", for a plugin to pick up
+            ->output('out');                       // the result leaves on "out", for a plugin to pick up
     }
 }

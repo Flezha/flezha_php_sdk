@@ -85,7 +85,7 @@ final class EchoRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Echoer::class)->sink('out');
+        $c->input('input')->into(Echoer::class)->output('out');
     }
 }
 
@@ -94,11 +94,11 @@ final class CounterRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Counter::class)->sink('out');
+        $c->input('input')->into(Counter::class)->output('out');
     }
 }
 
-/** A short form that only keeps state: no `sink`, and a body answering nothing. */
+/** A short form that only keeps state: no `output`, and a body answering nothing. */
 #[Relay(factoryId: 'sf_counter', input: 'ticks', codec: ChannelCodec::Text)]
 final class ShortCounter extends \Flezha\Relay
 {
@@ -129,7 +129,7 @@ final class KeyedRelay extends \Flezha\Relay
             ->keyBy(static fn (mixed $v): string => explode(':', (string) $v)[0])
             ->into(Keyed::class)
             ->keyed()
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -145,11 +145,11 @@ final class SplitKeyedRelay extends \Flezha\Relay
         $input = $c->input('input');
         $input->filter(static fn (mixed $v): bool => $v === 'drop')
             ->into(Echoer::class)
-            ->sink('dropped');
+            ->output('dropped');
         $input->filter(static fn (mixed $v): bool => $v !== 'drop')
             ->keyBy(static fn (mixed $v): string => explode(':', (string) $v)[0])
             ->into(Keyed::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -187,7 +187,7 @@ final class StampRelay extends \Flezha\Relay
             ->keyBy(static fn (mixed $v): string => 'ek')
             ->into(StampEmitter::class)
             ->keyed()
-            ->sink('keyed_out');
+            ->output('keyed_out');
     }
 }
 
@@ -214,8 +214,8 @@ final class FanTarget extends Tasklet
  * which is where a transform chain lives: the plugin frame is serialized once
  * per emit from the value as emitted, in every SDK.
  *
- * The sink is attached last, on the held handle. A transform declared behind an
- * attached sink is `TransformAfterTerminal` in every SDK — the sink serializes
+ * The output is attached last, on the held handle. A transform declared behind an
+ * attached output is `TransformAfterTerminal` in every SDK — the output serializes
  * the channel's own value, so the order says which value that is.
  */
 #[Relay(factoryId: 'mixed_stamp_relay')]
@@ -227,12 +227,12 @@ final class MixedStampRelay extends \Flezha\Relay
             ->keyBy(static fn (mixed $v): string => 'ek')
             ->branch(
                 static fn (Edge $e) => $e->into(PlainEmitter::class)
-                    ->sink('plain_out'),
+                    ->output('plain_out'),
                 static function (Edge $e): void {
                     $keyed = $e->into(StampEmitter::class)->keyed();
                     $keyed->flatMap(static fn (mixed $v): array => [$v . '1', $v . '2'])
                         ->into(FanTarget::class);
-                    $keyed->sink('keyed_out');
+                    $keyed->output('keyed_out');
                 },
             );
     }
@@ -256,7 +256,7 @@ final class PoisonRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Poison::class)->sink('out');
+        $c->input('input')->into(Poison::class)->output('out');
     }
 }
 
@@ -289,7 +289,7 @@ final class FlakyEntryRelay extends \Flezha\Relay
                 return $text;
             })
             ->into(Flaky::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -314,7 +314,7 @@ final class SagaRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('orders')->into(SagaStep::class)->sink('done');
+        $c->input('orders')->into(SagaStep::class)->output('done');
     }
 }
 
@@ -344,7 +344,7 @@ trait CompletingGraph
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(Completer::class)->sink('out');
+        $c->input('in')->into(Completer::class)->output('out');
     }
 }
 
@@ -464,7 +464,7 @@ trait StepsEmitGraph
         $edge = $c->input('in')->into(StepsProducer::class)->named('handoff');
         $edge->map(static fn (mixed $v): mixed => $v + 1)->into(StepsB::class);
         $edge->into(StepsC::class);
-        $edge->sink();
+        $edge->output();
     }
 }
 
@@ -548,7 +548,7 @@ final class RouteLatestRelay extends \Flezha\Relay
     public static function channels(Builder $c): void
     {
         $c->routeLatest($c->input('config'), $c->input('trades'), static fn (array $t): string => $t['symbol'])
-            ->sink('routed');
+            ->output('routed');
     }
 }
 

@@ -64,7 +64,7 @@ final class HostClassDecl
     /**
      * The channel as the record carries it: the kind the author declared and
      * the sequences declared off its handle. The consumers, the plugin kind and
-     * the sink name are the core's to DERIVE from those chains.
+     * the output name are the core's to DERIVE from those chains.
      *
      * @return array<string, mixed>
      */

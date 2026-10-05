@@ -94,14 +94,14 @@ final class CallTest extends RepositoryTestCase
         self::assertNotEmpty(self::derive(CallingPerInput::spec())['channels']);
     }
 
-    public function testACallOnAnEntryChannelIsRefusedAsASinkThereIs(): void
+    public function testACallOnAnEntryChannelIsRefusedAsAnOutputThereIs(): void
     {
         try {
             $builder = new Builder('on_entry');
             $builder->input('in')->call('p', deadlineMs: 5);
             self::fail('a call on an entry channel was accepted');
         } catch (FlezhaException $e) {
-            self::assertSame(['topology.sink_on_entry', 'in'], [$e->getCode(), $e->details['channel']]);
+            self::assertSame(['topology.output_on_entry', 'in'], [$e->getCode(), $e->details['channel']]);
         }
     }
 
@@ -224,7 +224,7 @@ final class CallingBesideSink extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(CallAsk::class)->sink('out')->call('p', deadlineMs: 5)->into(CallAsk::class);
+        $c->input('in')->into(CallAsk::class)->output('out')->call('p', deadlineMs: 5)->into(CallAsk::class);
     }
 }
 

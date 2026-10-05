@@ -54,7 +54,7 @@ final class ChatSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('messages')->into(ChatTurn::class)->sink('replies');
+        $c->input('messages')->into(ChatTurn::class)->output('replies');
     }
 }
 

@@ -12,8 +12,8 @@ declare(strict_types=1);
  * bench families and is loaded after this file, as the reference splits them.
  *
  * Entry payloads and plugin frames are UTF-8 text on the wire, as in the
- * reference: an entry names the text codec, and a bare `sink(name)` sends a
- * string as it stands, so only a sink that prefixes its value declares an
+ * reference: an entry names the text codec, and a bare `output(name)` sends a
+ * string as it stands, so only an output that prefixes its value declares an
  * encoder. An inter-tasklet hop between two PHP tasklets carries JSON, and
  * the core derives that channel's journal codec from the channel's kind, so no
  * fixture declares one.
@@ -226,7 +226,7 @@ final class EchoSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(EchoArgs::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -257,7 +257,7 @@ final class TypedOnceSteps extends \Flezha\Relay
     {
         $c->input('order', codec: ChannelCodec::Json)
             ->into(OncePlaced::class)
-            ->sink('placed');
+            ->output('placed');
     }
 }
 
@@ -306,8 +306,8 @@ final class SyncDurableSteps extends CommitBlockChain
 // -- optout_commit_block -----------------------------------------------------
 //
 // The opt-out twin with a live mid-chain signal: task A's output also reaches a
-// plugin sink, so the crash-resume drill can observe the mid-run point without
-// durable state. A crash re-runs the chain from the top, so the sink sees A's
+// plugin output, so the crash-resume drill can observe the mid-run point without
+// durable state. A crash re-runs the chain from the top, so the output sees A's
 // marker once per run and no journal file exists.
 
 #[Relay(factoryId: 'optout_commit_block', run: 'steps', durable: false)]
@@ -317,7 +317,7 @@ final class OptoutCommitBlock extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(CommitA::class)
-            ->sink('mid', static fn (mixed $v): string => "a-ran:$v")
+            ->output('mid', static fn (mixed $v): string => "a-ran:$v")
             ->into(BlockB::class);
     }
 }
@@ -345,7 +345,7 @@ final class TierCommitBlockSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(TierCommitA::class)->keyed()
-            ->sink('mid')
+            ->output('mid')
             ->into(BlockB::class);
     }
 }
@@ -450,7 +450,7 @@ final class KeyedSagaSteps extends KeyedCommits
 //
 // A steps output's identity. Task A commits durable state AND emits once,
 // keyed `k` with one metadata pair, on a keyed hybrid channel; the output rides
-// A's Cell record and reaches the sink once A's stage commits. Task B parks, so
+// A's Cell record and reaches the output once A's stage commits. Task B parks, so
 // a SIGKILL lands with A committed and B unfinished.
 
 #[Task(name: 'commit_a')]
@@ -469,7 +469,7 @@ final class OutboxBlockSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(OutboxA::class)->keyed()
-            ->sink('mid', static fn (mixed $v): string => "a-out:$v")
+            ->output('mid', static fn (mixed $v): string => "a-out:$v")
             ->into(BlockB::class);
     }
 }
@@ -510,7 +510,7 @@ final class UndoOutboxSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(UndoOutboxA::class)
-            ->sink('mid', static fn (mixed $v): string => "out:$v")
+            ->output('mid', static fn (mixed $v): string => "out:$v")
             ->into(UndoOutboxC::class);
     }
 }
@@ -542,7 +542,7 @@ final class FailedStageSteps extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(KeySplit::class)
             ->into(FailedStage::class)
-            ->sink('mid', static fn (mixed $v): string => "lost:$v");
+            ->output('mid', static fn (mixed $v): string => "lost:$v");
     }
 }
 
@@ -553,7 +553,7 @@ final class FailedStageSteps extends \Flezha\Relay
 //
 // The tasklet TREE (steps.rs:352). Every tasklet commits durable state
 // and compensates by emitting an undo record, so both tree behaviours are
-// observable at one sink:
+// observable at one output:
 //
 //   * crash-resume — BranchD PARKS, so the SIGKILL lands with A, B and C
 //     committed and only D's subtree outstanding. The respawn re-runs D alone,
@@ -564,7 +564,7 @@ final class FailedStageSteps extends \Flezha\Relay
 //     branches before the root they share: `undo-c`, `undo-b`, `undo-a`.
 //
 // The inter-task channels are hybrid, which is what makes a non-leaf
-// tasklet's forward and undo output visible at the sink.
+// tasklet's forward and undo output visible at the output.
 
 #[Task(name: 'branch_a')]
 final class BranchA extends UndoingStep
@@ -584,7 +584,7 @@ final class BranchB extends UndoingStep
     }
 }
 
-/** The sibling leaf: emits straight to the sink, and its undo does too. */
+/** The sibling leaf: emits straight to the output, and its undo does too. */
 #[Task(name: 'branch_c')]
 final class BranchC extends UndoingStep
 {
@@ -622,15 +622,15 @@ final class BranchSteps extends \Flezha\Relay
         // what BranchA released on it (held edge, wired twice).
         $mid = $c->input('in', codec: ChannelCodec::Text)
             ->into(BranchA::class)
-            ->sink('mid', static fn (mixed $v): string => "a:$v");
+            ->output('mid', static fn (mixed $v): string => "a:$v");
         $mid->into(BranchB::class)
-            ->sink('bmid', static fn (mixed $v): string => "b:$v")
+            ->output('bmid', static fn (mixed $v): string => "b:$v")
             // Fail fast into the one tasklet that fails: the compensation
             // scenario is about the rollback order, not the ladder before it.
             ->retryMax(1)
             ->into(BranchD::class)
-            ->sink('d_out');
-        $mid->into(BranchC::class)->sink('c_out');
+            ->output('d_out');
+        $mid->into(BranchC::class)->output('c_out');
     }
 }
 
@@ -703,15 +703,15 @@ final class DiamondSteps extends \Flezha\Relay
         // node name = the fan-in, since two unnamed mentions are one node.
         $fan = $c->input('in', codec: ChannelCodec::Text)
             ->into(DiamA::class)
-            ->sink('dfan', static fn (mixed $v): string => "a:$v");
+            ->output('dfan', static fn (mixed $v): string => "a:$v");
         $fan->into(DiamB1::class)->named('db1')
             ->into(DiamB2::class)
-            ->sink('db2')
+            ->output('db2')
             ->into(DiamJoin::class);
         $fan->into(DiamC::class)
-            ->sink('dc')
+            ->output('dc')
             ->into(DiamJoin::class)
-            ->sink('j_out');
+            ->output('j_out');
     }
 }
 
@@ -721,7 +721,7 @@ final class DiamondSteps extends \Flezha\Relay
 // forwards on a hybrid channel, and compensates by emitting an undo record;
 // `retry_flaky` fails its first FLEZHA_STEPS_RETRY_FAILS attempts (none by
 // default — each scenario arms it) and then emits `attempt:<n>:<input>`. One
-// armed failure is absorbed by the ladder, so the run completes and the sink
+// armed failure is absorbed by the ladder, so the run completes and the output
 // sees attempt 2; arming more failures than the ladder has attempts exhausts
 // it, RA rolls back and the run reports an error.
 
@@ -765,9 +765,9 @@ final class RetrySteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(RetryA::class)
-            ->sink('mid', static fn (mixed $v): string => "res:$v")
+            ->output('mid', static fn (mixed $v): string => "res:$v")
             ->into(RetryFlaky::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -831,7 +831,7 @@ final class TimerLoopSteps extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(TimerTick::class)->named('ticked')
             ->into(TimerTock::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -872,11 +872,11 @@ final class EventTimerSteps extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(EventTick::class)->sink('out');
+        $c->input('in', codec: ChannelCodec::Text)->into(EventTick::class)->output('out');
     }
 }
 
-// call_turn: a durable per-input loop whose turn's sink output answers the
+// call_turn: a durable per-input loop whose turn's output answers the
 // outside call.
 #[Task(name: 'call_turn')]
 final class CallTurnStep extends PassThrough
@@ -893,7 +893,7 @@ final class CallTurn extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(CallTurnStep::class)->sink();
+        $c->input('in', codec: ChannelCodec::Text)->into(CallTurnStep::class)->output();
     }
 }
 

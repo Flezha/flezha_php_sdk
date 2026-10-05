@@ -105,7 +105,7 @@ abstract class KeyedUpsertRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(TierStore::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -137,7 +137,7 @@ final class TierStoreRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)->retryBackoffMs(300)
             ->into(TierStore::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -206,7 +206,7 @@ final class TierChainRelay extends \Flezha\Relay
             ->into(TierPass::class)
             ->keyBy(Wire::prefix(...))->retryMax(1_000)
             ->into(TierTally::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -220,7 +220,7 @@ final class CheckpointStoreRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CheckpointStore::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -243,7 +243,7 @@ final class CheckpointBatchedRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CheckpointStore::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -264,7 +264,7 @@ final class BenchCheckpointRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(BenchCheckpoint::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -299,7 +299,7 @@ final class StoreInputRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(StoreInput::class)
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -362,7 +362,7 @@ final class PersistenceOffCounterRelay extends \Flezha\Relay
 // -- sleeping_counter --------------------------------------------------------
 //
 // A flow relay that sleeps when idle: `key:delta` inputs fold into one running
-// total per key, and every input emits `key=total` on the `totals` sink. The
+// total per key, and every input emits `key=total` on the `totals` output. The
 // sleep e2e reads the total after a wake to prove the Cell came back with the
 // state it slept with.
 
@@ -396,7 +396,7 @@ final class SleepingCounterRelay extends \Flezha\Relay
         $c->input('input', codec: ChannelCodec::Text)
             ->keyBy(Wire::prefix(...))
             ->into(SleepingCounter::class)
-            ->sink('totals');
+            ->output('totals');
     }
 }
 
@@ -487,7 +487,7 @@ final class ResumeProbeRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(ResumeProbe::class)
-            ->sink('total');
+            ->output('total');
     }
 }
 
@@ -576,7 +576,7 @@ final class SchemaEvolutionV1Relay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(EvolvingCartV1::class)
-            ->sink('total');
+            ->output('total');
     }
 }
 
@@ -587,6 +587,6 @@ final class SchemaEvolutionV2Relay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(EvolvingCartV2::class)
-            ->sink('total');
+            ->output('total');
     }
 }

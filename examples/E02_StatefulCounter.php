@@ -72,7 +72,7 @@ final class OrderTotalsRelay extends \Flezha\Relay
         $c->input('orders')
             ->keyBy(static fn (array $order): string => (string) $order['customer'])
             ->into(Counter::class)->keyed()
-            ->sink('totals');
+            ->output('totals');
     }
 }
 

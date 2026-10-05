@@ -26,7 +26,7 @@ final class AgentRelay extends \Flezha\Relay
     {
         $c->input('turn', codec: ChannelCodec::Text) // entry 1: `flz relay call`
             ->into(Reply::class)
-            ->sink('answer');                        // to whoever called, and whoever listens
+            ->output('answer');                      // to whoever called, and whoever listens
         $c->input('message')                         // entry 2: the gateway, into the same Reply
             ->map(fn (array $message) => $message['text'])
             ->into(Reply::class);

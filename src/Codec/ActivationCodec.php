@@ -91,7 +91,7 @@ final class ActivationCodec
     /**
      * One released `Output`, in the array shape {@see \Flezha\Ctx} builds and
      * this codec already encodes. The exact inverse of `encodeOutput`, and
-     * what local mode hands a host for a value its graph released on a sink.
+     * what local mode hands a host for a value its graph released on an output.
      *
      * @return array<string, mixed>
      */

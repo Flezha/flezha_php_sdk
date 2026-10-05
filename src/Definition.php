@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha;
 
+use Flezha\Attribute\Relay as RelayAttribute;
 use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
@@ -194,7 +195,7 @@ final class Definition
             }
             $arguments = [...$arguments, ...$own];
         }
-        foreach (['run', 'durable', 'sink', 'input', 'codec'] as $relayArgument) {
+        foreach (['run', 'durable', ...RelayAttribute::SHORT_FORM_ARGUMENTS] as $relayArgument) {
             if (array_key_exists($relayArgument, $arguments)) {
                 throw new FlezhaException('topology.relay_field_on_tasklet', [
                     'tasklet' => $arguments['name'] ?? $reflection->getName(),

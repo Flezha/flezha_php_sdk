@@ -40,7 +40,7 @@ final class ControlTest extends TestCase
     public function testAPluginIsEnabledByNameAndBoundAndUnboundByRelay(): void
     {
         $control = $this->answering('null');
-        $control->enablePlugin('writer', 'relay_file_sink', ['path' => 'out.txt']);
+        $control->enablePlugin('writer', 'relay_file_output', ['path' => 'out.txt']);
         $control->enablePlugin(
             'feed',
             'relay_websocket',
@@ -55,7 +55,7 @@ final class ControlTest extends TestCase
         $control->listPlugins();
 
         self::assertSame([
-            ['PluginManager.enable', '["writer",{"provider":"relay_file_sink","opts":{"path":"out.txt"}}]'],
+            ['PluginManager.enable', '["writer",{"provider":"relay_file_output","opts":{"path":"out.txt"}}]'],
             [
                 'PluginManager.enable',
                 '["feed",{"provider":"relay_websocket","opts":{},"single":true,'

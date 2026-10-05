@@ -62,7 +62,7 @@ final class LedgerRelay extends \Flezha\Relay
         $c->input('entries')
             ->keyBy(static fn (array $e): string => (string) $e['account'])
             ->into(Ledger::class)->keyed()
-            ->sink('balances');
+            ->output('balances');
     }
 }
 

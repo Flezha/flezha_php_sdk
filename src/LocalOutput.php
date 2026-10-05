@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-/** One value a graph released on a declared sink, in local mode. */
-final class SinkOutput
+/** One value a graph released on a declared output, in local mode. */
+final class LocalOutput
 {
     /**
      * @param array<string, string> $metadata what a deployed run would have

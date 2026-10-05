@@ -28,7 +28,7 @@ use Flezha\Timer;
 // chat_loop_steps is the durable-loop + suspension shape
 // (steps_loop.rs:8). One iteration per inbox item: TURN commits the turn to
 // Cell state, so a resumed iteration is visible in the WAL, and REPLY emits
-// the answer to the sink. Between turns the loop finds an empty inbox at a
+// the answer to the output. Between turns the loop finds an empty inbox at a
 // committed boundary and PARKS — the instance is evicted and rehydrated by the
 // next message. The turn whose payload is the crash turn parks while the
 // release variable is unset, so a SIGKILL lands with the earlier iterations
@@ -140,7 +140,7 @@ final class ChatLoopSteps extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
             ->into(ChatReply::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -156,7 +156,7 @@ final class StatelessLoopSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatReply::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -198,7 +198,7 @@ final class KeyedLoopSteps extends \Flezha\Relay
     {
         $c->input('trades', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
             ->into(KeyedLoopCount::class)
-            ->sink('keyed_loop_steps_out');
+            ->output('keyed_loop_steps_out');
     }
 }
 
@@ -215,13 +215,13 @@ final class ChatRewindSteps extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
             ->into(ChatReplyUndoable::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
 // failing_turn_loop_steps: a session whose turn can fail after `note`
 // committed. `note` records each message and its undo moves the latest one to
-// `undone`; `answer` replies `re:<message>` on the sink `answer`, and fails on
+// `undone`; `answer` replies `re:<message>` on the output `answer`, and fails on
 // `boom` always, on `boom-once` while the release env is unset (the first
 // runner of a crash drill), and on `boom-until-healed` until a `heal` turn set
 // its state. failing_turn_undo_all_steps is the same under
@@ -294,7 +294,7 @@ abstract class FailingTurnLoop extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(Note::class)->named('noted')
             ->into(Answer::class)
-            ->sink('answer');
+            ->output('answer');
     }
 }
 
@@ -349,7 +349,7 @@ final class ReplyBlockLoopSteps extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
             ->into(BlockingReply::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -392,7 +392,7 @@ final class SpawnRequesterRelay extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SpawnRequester::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -420,7 +420,7 @@ final class SpawnHoldRequesterRelay extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(SpawnHoldRequester::class)->keyed()
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -446,14 +446,14 @@ final class SpawnOnceRequesterRelay extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SpawnOnceRequester::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
 // -- the bench chains --------------------------------------------------------
 //
 // What `mix bench.steps --scenario chain` drives (steps_loop.rs:232): K
-// durable pass-through steps in a line, the payload unchanged, so the sink
+// durable pass-through steps in a line, the payload unchanged, so the output
 // receives the seed input and the bench reads its own seq and send timestamp
 // back. Each chain position needs its own tasklet and a PHP tasklet is a
 // class, so the sixteen are written out; the edge names follow the reference,
@@ -558,7 +558,7 @@ abstract class BenchChain extends \Flezha\Relay
         for ($at = 1; $at < static::STEPS; $at++) {
             $edge = $edge->named("edge_BenchS$at")->into(self::STEP_CLASSES[$at]);
         }
-        $edge->sink('out');
+        $edge->output('out');
     }
 }
 
@@ -638,7 +638,7 @@ final class BenchLoopSteps extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(BenchTurn::class)->named('mid')
             ->into(ChatReply::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -674,7 +674,7 @@ final class StaticCellSteps extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(StaticCellStep::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -700,7 +700,7 @@ final class CompleteFlowRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CompleteFlow::class)
-            ->sink('complete_flow_out');
+            ->output('complete_flow_out');
     }
 }
 

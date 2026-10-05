@@ -13,7 +13,7 @@ use Flezha\Dispatch\RegisteredClass;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\LocalRelay;
-use Flezha\SinkOutput;
+use Flezha\LocalOutput;
 use Flezha\SpawnBridge;
 use Flezha\Tasklet;
 use Flezha\Testing\Harness;
@@ -37,11 +37,11 @@ final class PreviewRelay extends \Flezha\Relay
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(Previewer::class)
-            ->sink('answer', encode: static fn (mixed $v): string => '<' . json_encode($v) . '>');
+            ->output('answer', encode: static fn (mixed $v): string => '<' . json_encode($v) . '>');
     }
 }
 
-/** Records every part refusal the no-sink tasklets met, then emits its input. */
+/** Records every part refusal the no-output tasklets met, then emits its input. */
 #[Task(name: 'part_feeder')]
 final class PartFeeder extends Tasklet
 {
@@ -74,13 +74,13 @@ final class PartFeederRelay extends \Flezha\Relay
     public static function channels(Builder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(PartFeeder::class)
-            ->into(PartPass::class)->sink('answer');
+            ->into(PartPass::class)->output('answer');
     }
 }
 
 /**
  * A tasklet's part: the runtime hands the core the activation's token, the
- * index of the item the handler runs and the value encoded as the sink would
+ * index of the item the handler runs and the value encoded as the output would
  * encode it, and a refusal throws inside the handler like any throw. The core
  * numbers, stamps and drops parts; its own tests and the fake controller cover
  * that side.
@@ -94,7 +94,7 @@ final class PartTest extends TestCase
         TestApp::load('fixtures_parts.php');
     }
 
-    public function testEachPartNamesItsTokenAndItemAndIsEncodedAsTheSinkEncodes(): void
+    public function testEachPartNamesItsTokenAndItemAndIsEncodedAsTheOutputEncodes(): void
     {
         $bridge = self::recording();
         self::invoke($bridge, 'a', item: 3);
@@ -104,13 +104,13 @@ final class PartTest extends TestCase
 
     public function testARefusedPartThrowsOutOfTheHandler(): void
     {
-        $bridge = self::recording(new FlezhaException('part.no_sink', ['tasklet' => 'previewer']));
+        $bridge = self::recording(new FlezhaException('part.no_output', ['tasklet' => 'previewer']));
 
         try {
             self::invoke($bridge, 'a', item: 0);
             self::fail('a refused part returned');
         } catch (FlezhaException $e) {
-            self::assertSame('part.no_sink', $e->getCode());
+            self::assertSame('part.no_output', $e->getCode());
         }
     }
 
@@ -125,13 +125,13 @@ final class PartTest extends TestCase
         self::assertSame(['done:3', 'done:1'], self::released(PartEcho::class, ['3', '1']));
     }
 
-    public function testAChannelWithoutASinkRefusesThePart(): void
+    public function testAChannelWithoutAnOutputRefusesThePart(): void
     {
         PartFeeder::$refusals = [];
         self::assertSame(['x'], self::released(PartFeederRelay::class, ['x']));
 
         self::assertSame(
-            ['part.no_sink'],
+            ['part.no_output'],
             PartFeeder::$refusals,
             'a channel feeding another tasklet previews nothing',
         );
@@ -199,13 +199,13 @@ final class PartTest extends TestCase
      * @param list<string>                   $inputs
      * @return list<string>
      */
-    private static function released(string $class, array $inputs, string $sink = 'answer'): array
+    private static function released(string $class, array $inputs, string $channel = 'answer'): array
     {
         $released = [];
         $run = LocalRelay::start($class);
 
         try {
-            $run->onSink($sink, static function (SinkOutput $out) use (&$released): void {
+            $run->onOutput($channel, static function (LocalOutput $out) use (&$released): void {
                 $released[] = $out->payload;
             });
             foreach ($inputs as $input) {

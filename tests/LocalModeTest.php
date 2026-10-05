@@ -14,7 +14,7 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\LocalRelay;
 use Flezha\Tasklet;
-use Flezha\SinkOutput;
+use Flezha\LocalOutput;
 
 /**
  * The PHP SDK's local mode: the shipped example's relay class, its
@@ -23,7 +23,7 @@ use Flezha\SinkOutput;
  * The example is what is asserted rather than a copy of it, so the file a
  * reader is pointed at is the file this proves.
  *
- * The graph and its expected sink output are read from
+ * The graph and its expected output are read from
  * `test/fixtures/local_mode_word_count.txt`, which the Rust, Java, Node,
  * Python, Ruby and Elixir local-mode suites read too — so every core is
  * compared against one recorded expectation instead of by inspection.
@@ -31,7 +31,7 @@ use Flezha\SinkOutput;
 final class LocalModeTest extends RepositoryTestCase
 {
     /**
-     * The scenario every core runs: the lines to feed, and the sink values.
+     * The scenario every core runs: the lines to feed, and the output values.
      *
      * @return array{list<string>, array<string, int>}
      */
@@ -59,7 +59,7 @@ final class LocalModeTest extends RepositoryTestCase
         $run = LocalRelay::start(WordCountRelay::class);
 
         try {
-            $run->onSink('totals', static function (SinkOutput $out) use (&$released): void {
+            $run->onOutput('totals', static function (LocalOutput $out) use (&$released): void {
                 $released[] = $out;
             });
             foreach ($lines as $line) {
@@ -102,13 +102,13 @@ final class LocalModeTest extends RepositoryTestCase
         }
     }
 
-    public function testAnUndeclaredEntryReadsJsonAndAnUndeclaredSinkFollowsTheValue(): void
+    public function testAnUndeclaredEntryReadsJsonAndAnUndeclaredOutputFollowsTheValue(): void
     {
         $released = [];
         $run = LocalRelay::start(DefaultCodecs::class);
 
         try {
-            $run->onSink('out', static function (SinkOutput $out) use (&$released): void {
+            $run->onOutput('out', static function (LocalOutput $out) use (&$released): void {
                 $released[] = $out->payload;
             });
             $run->feed('in', '{"a":1}');
@@ -137,6 +137,6 @@ final class DefaultCodecs extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(DefaultCodecsTasklet::class)->sink('out');
+        $c->input('in')->into(DefaultCodecsTasklet::class)->output('out');
     }
 }

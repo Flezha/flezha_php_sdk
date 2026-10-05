@@ -40,7 +40,7 @@ final class OrderExecutorRelay extends \Flezha\Relay
      * `branch` receives the same edge, so the declaration is exactly two `into` calls on the
      * placed channel, written as one.
      *
-     * Nothing ends on a sink, and nothing names a channel, so each channel carries the name of
+     * Nothing ends on an output, and nothing names a channel, so each channel carries the name of
      * the step that produces it.
      */
     public static function channels(Builder $c): void

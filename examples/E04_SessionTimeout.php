@@ -72,7 +72,7 @@ final class SessionRelay extends \Flezha\Relay
         $c->input('events')
             ->keyBy(static fn (array $e): string => (string) $e['session'])
             ->into(Session::class)->keyed()
-            ->sink('closed');
+            ->output('closed');
     }
 }
 

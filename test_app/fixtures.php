@@ -78,7 +78,7 @@ final class DoNothingRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(DoNothing::class)
-            ->sink('echo');
+            ->output('echo');
     }
 }
 
@@ -94,7 +94,7 @@ final class BenchEchoRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(DoNothing::class)
-            ->sink('echo');
+            ->output('echo');
     }
 }
 
@@ -127,7 +127,7 @@ final class CompareFilterRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CompareFilter::class)
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -200,12 +200,12 @@ final class StaticCellRelay extends \Flezha\Relay
         $c->input('input', codec: ChannelCodec::Text)
             ->into(StaticEntry::class)->named('hop')
             ->into(StaticDownstream::class)
-            ->sink('kafka');
+            ->output('kafka');
     }
 }
 
 /**
- * The reference pipeline sugar leaves the hop unnamed and lets the sink name
+ * The reference pipeline sugar leaves the hop unnamed and lets the output name
  * the producing channel.
  */
 #[Relay(factoryId: 'sugar_static_cell')]
@@ -216,7 +216,7 @@ final class SugarStaticCellRelay extends \Flezha\Relay
         $c->input('input', codec: ChannelCodec::Text)
             ->into(MacroStaticEntry::class)
             ->into(MacroStaticDownstream::class)
-            ->sink('test_kafka');
+            ->output('test_kafka');
     }
 }
 
@@ -238,7 +238,7 @@ final class MixedRelay extends \Flezha\Relay
         $c->input('input', codec: ChannelCodec::Text)
             ->into(MixedMacroEntry::class)->named('hop')
             ->into(MixedHandDownstream::class)
-            ->sink('kafka');
+            ->output('kafka');
     }
 }
 
@@ -248,13 +248,13 @@ final class MixedRelay extends \Flezha\Relay
 // of `channels()`, and `runner.php` registers the class itself. No tasklet
 // class stands beside them.
 
-#[Relay(factoryId: 'sugar_do_nothing', sink: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
+#[Relay(factoryId: 'sugar_do_nothing', output: 'sugar_do_nothing_echo', codec: ChannelCodec::Text)]
 final class SugarDoNothing extends \Flezha\Relay
 {
     use PassesThrough;
 }
 
-#[Relay(factoryId: 'sugar_store_input', sink: 'sugar_store_sink', codec: ChannelCodec::Text)]
+#[Relay(factoryId: 'sugar_store_input', output: 'sugar_store_sink', codec: ChannelCodec::Text)]
 final class SugarStoreInput extends \Flezha\Relay
 {
     public function initState(?string $cellKey): mixed
@@ -277,7 +277,7 @@ final class SugarStoreInput extends \Flezha\Relay
 
 #[Relay(
     factoryId: 'sugar_named_input',
-    sink: 'sugar_named_input_sink',
+    output: 'sugar_named_input_sink',
     input: 'prices',
     codec: ChannelCodec::Text,
 )]
@@ -290,7 +290,7 @@ final class SugarNamedInput extends \Flezha\Relay
     factoryId: 'sugar_steps',
     run: 'steps',
     durable: FIXTURE_DURABLE,
-    sink: 'sugar_steps_placed',
+    output: 'sugar_steps_placed',
     input: 'order',
     codec: ChannelCodec::Text,
 )]
@@ -304,7 +304,7 @@ final class SugarSteps extends \Flezha\Relay
     factoryId: 'sugar_steps_per_input',
     run: ['steps' => ['each' => 'per_input']],
     durable: FIXTURE_DURABLE,
-    sink: 'sugar_steps_per_input_out',
+    output: 'sugar_steps_per_input_out',
     codec: ChannelCodec::Text,
 )]
 final class SugarStepsPerInput extends \Flezha\Relay
@@ -312,7 +312,7 @@ final class SugarStepsPerInput extends \Flezha\Relay
     use PassesThrough;
 }
 
-/** No `sink`: the tasklet only keeps what it is sent, and answers nothing. */
+/** No `output`: the tasklet only keeps what it is sent, and answers nothing. */
 #[Relay(factoryId: 'sugar_state_only', input: 'ticks', codec: ChannelCodec::Text)]
 final class SugarStateOnly extends \Flezha\Relay
 {
@@ -375,7 +375,7 @@ final class HybridChannelRelay extends \Flezha\Relay
             // The consumer edge first, so a refused plugin serialization leaves
             // the in-process fan-out already recorded — the reference's isolation.
             static fn ($edge) => $edge->named('hybrid_indicator')->into(HybridConsumer::class),
-            static fn ($edge) => $edge->sink(static function (mixed $value): string {
+            static fn ($edge) => $edge->output(static function (mixed $value): string {
                 if ($value === HybridProducer::SENTINEL) {
                     throw new \RuntimeException('hybrid_indicators: serializer rejected sentinel 0xDEADBEEF');
                 }
@@ -414,7 +414,7 @@ final class MergedInputRelay extends \Flezha\Relay
             ->keyBy(static fn (array $value): string => $value['symbol'])
             ->into(MergeLabel::class)
             ->keyed()
-            ->sink('merged');
+            ->output('merged');
     }
 
     /** @return callable(string):array{source: string, symbol: string, payload: string} */
@@ -450,7 +450,7 @@ final class TransformChainRelay extends \Flezha\Relay
             ->keyBy(Wire::prefix(...))
             ->into(TransformLabel::class)
             ->keyed()
-            ->sink('transformed');
+            ->output('transformed');
     }
 }
 
@@ -509,7 +509,7 @@ final class CellStressRelay extends \Flezha\Relay
             ->into(StressB::class)->named('b_to_c')
             ->into(StressC::class)->named('c_to_d')
             ->into(StressD::class)
-            ->sink('echo');
+            ->output('echo');
     }
 }
 
@@ -559,7 +559,7 @@ final class CandleRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(Candle::class)->keyed()
-            ->sink('sink');
+            ->output('sink');
     }
 }
 
@@ -609,7 +609,7 @@ final class SessionTimeoutRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(SessionTimeout::class)
-            ->sink('kafka');
+            ->output('kafka');
     }
 }
 
@@ -659,7 +659,7 @@ final class BoundedMailboxDropNothingRelay extends \Flezha\Relay
     {
         $c->input('drop_nothing_input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(DropNothingMailbox::class)
-            ->sink('drop_nothing_echo');
+            ->output('drop_nothing_echo');
     }
 }
 
@@ -670,7 +670,7 @@ final class BoundedMailboxDropNewestRelay extends \Flezha\Relay
     {
         $c->input('drop_newest_input', codec: ChannelCodec::Text)->onFull(Overflow::DropNewest)
             ->into(DropNewestMailbox::class)
-            ->sink('drop_newest_echo');
+            ->output('drop_newest_echo');
     }
 }
 
@@ -681,7 +681,7 @@ final class BoundedMailboxDropOldestRelay extends \Flezha\Relay
     {
         $c->input('drop_oldest_input', codec: ChannelCodec::Text)->onFull(Overflow::DropOldest)
             ->into(DropOldestMailbox::class)
-            ->sink('drop_oldest_echo');
+            ->output('drop_oldest_echo');
     }
 }
 
@@ -720,7 +720,7 @@ final class PartitionPassRelay extends \Flezha\Relay
     {
         $c->input('in', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
             ->into(PartitionPass::class)->keyed()
-            ->sink('input');
+            ->output('input');
     }
 }
 
@@ -761,13 +761,13 @@ final class DynamicCellRelay extends \Flezha\Relay
             ->filter(static fn (mixed $input): bool => $input !== 'drop')
             ->keyBy(Wire::prefix(...))
             ->into(DynamicCell::class)
-            ->sink('kafka');
+            ->output('kafka');
     }
 }
 
 // -- call_response -------------------------------------------------------------
 //
-// Relays an outside caller calls and whose sink output answers it: from the
+// Relays an outside caller calls and whose output answers it: from the
 // first tasklet, from a downstream one, and from whichever of two filtered
 // paths the input took. `call_turn` is the steps
 // one, in fixtures_steps.php.
@@ -782,7 +782,7 @@ final class CallEcho extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(CallEchoStep::class)->sink();
+        $c->input('in', codec: ChannelCodec::Text)->into(CallEchoStep::class)->output();
     }
 }
 
@@ -808,7 +808,7 @@ final class CallDownstream extends \Flezha\Relay
         $c->input('in', codec: ChannelCodec::Text)
             ->into(CallParse::class)
             ->into(CallAnswer::class)
-            ->sink();
+            ->output();
     }
 }
 
@@ -844,10 +844,10 @@ final class CallSplit extends \Flezha\Relay
         $admitted = $c->input('in', codec: ChannelCodec::Text)->into(CallAdmit::class);
         $admitted->filter(static fn (mixed $input): bool => !str_starts_with($input, 'no'))
             ->into(CallAccept::class)
-            ->sink();
+            ->output();
         $admitted->filter(static fn (mixed $input): bool => str_starts_with($input, 'no'))
             ->into(CallRefuse::class)
-            ->sink();
+            ->output();
     }
 }
 

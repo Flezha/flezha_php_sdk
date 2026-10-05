@@ -265,7 +265,7 @@ final class CheckpointOutputsOnly extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(CheckpointTasklet::class)->keyed()->sink('sink');
+        $c->input('input')->into(CheckpointTasklet::class)->keyed()->output('sink');
     }
 }
 
@@ -277,6 +277,6 @@ final class CheckpointAckOnly extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(CheckpointTasklet::class)->keyed()->sink('sink');
+        $c->input('input')->into(CheckpointTasklet::class)->keyed()->output('sink');
     }
 }

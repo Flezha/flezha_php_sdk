@@ -8,7 +8,7 @@ declare(strict_types=1);
  * tasklet names, channel names and payloads: relays that call another
  * relay from their graph and read the outcome as a `Flezha\Response`.
  *
- * - `call_pricing`: a flow callee answering `price:<input>` on its sink
+ * - `call_pricing`: a flow callee answering `price:<input>` on its output
  *   `quotes`; an input starting `silent` is never answered.
  * - `call_orders`: a flow caller calling the instance `pricing`, answered from
  *   `quotes`.
@@ -21,7 +21,7 @@ declare(strict_types=1);
  * - `call_tool_session`: a durable per-input session calling `pricing` from a
  *   turn and reading the outcome as its next turn.
  *
- * Every outcome is written to a sink as one line,
+ * Every outcome is written to an output as one line,
  * `<request>=ok:<answer>@<target>/<created>` or
  * `<request>=error:<code>@<target>/<created>`.
  */
@@ -43,7 +43,7 @@ final class RelayCall
 
     /**
      * The prefix a caller's tasklet puts on an outcome line, which no request
-     * carries, so one output channel can feed both the call and the sink.
+     * carries, so one output channel can feed both the call and the output.
      */
     public const OUTCOME = 'response ';
 
@@ -113,7 +113,7 @@ final class CallPricing extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(PricingQuote::class)->sink('quotes');
+        $c->input('in', codec: ChannelCodec::Text)->into(PricingQuote::class)->output('quotes');
     }
 }
 
@@ -146,7 +146,7 @@ final class CallOrders extends \Flezha\Relay
                 codec: ChannelCodec::Text,
             )
             ->into(OrderPriced::class)
-            ->sink('priced');
+            ->output('priced');
     }
 }
 
@@ -176,7 +176,7 @@ final class CallAgent extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('turn', codec: ChannelCodec::Text)->into(AgentTurn::class)->sink();
+        $c->input('turn', codec: ChannelCodec::Text)->into(AgentTurn::class)->output();
     }
 }
 
@@ -232,7 +232,7 @@ final class CallGateway extends \Flezha\Relay
             ->keyBy(RelayCall::session(...))
             ->into(GatewayLog::class)
             ->keyed()
-            ->sink('gateway_out');
+            ->output('gateway_out');
     }
 }
 
@@ -268,7 +268,7 @@ final class CallToolSession extends \Flezha\Relay
         $turn->filter(static fn (mixed $line): bool => !RelayCall::isOutcome($line))
             ->call('pricing', deadlineMs: RelayCall::DEADLINE_MS, codec: ChannelCodec::Text)
             ->into(ToolTurn::class);
-        $turn->filter(RelayCall::isOutcome(...))->into(ToolLog::class)->sink('tool_out');
+        $turn->filter(RelayCall::isOutcome(...))->into(ToolLog::class)->output('tool_out');
     }
 }
 

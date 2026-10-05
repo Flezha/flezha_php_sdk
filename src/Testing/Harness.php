@@ -58,12 +58,12 @@ final class Harness implements SpawnBridge
         $this->definition = Definition::of($taskletClass);
 
         // The real channel builder, not a hand-written spec: one entry channel
-        // into the tasklet, and one plugin sink so `ctx->emit` has somewhere
+        // into the tasklet, and one plugin output so `ctx->emit` has somewhere
         // to go. A tasklet under test emits to be observed, not to be routed,
-        // and the sink names JSON so `outputs` reports exactly the value a
+        // and the output names JSON so `outputs` reports exactly the value a
         // handler emitted.
         $builder = new Builder('<harness>');
-        $builder->input('in')->into($taskletClass)->sink('out', codec: ChannelCodec::Json);
+        $builder->input('in')->into($taskletClass)->output('out', codec: ChannelCodec::Json);
         $this->node = $builder->tasklets[0];
 
         $spec = new ClassSpec(

@@ -28,7 +28,7 @@ final class GatewayRelay extends \Flezha\Relay
         $http->filter(fn (Request $request) => !$request->sends())
             ->into(Watch::class)
             ->keyed()
-            ->sink();                                // a stream, or 404
+            ->output();                              // a stream, or 404
         // route 2: POST .../messages is checked against the user's budget
         $verdicts = $http->filter(fn (Request $request) => $request->sends())
             ->map(fn (Request $request) => $request->message())
@@ -38,7 +38,7 @@ final class GatewayRelay extends \Flezha\Relay
         // use 1: answer the POST
         $verdicts->into(Admit::class)
             ->keyed()
-            ->sink();                                // 202, or 429 over the budget
+            ->output();                              // 202, or 429 over the budget
         // use 2: pass an admitted message on to the user's session
         $verdicts->filter(Budget::admitted(...))
             ->map(fn (array $verdict) => $verdict['message'])

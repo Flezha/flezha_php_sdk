@@ -44,6 +44,6 @@ final class TradeWatcherRelay extends \Flezha\Relay
             ->keyBy(fn (array $trade) => $trade['symbol'])                             // one cell per symbol
             ->into(TrackPrices::class)
             ->into(BuyAboveAverage::class)                                             // fed by the tasklet above
-            ->sink('signals');                                                         // out to the file plugin
+            ->output('signals');                                                       // out to the file plugin
     }
 }

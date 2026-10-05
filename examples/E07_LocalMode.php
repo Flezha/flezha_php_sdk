@@ -10,7 +10,7 @@ declare(strict_types=1);
  *
  * `Split` and `Tally` are ordinary tasklets with nothing local-mode about
  * them: the same classes deploy against a controller unchanged. What local
- * mode supplies is the sink — the values `Tally` releases arrive here instead
+ * mode supplies is the output — the values `Tally` releases arrive here instead
  * of on a socket.
  *
  * State is held in memory and nothing is durable; the run says so on stderr.
@@ -27,7 +27,7 @@ use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\LocalRelay;
 use Flezha\Tasklet;
-use Flezha\SinkOutput;
+use Flezha\LocalOutput;
 
 /** One line into its words: the hop to `Tally` is the runtime's job. */
 #[Task(name: 'split')]
@@ -75,7 +75,7 @@ final class WordCountRelay extends \Flezha\Relay
             // runtime's, not this file's.
             ->keyBy(static fn (string $word): string => $word)
             ->into(Tally::class)->keyed()
-            ->sink('totals');
+            ->output('totals');
     }
 }
 
@@ -83,7 +83,7 @@ if (PHP_SAPI === 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE
     $run = LocalRelay::start(WordCountRelay::class);
 
     try {
-        $run->onSink('totals', static fn (SinkOutput $out) => print($out->payload . PHP_EOL));
+        $run->onOutput('totals', static fn (LocalOutput $out) => print($out->payload . PHP_EOL));
         $run->feed('lines', 'the quick brown fox');
         $run->feed('lines', 'the lazy dog');
         $run->runUntilIdle(10_000);

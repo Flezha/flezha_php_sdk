@@ -75,7 +75,7 @@ final class HarnessTest extends TestCase
         self::assertSame(['hello'], (new Harness(Echoer::class))->feed('hello')->outputs);
     }
 
-    /** The harness reads its sink back as JSON, so a string is not reported as its bytes. */
+    /** The harness reads its output back as JSON, so a string is not reported as its bytes. */
     public function testAStringAndAnArrayAreReportedExactlyAsEmitted(): void
     {
         $harness = new Harness(Echoer::class);

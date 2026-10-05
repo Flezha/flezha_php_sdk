@@ -48,8 +48,8 @@ final class ChannelSpec
         public ?int $retryBackoffMs = null,
         public bool $keyed = false,
         /**
-         * The channel's name once a plugin end, a sink or a call, is
-         * attached; null means none. The core's answer names no sink for a
+         * The channel's name once a plugin end, an output or a call, is
+         * attached; null means none. The core's answer names no output for a
          * call.
          */
         public ?string $sink = null,
@@ -61,8 +61,8 @@ final class ChannelSpec
          */
         public $decode = null,
         /**
-         * The plugin sink's payload encoder, which `sink` always sets. It
-         * belongs to the sink frame alone: an inter-tasklet frame is decoded
+         * The plugin output's payload encoder, which `output` always sets. It
+         * belongs to the output frame alone: an inter-tasklet frame is decoded
          * with the class codec, so encoding one with this hands the consuming
          * tasklet bytes it cannot read.
          *

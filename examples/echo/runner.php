@@ -27,7 +27,7 @@ $runner = Flezha::createRunner($argv[1] ?? 'default')
 //
 // $control = $runner->control();
 // $control->startRelay('echo', id: 'my_echo');
-// $control->enablePlugin('writer', 'relay_file_sink', ['path' => 'echo-out.txt']);
+// $control->enablePlugin('writer', 'relay_file_output', ['path' => 'echo-out.txt']);
 // $control->bindPlugin('writer', 'my_echo', hooks: [['on_output', new stdClass()]]);
 // $runner->send('my_echo', 'hello world', 'in', msgId: 'hello-1');
 //

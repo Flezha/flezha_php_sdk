@@ -29,7 +29,7 @@ use Flezha\Transforms;
 // ---------------------------------------------------------------------------
 // The §5 short form
 
-#[Relay(factoryId: 'sf_upcase', sink: 'out', codec: ChannelCodec::Text)]
+#[Relay(factoryId: 'sf_upcase', output: 'out', codec: ChannelCodec::Text)]
 final class ShortUpcase extends RelayBase
 {
     use Echoes;
@@ -43,11 +43,11 @@ final class ShortUpcaseTwinRelay extends RelayBase
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(Echoer::class, 'sf_upcase')
-            ->sink('out');
+            ->output('out');
     }
 }
 
-#[Relay(factoryId: 'sf_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+#[Relay(factoryId: 'sf_place', run: 'steps', output: 'placed', input: 'order', codec: ChannelCodec::Text)]
 final class ShortPlace extends RelayBase
 {
     use Echoes;
@@ -60,25 +60,25 @@ final class ShortPlaceTwinRelay extends RelayBase
     {
         $c->input('order', codec: ChannelCodec::Text)
             ->into(Echoer::class, 'sf_place')
-            ->sink('placed');
+            ->output('placed');
     }
 }
 
 /** A steps short form under the id `ShortUpcase` already holds. */
-#[Relay(factoryId: 'sf_upcase', run: 'steps', sink: 'placed')]
+#[Relay(factoryId: 'sf_upcase', run: 'steps', output: 'placed')]
 final class ShortUpcaseSteps extends RelayBase
 {
     use Echoes;
 }
 
-#[Relay(factoryId: 'sf_both', sink: 'out')]
+#[Relay(factoryId: 'sf_both', output: 'out')]
 final class ShortWithTopology extends RelayBase
 {
     use Echoes;
 
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Echoer::class)->sink('out');
+        $c->input('input')->into(Echoer::class)->output('out');
     }
 }
 
@@ -126,7 +126,7 @@ final class ShortCodecOnTopology extends RelayBase
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Echoer::class)->sink('out');
+        $c->input('input')->into(Echoer::class)->output('out');
     }
 }
 
@@ -136,7 +136,7 @@ final class ShortTaskOnTopology extends RelayBase
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Echoer::class)->sink('out');
+        $c->input('input')->into(Echoer::class)->output('out');
     }
 }
 
@@ -285,8 +285,8 @@ final class TaskWithRun extends Tasklet
     use Echoes;
 }
 
-#[Task(name: 'sf_task_sink', sink: 'out')]
-final class TaskWithSink extends Tasklet
+#[Task(name: 'sf_task_sink', output: 'out')]
+final class TaskWithOutput extends Tasklet
 {
     use Echoes;
 }
@@ -322,7 +322,7 @@ final class FoldWithoutState extends Tasklet
  * the reference refusals are pinned by `test/fixtures/reference_topologies.txt`
  * — not here. What is left here is the ergonomics: which shapes the fluent
  * builder BUILDS, the defects a record cannot carry (a PHP class that does not
- * define the method its declaration promises, a plugin sink on a channel no
+ * define the method its declaration promises, a plugin output on a channel no
  * tasklet produces on), and that the core's verdict reaches an author as this
  * package's own refusal.
  */
@@ -337,14 +337,14 @@ final class AuthoringTest extends RepositoryTestCase
             'declares applyChange but no initial state',
         ];
         // The other refusal the builder keeps: a channel with no producer has
-        // no value to serialize, and the core reads a sink as the terminal of
+        // no value to serialize, and the core reads an output as the terminal of
         // the channel it sits on — it cannot see this one is controller-fed.
         yield 'a sink fed by an entry channel' => [
             static fn (): mixed => self::validate(static function (Builder $c): void {
-                $c->input('in')->sink();
+                $c->input('in')->output();
             }),
-            'topology.sink_on_entry',
-            'a sink is fed by a tasklet',
+            'topology.output_on_entry',
+            'an output is fed by a tasklet',
         ];
         // The one refusal the builder raises under a code of the core's.
         yield 'two tasklets claiming one node identity' => [
@@ -436,11 +436,11 @@ final class AuthoringTest extends RepositoryTestCase
 
     /**
      * `named()` is honoured on the inter-task path and was dropped on the
-     * plugin path, so `named('input')->sink('pass_out')` produced a channel
+     * plugin path, so `named('input')->output('pass_out')` produced a channel
      * called `pass_out` — and the channel name is what a forwarded frame
      * carries and what selects the receiving relay's entry channel.
      */
-    public function testANamedEdgeTerminatingOnASinkNamesTheChannelToo(): void
+    public function testANamedEdgeTerminatingOnAnOutputNamesTheChannelToo(): void
     {
         $spec = NamedSink::spec();
         self::derived($spec);
@@ -452,11 +452,11 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /**
-     * `sdk-graph-authoring`: the no-argument `sink()` names nothing, so the
+     * `sdk-graph-authoring`: the no-argument `output()` names nothing, so the
      * channel keeps the PRODUCER NODE's name — the derivation a channel with
-     * no sink at all would take.
+     * no output at all would take.
      */
-    public function testAnUnnamedEdgeTerminatingOnASinkTakesTheProducingNodesName(): void
+    public function testAnUnnamedEdgeTerminatingOnAnOutputTakesTheProducingNodesName(): void
     {
         $spec = UnnamedSink::spec();
         self::derived($spec);
@@ -562,8 +562,8 @@ final class AuthoringTest extends RepositoryTestCase
         }
     }
 
-    /** The sink names the channel; the no-argument form leaves it derived. */
-    public function testTheSinkNamesTheChannelAndTheNoArgumentFormDoesNot(): void
+    /** The output names the channel; the no-argument form leaves it derived. */
+    public function testTheOutputNamesTheChannelAndTheNoArgumentFormDoesNot(): void
     {
         self::assertSame(
             ['in', 'input'],
@@ -575,7 +575,7 @@ final class AuthoringTest extends RepositoryTestCase
         );
     }
 
-    /** A channel both `named()` and `sink()` name is refused, naming both. */
+    /** A channel both `named()` and `output()` name is refused, naming both. */
     public function testAChannelNamedTwiceIsRefusedNamingBoth(): void
     {
         $this->expectException(FlezhaException::class);
@@ -597,21 +597,21 @@ final class AuthoringTest extends RepositoryTestCase
         self::derived(TrailingKeyed::spec());
     }
 
-    /** Two channels naming one sink is a duplicate channel name. */
-    public function testTwoChannelsNamingOneSinkIsRefused(): void
+    /** Two channels naming one output is a duplicate channel name. */
+    public function testTwoChannelsNamingOneOutputIsRefused(): void
     {
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionCode('topology.duplicate_sink_name');
+        $this->expectExceptionCode('topology.duplicate_output_name');
 
         self::derived(OneSinkTwoChannels::spec());
     }
 
-    /** A sink beside a call on one channel is refused as ending twice. */
-    public function testASinkBesideACallOnOneChannelIsRefused(): void
+    /** An output beside a call on one channel is refused as ending twice. */
+    public function testAnOutputBesideACallOnOneChannelIsRefused(): void
     {
         try {
             self::validate(static function (Builder $c): void {
-                $c->input('in')->into(Echoer::class)->sink('out')
+                $c->input('in')->into(Echoer::class)->output('out')
                     ->call('pricing', deadlineMs: 500)->into(Counter::class);
             });
             self::fail('a channel ending twice was accepted');
@@ -631,7 +631,7 @@ final class AuthoringTest extends RepositoryTestCase
 
     /**
      * Read off the DERIVED declaration: the consumers, the plugin kind and the
-     * sink name are what the core made of the chains this builder recorded.
+     * output name are what the core made of the chains this builder recorded.
      *
      * @param ClassSpec|array<string, mixed> $declaration a class, or what the core already derived
      * @return list<array{string, string, ?int, list<int>, ?string}>
@@ -757,8 +757,8 @@ final class AuthoringTest extends RepositoryTestCase
         $builder = null;
         $key = static fn (array $t): string => $t['symbol'];
         $derived = self::validate(static function (Builder $c) use (&$builder, $key): void {
-            $c->routeLatest($c->input('config'), $c->input('trades'), $key)->sink('routed');
-            $c->routeLatestNamed($c->input('limits'), $c->input('orders'), $key, 'limits_router')->sink('limited');
+            $c->routeLatest($c->input('config'), $c->input('trades'), $key)->output('routed');
+            $c->routeLatestNamed($c->input('limits'), $c->input('orders'), $key, 'limits_router')->output('limited');
             $builder = $c;
         });
 
@@ -784,7 +784,7 @@ final class AuthoringTest extends RepositoryTestCase
         self::assertSame(self::channelsOf(FanOut::spec()), self::channelsOf(Branched::spec()));
     }
 
-    public function testSinkReturnsTheEdgeSoAConsumerWiresBehindIt(): void
+    public function testOutputReturnsTheEdgeSoAConsumerWiresBehindIt(): void
     {
         self::assertSame(
             [
@@ -796,7 +796,7 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /** `keyed()` reaches the channel it was declared on, and the record. */
-    public function testKeyedReachesTheChannelOfAHybridSink(): void
+    public function testKeyedReachesTheChannelOfAHybridOutput(): void
     {
         $spec = KeyedHybrid::spec();
         self::derived($spec);
@@ -903,16 +903,16 @@ final class AuthoringTest extends RepositoryTestCase
     // is `test/fixtures/channel_codecs.txt`; what is PHP's own is asserted here.
 
     /**
-     * The entry decoder and the sink encoder `input` and `sink` resolved.
+     * The entry decoder and the output encoder `input` and `output` resolved.
      *
      * @param array<string, mixed> $input
-     * @param array<string, mixed> $sink
+     * @param array<string, mixed> $output
      * @return array{callable(string):mixed, callable(mixed):string}
      */
     private static function codecSlots(array $input = [], array $sink = []): array
     {
         $builder = new Builder('codecs');
-        $builder->input('in', ...$input)->into(Echoer::class)->sink('out', ...$sink);
+        $builder->input('in', ...$input)->into(Echoer::class)->output('out', ...$sink);
 
         return [$builder->channels[0]->decode, $builder->channels[1]->sinkEncode];
     }
@@ -1007,7 +1007,7 @@ final class AuthoringTest extends RepositoryTestCase
     }
 
     /** @dataProvider unsendable */
-    public function testASinkRefusesAValueItsCodecCannotCarryNamingTheChannel(ChannelCodec $codec, mixed $value): void
+    public function testAnOutputRefusesAValueItsCodecCannotCarryNamingTheChannel(ChannelCodec $codec, mixed $value): void
     {
         $this->expectException(FlezhaException::class);
         $this->expectExceptionCode('runtime.value_wrong_for_codec');
@@ -1016,8 +1016,8 @@ final class AuthoringTest extends RepositoryTestCase
         self::codecSlots([], ['codec' => $codec])[1]($value);
     }
 
-    /** A PHP string is its bytes, so a `Bytes` sink takes one, where Python and Node refuse a string there. */
-    public function testABytesSinkPassesAnyString(): void
+    /** A PHP string is its bytes, so a `Bytes` output takes one, where Python and Node refuse a string there. */
+    public function testABytesOutputPassesAnyString(): void
     {
         self::assertSame("\xFF", self::codecSlots([], ['codec' => ChannelCodec::Bytes])[1]("\xFF"));
     }
@@ -1033,7 +1033,7 @@ final class AuthoringTest extends RepositoryTestCase
     /**
      * @dataProvider codecBesideCallable
      * @param array<string, mixed> $input
-     * @param array<string, mixed> $sink
+     * @param array<string, mixed> $output
      */
     public function testACodecAndACallableTogetherAreRefused(array $input, array $sink, string $channel): void
     {
@@ -1091,7 +1091,7 @@ final class AuthoringTest extends RepositoryTestCase
         self::derived(ShortPerInputTimeLimited::spec());
     }
 
-    public function testASinklessShortFormDeclaresItsEntryIntoItsTaskletAndNothingElse(): void
+    public function testAShortFormWithNoOutputDeclaresItsEntryIntoItsTaskletAndNothingElse(): void
     {
         $spec = ShortCounter::spec();
 
@@ -1100,7 +1100,7 @@ final class AuthoringTest extends RepositoryTestCase
             array_map(static fn ($c): array => [$c->name, $c->kind], $spec->channels),
         );
         self::assertSame(['sf_counter'], array_column($spec->tasklets, 'name'));
-        // The codec reached the entry with no sink written: JSON would refuse this.
+        // The codec reached the entry with no output written: JSON would refuse this.
         self::assertSame('one', ($spec->channels[0]->decode)('one'));
         // The core takes a channel ending at a tasklet, as it does a full form's.
         self::assertCount(1, self::derived($spec)['channels']);
@@ -1250,7 +1250,7 @@ final class AuthoringTest extends RepositoryTestCase
     public static function taskletsWithARelayArgument(): iterable
     {
         yield 'run' => [TaskWithRun::class, 'run'];
-        yield 'sink' => [TaskWithSink::class, 'sink'];
+        yield 'output' => [TaskWithOutput::class, 'output'];
         yield 'input' => [TaskWithInput::class, 'input'];
         yield 'codec' => [TaskWithCodec::class, 'codec'];
     }
@@ -1284,7 +1284,7 @@ final class AuthoringTest extends RepositoryTestCase
      * fails when: either `run` a body can override stops being declared
      * `: void`, which is what holds every body to emitting through its
      * context. No body declares an output type, so this SDK owes no
-     * `topology.sink_without_output`.
+     * `topology.output_without_type`.
      */
     public function testEveryBodyIsVoid(): void
     {
@@ -1325,7 +1325,7 @@ final class Hybrid extends RelayBase
     public static function channels(Builder $c): void
     {
         $c->input('in')->into(Counter::class)
-            ->sink('hybrid_indicator')->into(Echoer::class);
+            ->output('hybrid_indicator')->into(Echoer::class);
     }
 }
 
@@ -1335,7 +1335,7 @@ final class KeyedHybrid extends RelayBase
     public static function channels(Builder $c): void
     {
         $c->input('in')->into(Counter::class)->keyed()
-            ->sink('mid')->into(Echoer::class);
+            ->output('mid')->into(Echoer::class);
     }
 }
 
@@ -1367,7 +1367,7 @@ final class NamedSink extends RelayBase
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(Echoer::class)->sink('input');
+        $c->input('in')->into(Echoer::class)->output('input');
     }
 }
 
@@ -1376,7 +1376,7 @@ final class UnnamedSink extends RelayBase
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(Counter::class)->sink();
+        $c->input('in')->into(Counter::class)->output();
     }
 }
 
@@ -1385,7 +1385,7 @@ final class NamedTwice extends RelayBase
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(Echoer::class)->named('a')->sink('b');
+        $c->input('in')->into(Echoer::class)->named('a')->output('b');
     }
 }
 
@@ -1412,8 +1412,8 @@ final class OneSinkTwoChannels extends RelayBase
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(Echoer::class)->sink('shared')
-            ->into(Counter::class)->sink('shared');
+        $c->input('in')->into(Echoer::class)->output('shared')
+            ->into(Counter::class)->output('shared');
     }
 }
 
@@ -1424,7 +1424,7 @@ final class Diamond extends RelayBase
     {
         $edge = $c->input('in')->into(Echoer::class);
         $edge->named('left')->into(Counter::class);
-        $edge->sink();
+        $edge->output();
     }
 }
 

@@ -158,32 +158,32 @@ final class Edge
     /**
      * Terminate this edge's channel on the plugin layer, and answer the edge.
      * A name written here IS the channel's name, everywhere one appears;
-     * `sink()` leaves it derived as it would be without a sink at all.
+     * `output()` leaves it derived as it would be without an output at all.
      *
-     * `sink(...)->into(...)` wires a consumer behind the sink, so one emit
+     * `output(...)->into(...)` wires a consumer behind the output, so one emit
      * reaches both. A channel with no consumer behind it is the plugin-bound
      * terminal — terminality is the absence of further wiring, not a different
      * method.
      *
      * The one refusal left here: a channel with no producer has no value to
-     * serialize, and the core reads a sink as the terminal of the channel it
+     * serialize, and the core reads an output as the terminal of the channel it
      * sits on — it cannot see that this one is fed by the controller.
      *
      * `$encode` turns a value into the plugin frame's bytes, and `$codec` names
      * a format instead. With neither, a string is sent as it stands and any
-     * other value as JSON, so a sink needs neither for a string or a JSON value.
+     * other value as JSON, so an output needs neither for a string or a JSON value.
      *
      * @param string|(callable(mixed):string)|null $nameOrEncode
      * @param (callable(mixed):string)|null         $encode
      */
-    public function sink(
+    public function output(
         string|callable|null $nameOrEncode = null,
         ?callable $encode = null,
         ?ChannelCodec $codec = null,
     ): self {
         // One method, two positions: a string names the channel, a callable is
         // the serializer. PHP has no overloading, so telling them apart here is
-        // what keeps the serializer-only form from spelling `sink(null, $enc)`.
+        // what keeps the serializer-only form from spelling `output(null, $enc)`.
         $name = is_string($nameOrEncode) ? $nameOrEncode : null;
         $encode = is_callable($nameOrEncode) ? $nameOrEncode : $encode;
 
@@ -202,7 +202,7 @@ final class Edge
      * whose output answers (its first output for the request when null), and
      * `$codec` the format of both the request and the answer, JSON by default.
      * A call is not an edge, so the Response channel may feed this tasklet. A
-     * channel ends in one sink or one call.
+     * channel ends in one output or one call.
      */
     public function call(
         ?string $target = null,
@@ -217,7 +217,7 @@ final class Edge
             throw new \ArgumentCountError('call() takes deadlineMs');
         }
         if ($this->from[0] !== 'tasklet') {
-            throw new FlezhaException('topology.sink_on_entry', ['channel' => $this->from[1]->name]);
+            throw new FlezhaException('topology.output_on_entry', ['channel' => $this->from[1]->name]);
         }
 
         $source = $this->channel();
@@ -228,7 +228,7 @@ final class Edge
             $this->pending['chain'] ?? null,
             self::callLink($target, $factory, $deadlineMs, $create, $channel, $answerChannel, $response),
         );
-        // First call wins, as for a sink; a second end is the core's to refuse.
+        // First call wins, as for an output; a second end is the core's to refuse.
         $source->call ??= new CallEnd($this->transforms(), $this->pending['keyBy'] ?? null, $codec->encoder($source));
         $decode = $codec->decoder($source);
 
@@ -260,7 +260,7 @@ final class Edge
     }
 
     /**
-     * Attach a sink, which leaves as a plugin output; the core refuses a
+     * Attach an output, which leaves as a plugin output; the core refuses a
      * second end.
      *
      * @param (callable(mixed):string)|null $encode
@@ -268,12 +268,12 @@ final class Edge
     private function attachSink(?string $name, ?callable $encode, ?ChannelCodec $codec): self
     {
         if ($this->from[0] !== 'tasklet') {
-            throw new FlezhaException('topology.sink_on_entry', ['channel' => $name ?? '<derived>']);
+            throw new FlezhaException('topology.output_on_entry', ['channel' => $name ?? '<derived>']);
         }
 
         $channel = $this->channel();
-        // The name written here IS the channel's name; `sink()` with none
-        // leaves it derived as it would be without a sink at all.
+        // The name written here IS the channel's name; `output()` with none
+        // leaves it derived as it would be without an output at all.
         if ($name !== null) {
             $channel->name = $name;
         }

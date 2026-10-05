@@ -220,7 +220,7 @@ final class Routed extends Tasklet
     }
 }
 
-#[Relay(factoryId: 'form_place', run: 'steps', sink: 'placed', input: 'order', codec: ChannelCodec::Text)]
+#[Relay(factoryId: 'form_place', run: 'steps', output: 'placed', input: 'order', codec: ChannelCodec::Text)]
 final class ShortPlaceOrder extends \Flezha\Relay
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -234,7 +234,7 @@ final class EmitsRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in')->into(EmitsOrSkips::class)->sink('out');
+        $c->input('in')->into(EmitsOrSkips::class)->output('out');
     }
 }
 
@@ -262,7 +262,7 @@ final class ClocksRelay extends \Flezha\Relay
     public static function channels(Builder $c): void
     {
         $in = $c->input('in');
-        $in->into(Stamped::class)->sink('stamps');
+        $in->into(Stamped::class)->output('stamps');
         $in->into(LogicalLedger::class);
         $in->into(Seeded::class);
     }
@@ -469,8 +469,8 @@ final class TaskletFormTest extends TestCase
         self::assertSame([], $result['effects'][1]['outputs']);
     }
 
-    /** A steps short form's `run` emits as a tasklet's does, and the value reaches its sink. */
-    public function testABoundedShortFormsEmittedValueReachesItsSink(): void
+    /** A steps short form's `run` emits as a tasklet's does, and the value reaches its output. */
+    public function testABoundedShortFormsEmittedValueReachesItsOutput(): void
     {
         [$dispatcher, $core] = self::dispatcherFor(ShortPlaceOrder::class);
         try {

@@ -56,7 +56,7 @@ final class SpawnerRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('in', codec: ChannelCodec::Text)->into(Spawner::class)->sink('out');
+        $c->input('in', codec: ChannelCodec::Text)->into(Spawner::class)->output('out');
     }
 }
 
@@ -149,7 +149,7 @@ final class SpawnTest extends TestCase
     }
 
     /**
-     * The payload is the spawned instance's first message, sent as a sink
+     * The payload is the spawned instance's first message, sent as an output
      * naming no codec sends a value: a string as it stands, so a `Text` entry
      * reads it, and anything else as JSON, so a `Json` entry reads it.
      */

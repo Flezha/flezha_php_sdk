@@ -62,7 +62,7 @@ final class CheckoutSteps extends \Flezha\Relay
         $c->input('orders')
             ->into(ReserveStock::class)->named('reserved')
             ->into(ChargeCard::class)
-            ->sink('charged');
+            ->output('charged');
     }
 }
 

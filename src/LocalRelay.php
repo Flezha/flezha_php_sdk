@@ -42,7 +42,7 @@ final class LocalRelay
     /** The idle probe's own budget: two observations a millisecond apart. */
     private const IDLE_PROBE_MS = 20;
 
-    /** @var array<string, callable(SinkOutput): void> */
+    /** @var array<string, callable(LocalOutput): void> */
     private array $sinks = [];
 
     private bool $closed = false;
@@ -85,13 +85,13 @@ final class LocalRelay
     }
 
     /**
-     * Deliver every value released on the sink `$channel` to `$callback`, in
-     * release order. A sink channel takes the producing tasklet's name
+     * Deliver every value released on the output `$channel` to `$callback`, in
+     * release order. An output channel takes the producing tasklet's name
      * unless the declaration named it.
      *
-     * @param callable(SinkOutput): void $callback
+     * @param callable(LocalOutput): void $callback
      */
-    public function onSink(string $channel, callable $callback): self
+    public function onOutput(string $channel, callable $callback): self
     {
         // Registered with the core first: a channel the declaration does not
         // carry is refused there, naming it, rather than silently accepted.
@@ -113,7 +113,7 @@ final class LocalRelay
      * Drive the graph until it has nothing left to do.
      *
      * One turn is: take an activation if the core has one and answer it, then
-     * hand on whatever the sinks released. When a turn hands nothing back, ask
+     * hand on whatever the outputs released. When a turn hands nothing back, ask
      * the core whether the graph has settled — a refusal there means it has
      * not, and the turn repeats until `$budgetMs` runs out.
      *
@@ -172,7 +172,7 @@ final class LocalRelay
         $this->core->free();
     }
 
-    /** Everything the sinks have released, handed on and then forgotten. */
+    /** Everything the outputs have released, handed on and then forgotten. */
     private function drainOutputs(): void
     {
         while (true) {
@@ -188,7 +188,7 @@ final class LocalRelay
     private function deliver(array $output): void
     {
         if ($output['target'] !== 'plugin') {
-            // The core queues what a sink released and nothing else; an edge
+            // The core queues what an output released and nothing else; an edge
             // output is an in-process mailbox push that never leaves.
             throw new \LogicException('local mode released a ' . (string) $output['target'] . ' output');
         }
@@ -199,6 +199,6 @@ final class LocalRelay
         }
         /** @var array<string, string> $metadata */
         $metadata = $output['metadata'];
-        $callback(new SinkOutput($channel, (string) $output['payload'], $metadata));
+        $callback(new LocalOutput($channel, (string) $output['payload'], $metadata));
     }
 }

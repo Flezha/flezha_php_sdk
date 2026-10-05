@@ -44,7 +44,7 @@ final class PoisonProbeRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)->retryBackoffMs(25)
             ->into(PoisonProbe::class)
-            ->sink('out');
+            ->output('out');
     }
 }
 
@@ -90,6 +90,6 @@ final class WedgeProbeRelay extends \Flezha\Relay
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(WedgeProbe::class)
-            ->sink('out');
+            ->output('out');
     }
 }

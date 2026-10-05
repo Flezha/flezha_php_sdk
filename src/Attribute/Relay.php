@@ -20,7 +20,7 @@ use Flezha\ChannelCodec;
  * On a §5 short form, a class that defines its one tasklet's `run` instead
  * of `channels()`, it also names the channels that tasklet is wired between:
  * the entry channel (`input` when none is written) and its `codec`, and the
- * plugin `sink` the tasklet's output reaches, if any.
+ * plugin `output` the tasklet's output reaches, if any.
  *
  * Deliberately not inherited: two relays cannot share a factory id, and a
  * subclass silently taking its parent's would be refused by the core at
@@ -30,6 +30,9 @@ use Flezha\ChannelCodec;
 #[Attribute(Attribute::TARGET_CLASS)]
 final class Relay
 {
+    /** The short form's own arguments, which a full form wires in `channels()` instead. */
+    public const SHORT_FORM_ARGUMENTS = ['output', 'input', 'codec'];
+
     /**
      * @param string|array<string, mixed>|null      $run
      * @param bool|string|array<string, mixed>|null $durable
@@ -40,7 +43,7 @@ final class Relay
         public readonly bool|string|array|null $durable = null,
         public readonly ?int $maxDurationMs = null,
         public readonly ?string $description = null,
-        public readonly ?string $sink = null,
+        public readonly ?string $output = null,
         public readonly ?string $input = null,
         public readonly ?ChannelCodec $codec = null,
     ) {

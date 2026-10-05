@@ -43,7 +43,7 @@ final class KeptRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input')->into(Kept::class)->sink('out');
+        $c->input('input')->into(Kept::class)->output('out');
     }
 }
 

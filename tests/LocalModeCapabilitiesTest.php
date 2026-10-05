@@ -6,7 +6,7 @@ namespace Flezha\Tests;
 
 use Flezha\Exception\FlezhaException;
 use Flezha\LocalRelay;
-use Flezha\SinkOutput;
+use Flezha\LocalOutput;
 use Flezha\TestApp\BoundedMailboxDropNothingRelay;
 use Flezha\TestApp\DynamicCellRelay;
 use Flezha\TestApp\PartitionPassRelay;
@@ -27,7 +27,7 @@ use PHPUnit\Framework\TestCase;
  * approximating them.
  *
  * What each test can assert is what a run with no controller can see. A
- * durable write reaches a null sink, a parked payload has nowhere to park, and
+ * durable write reaches a null output, a parked payload has nowhere to park, and
  * a partition member's key range arrives with `AddRelay`, so the
  * assertions here are the output side of each capability, which is the half
  * the language layer produces.
@@ -61,7 +61,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
         self::assertSame(
             ['alpha', 'beta'],
-            array_map(static fn (SinkOutput $out): string => $out->payload, $released),
+            array_map(static fn (LocalOutput $out): string => $out->payload, $released),
             'the builder produced a graph the core ran, in order',
         );
     }
@@ -96,10 +96,10 @@ final class LocalModeCapabilitiesTest extends TestCase
 
     public function testADynamicCellFilterRunsBeforeKeyingAndNothingElseIsLost(): void
     {
-        // The class's sink is not keyed, so a released value carries no cell
+        // The class's output is not keyed, so a released value carries no cell
         // stamp and the per-key minting is not visible on this channel. It is
         // asserted above, on `partition_pass`, whose tasklet is dynamic too
-        // and whose sink IS keyed. What this class shows that that one does
+        // and whose output IS keyed. What this class shows that that one does
         // not is the declared filter: a value it rejects answers no key, so
         // the core is never asked to mint a Cell for it.
         $this->declares('dynamic_cell', 'dynamic_cell');
@@ -145,7 +145,7 @@ final class LocalModeCapabilitiesTest extends TestCase
 
         self::assertSame(
             $inputs,
-            array_map(static fn (SinkOutput $out): string => $out->payload, $released),
+            array_map(static fn (LocalOutput $out): string => $out->payload, $released),
             'six mailboxfuls were fed and under `drop_nothing` all 24 came back, in order',
         );
     }
@@ -171,7 +171,7 @@ final class LocalModeCapabilitiesTest extends TestCase
             putenv($previous === false ? 'TIMER_TEST_TIMEOUT_MS' : "TIMER_TEST_TIMEOUT_MS=$previous");
         }
 
-        $payloads = array_map(static fn (SinkOutput $out): string => $out->payload, $released);
+        $payloads = array_map(static fn (LocalOutput $out): string => $out->payload, $released);
         $closed = array_values(array_filter($payloads, static fn (string $p): bool => str_starts_with($p, 'closed@')));
         self::assertCount(1, $closed, 'the timer fired exactly once: ' . json_encode($payloads));
         self::assertMatchesRegularExpression(
@@ -202,7 +202,7 @@ final class LocalModeCapabilitiesTest extends TestCase
      *
      * @param list<string> $inputs
      *
-     * @return list<SinkOutput>
+     * @return list<LocalOutput>
      */
     private function release(
         string $class,
@@ -215,7 +215,7 @@ final class LocalModeCapabilitiesTest extends TestCase
         $run = LocalRelay::start($class);
 
         try {
-            $run->onSink($sink, static function (SinkOutput $out) use (&$released): void {
+            $run->onOutput($sink, static function (LocalOutput $out) use (&$released): void {
                 $released[] = $out;
             });
             foreach ($perDrive > 0 ? array_chunk($inputs, $perDrive) : [$inputs] as $batch) {
@@ -238,7 +238,7 @@ final class LocalModeCapabilitiesTest extends TestCase
      * rather than interleaved as they were fed. What a keyed declaration
      * promises is the order within a key, which is what this compares.
      *
-     * @param list<SinkOutput> $released
+     * @param list<LocalOutput> $released
      *
      * @return array<string, list<string>>
      */

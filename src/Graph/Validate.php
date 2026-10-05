@@ -25,7 +25,7 @@ final class Validate
 
     /**
      * Judge one declaration and answer what the core derived from it: the
-     * channel names, kinds, consumers, sink names and acknowledgement
+     * channel names, kinds, consumers, output names and acknowledgement
      * granularity it read off the record.
      *
      * The defect this package can see is refused first, so an author reads

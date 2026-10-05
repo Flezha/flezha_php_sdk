@@ -163,7 +163,7 @@ final class DeclKeysTest extends RepositoryTestCase
     /**
      * The DERIVED declaration rendered in the golden's columns, one line per
      * channel. Every column but the index is the core's answer now — the
-     * record carries chains, and the consumers, the plugin kind and the sink
+     * record carries chains, and the consumers, the plugin kind and the output
      * name are read off them.
      *
      * @return list<string>
@@ -277,7 +277,7 @@ final class FullFlow extends \Flezha\Relay
         $edge->named('hop')->keyBy(static fn (mixed $v): string => (string) $v)
             ->retryMax(5)->retryBackoffMs(50)->into(FullDownstream::class);
         $edge->named('fan')->into(FullFanned::class);
-        $c->input('second')->into(FullEntry::class)->keyed()->sink('sink');
+        $c->input('second')->into(FullEntry::class)->keyed()->output('sink');
     }
 }
 
@@ -298,14 +298,14 @@ final class HybridConsumer extends Tasklet
     }
 }
 
-/** The reference's flow fixture: one producing channel, a sink AND a consumer. */
+/** The reference's flow fixture: one producing channel, an output AND a consumer. */
 #[Relay(factoryId: 'hybrid_channel')]
 final class HybridChannelTopology extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
         $c->input('input')->into(HybridProducer::class)
-            ->sink('hybrid_indicator', static fn (mixed $v): string => (string) $v)
+            ->output('hybrid_indicator', static fn (mixed $v): string => (string) $v)
             ->into(HybridConsumer::class);
     }
 }
@@ -334,7 +334,7 @@ final class CommitBlockChainTopology extends \Flezha\Relay
     public static function channels(Builder $c): void
     {
         $c->input('in')->into(TierCommitA::class)->keyed()
-            ->sink('mid', static fn (mixed $v): string => (string) $v)
+            ->output('mid', static fn (mixed $v): string => (string) $v)
             ->into(BlockB::class);
     }
 }

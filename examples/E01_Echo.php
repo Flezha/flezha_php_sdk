@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * The smallest relay: one entry channel, one stateless tasklet, one
- * plugin sink. A value leaves through `$ctx->emit()`, so a pass-through is
+ * plugin output. A value leaves through `$ctx->emit()`, so a pass-through is
  * one call.
  *
  *     php examples/E01_Echo.php default
@@ -36,7 +36,7 @@ final class EchoRelay extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->input('input', codec: ChannelCodec::Text)->into(Echoer::class)->sink('out');
+        $c->input('input', codec: ChannelCodec::Text)->into(Echoer::class)->output('out');
     }
 }
 

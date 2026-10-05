@@ -66,11 +66,11 @@ final class DispatchTest extends TestCase
 
         self::assertSame('work', $result['outcome']);
         self::assertSame('ok', $result['effects'][0]['verdict']);
-        // The sink names no codec, so the string is sent as it stands.
+        // The output names no codec, so the string is sent as it stands.
         self::assertSame('hello', $result['effects'][0]['outputs'][0]['payload']);
         self::assertSame('plugin', $result['effects'][0]['outputs'][0]['target']);
         // The CHANNEL's name, which the fixture sets with `named('out')`, not
-        // the sink's — it is what rides the frame as `channel` metadata.
+        // the output's — it is what rides the frame as `channel` metadata.
         self::assertSame('out', $result['effects'][0]['outputs'][0]['plugin_channel']);
     }
 
@@ -332,7 +332,7 @@ final class DispatchTest extends TestCase
     /**
      * A flow tasklet's request is carried the same way, and the core ends the
      * instance once its Cells are idle; a string result rides as it stands, as
-     * a sink sends one.
+     * an output sends one.
      */
     public function testAnFlowTaskletCompletionIsCarriedTheSameWay(): void
     {

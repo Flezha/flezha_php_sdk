@@ -30,7 +30,7 @@ abstract class Relay
     /**
      * The body of the one tasklet a §5 short form is, defined instead of
      * `channels()`: the entry channel its `#[Relay]` names feeds that
-     * tasklet, named the factory id, whose output reaches the `sink` if one
+     * tasklet, named the factory id, whose output reaches the `output` if one
      * is written. A short form may also define the hooks {@see Tasklet}
      * declares (`initState`, `applyChange`, ...), which that tasklet takes,
      * held to the signatures `Tasklet` gives them.
@@ -70,8 +70,8 @@ abstract class Relay
             // the factory id.
             $edge = $builder->input($declaration->input ?? 'input', null, $declaration->codec)
                 ->into(static::class);
-            if ($declaration->sink !== null) {
-                $edge->sink($declaration->sink);
+            if ($declaration->output !== null) {
+                $edge->output($declaration->output);
             }
         } else {
             static::channels($builder);
@@ -145,13 +145,8 @@ abstract class Relay
             ]);
         }
         if ($topology) {
-            $shortFormArguments = [
-                'sink' => $declaration->sink,
-                'input' => $declaration->input,
-                'codec' => $declaration->codec,
-            ];
-            foreach ($shortFormArguments as $argument => $value) {
-                if ($value !== null) {
+            foreach (RelayAttribute::SHORT_FORM_ARGUMENTS as $argument) {
+                if ($declaration->{$argument} !== null) {
                     self::refuseFields('topology.short_form_field_on_full_form', $declaration, ["`$argument`"]);
                 }
             }

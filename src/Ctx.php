@@ -130,7 +130,7 @@ final class Ctx
      * producing, which leaves the runner now rather than when the handler
      * returns. It previews the tasklet's own output channel and is encoded as
      * an emit of the same value there would be. The relay's listeners
-     * receive it before the output; a sink never does, and it is never
+     * receive it before the output; an output never does, and it is never
      * durable or replayed. Parts are numbered from 0 within each attempt, so
      * a retry starts its preview again.
      *
@@ -138,8 +138,8 @@ final class Ctx
      * local run, a stream that would block, a frame over the size limit) is
      * dropped, and a replayed input sends none.
      *
-     * @throws FlezhaException `part.no_sink` when the output channel does not
-     *   end in a sink (it only feeds another tasklet, or ends in `call`),
+     * @throws FlezhaException `part.no_output` when the output channel does not
+     *   end in an output (it only feeds another tasklet, or ends in `call`),
      *   `part.outside_invocation` through a context whose invocation returned
      */
     public function part(mixed $value): void
@@ -206,8 +206,8 @@ final class Ctx
      * End the instance this tasklet runs in with `$result` once the current
      * iteration commits, instead of waiting for its next input; a flow
      * instance ends once every Cell is idle. The rest of the iteration still
-     * runs, and a later call replaces an earlier one. The result travels as a
-     * sink naming no codec sends a value: a string as it stands, anything else
+     * runs, and a later call replaces an earlier one. The result travels as an
+     * output naming no codec sends a value: a string as it stands, anything else
      * as JSON, and `null` as no result.
      */
     public function complete(mixed $result = null): void
@@ -232,7 +232,7 @@ final class Ctx
      * context is registered on replay, because a timer is internal state.
      *
      * `$payload` is an ordinary message on the instance's first entry channel,
-     * sent as a sink naming no codec sends a value (a string as it stands,
+     * sent as an output naming no codec sends a value (a string as it stands,
      * anything else as JSON), so a `Text` or `Json` entry reads it.
      *
      * @throws \InvalidArgumentException for an `$ifRunning` with no `$id`; nothing is sent
@@ -398,7 +398,7 @@ final class Ctx
 
     /**
      * The plugin frame, serialized once from the value as emitted: an edge's
-     * transforms belong to that edge, so they never reach the sink.
+     * transforms belong to that edge, so they never reach the output.
      *
      * @param array<string, string>|null $metadata
      * @return array<string, mixed>
@@ -427,7 +427,7 @@ final class Ctx
 
     /**
      * The inter-tasklet frame's bytes: the class codec, always. The
-     * consuming tasklet decodes with it, so a sink's serializer here would
+     * consuming tasklet decodes with it, so an output's serializer here would
      * hand it bytes it cannot read.
      */
     private function edgePayload(ChannelSpec $channel, mixed $value): string
@@ -435,7 +435,7 @@ final class Ctx
         return Json::guard($channel->name, static fn (): string => Json::encode($value));
     }
 
-    /** The plugin frame's bytes: the sink's encoder, which `sink` always sets. */
+    /** The plugin frame's bytes: the output's encoder, which `output` always sets. */
     private function pluginPayload(ChannelSpec $channel, mixed $value): string
     {
         return ($channel->sinkEncode)($value);
