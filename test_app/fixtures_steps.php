@@ -303,6 +303,59 @@ final class SyncDurableSteps extends CommitBlockChain
 {
 }
 
+// -- effect_block_steps ------------------------------------------------------
+//
+// The one tasklet calls an outside function through `ctx->effect`, then parks
+// until released. The input names a file the function appends one line to per
+// run, so a SIGKILL after the effect and a resume on a released runner shows
+// whether the function ran again.
+
+#[Task(name: 'effect_block')]
+final class EffectBlock extends Tasklet
+{
+    public static function countRun(string $path): string
+    {
+        file_put_contents($path, "ran\n", FILE_APPEND);
+
+        return 'answer';
+    }
+
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->effect('model', static fn (): string => self::countRun($input));
+        StepsGate::blockUntilReleased();
+    }
+}
+
+#[Relay(factoryId: 'effect_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
+final class EffectBlockSteps extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)->into(EffectBlock::class);
+    }
+}
+
+// `effect_flow`: the same call in a flow relay at the default tier, which
+// keeps no input log, so nothing re-runs an input and nothing is kept.
+#[Task(name: 'effect_once')]
+final class EffectOnce extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->effect('model', static fn (): string => EffectBlock::countRun($input));
+    }
+}
+
+#[Relay(factoryId: 'effect_flow')]
+final class EffectFlow extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in', codec: ChannelCodec::Text)->into(EffectOnce::class);
+    }
+}
+
 // -- optout_commit_block -----------------------------------------------------
 //
 // The opt-out twin with a live mid-chain signal: task A's output also reaches a
@@ -909,6 +962,8 @@ final class StepsFixtures
             TypedOnceSteps::class,
             CommitBlockSteps::class,
             SyncDurableSteps::class,
+            EffectBlockSteps::class,
+            EffectFlow::class,
             OptoutCommitBlock::class,
             TierCommitBlockSteps::class,
             SagaBlockSteps::class,

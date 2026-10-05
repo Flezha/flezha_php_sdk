@@ -108,6 +108,22 @@ final class ScriptedSpawns implements SpawnBridge
     {
         throw new \LogicException('a spawn test sent a part');
     }
+
+    /** A spawn test keeps no effect. */
+    public function effectBegin(int $token, int $item, string $name): array
+    {
+        throw new \LogicException('a spawn test began an effect');
+    }
+
+    public function effectEnd(int $token, int $item, string $payload): ?string
+    {
+        throw new \LogicException('a spawn test ended an effect');
+    }
+
+    public function effectRelease(int $token, int $item): void
+    {
+        throw new \LogicException('a spawn test released an effect');
+    }
 }
 
 /**

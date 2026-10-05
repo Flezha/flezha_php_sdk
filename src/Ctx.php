@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Codec\Json;
+use Flezha\Codec\ValueCodec;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\CallEnd;
 use Flezha\Graph\ChannelSpec;
@@ -263,11 +264,61 @@ final class Ctx
     }
 
     /**
+     * Run `$fn`, a call to anything outside the instance (a model, a tool, a
+     * service), and keep its result: when this invocation runs again (a crash
+     * re-run, a replay, a wake, a move), the call returns the kept result and
+     * `$fn` does not run.
+     *
+     * The result is kept, synced on the controller, before this returns. A
+     * crash between `$fn` finishing and that point runs `$fn` again, so give
+     * the outside service {@see stableId()} as an idempotency key where it
+     * takes one. `$name` names the call: a non-empty string of at most 255
+     * bytes, counted per invocation, so a call of another name added before
+     * this one leaves its kept result where it was. One call runs at a time;
+     * a concurrent one is refused.
+     *
+     * The result is encoded as an output naming no codec encodes a value (a
+     * string as it stands, anything else as JSON) and read back as JSON, else
+     * text, else bytes; `$codec` encodes and decodes it instead. The call
+     * returns the result as it reads back, on a first run and a re-run alike.
+     *
+     * An invocation that took no input-log offset (local mode, a relay with
+     * no input log) runs `$fn` each time and keeps nothing. `$fn`'s own error
+     * propagates and nothing is kept.
+     *
+     * @param callable(): mixed $fn
+     * @throws FlezhaException `effect.bad_name`, `effect.nested`,
+     *   `effect.outside_invocation`, `effect.too_large` and
+     *   `effect.not_recorded` (the only one retried)
+     */
+    public function effect(string $name, callable $fn, ?ValueCodec $codec = null): mixed
+    {
+        $item = $this->item ?? 0;
+        [$status, $kept] = self::effectRefusals(fn (): array => $this->bridge->effectBegin($this->token, $item, $name));
+        if ($status === 'kept') {
+            return self::effectDecode((string) $kept, $codec);
+        }
+
+        try {
+            $value = $fn();
+            $encoded = $codec !== null ? $codec->encode($value) : ChannelCodec::plain($value, "effect '{$name}'");
+            $first = $status === 'run'
+                ? self::effectRefusals(fn (): ?string => $this->bridge->effectEnd($this->token, $item, $encoded))
+                : null;
+
+            return self::effectDecode($first ?? $encoded, $codec);
+        } finally {
+            // A no-op once the end has kept the result.
+            $this->bridge->effectRelease($this->token, $item);
+        }
+    }
+
+    /**
      * The effect record for this item, as the core folds it.
      *
      * @return array<string, mixed>
      */
-    public function effect(?int $consumedOffset): array
+    public function effectRecord(?int $consumedOffset): array
     {
         return [
             'verdict' => 'ok',
@@ -279,6 +330,39 @@ final class Ctx
             'checkpoint' => $this->checkpointed,
             'complete' => $this->completion,
         ];
+    }
+
+    /**
+     * An `effect.*` refusal is non-retryable, but for `effect.not_recorded`: a
+     * call that could not be kept is the one worth running again.
+     *
+     * @template T
+     * @param callable(): T $call
+     * @return T
+     */
+    private static function effectRefusals(callable $call): mixed
+    {
+        try {
+            return $call();
+        } catch (FlezhaException $e) {
+            if (str_starts_with($e->getCode(), 'effect.') && $e->getCode() !== 'effect.not_recorded') {
+                $e->markNonRetryable();
+            }
+            throw $e;
+        }
+    }
+
+    /** A kept result as it reads back: through `$codec`, or JSON, else text, else bytes. */
+    private static function effectDecode(string $body, ?ValueCodec $codec): mixed
+    {
+        if ($codec !== null) {
+            return $codec->decode($body);
+        }
+        try {
+            return json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $body;
+        }
     }
 
     /** A rollback is no place to arm a deadline. */

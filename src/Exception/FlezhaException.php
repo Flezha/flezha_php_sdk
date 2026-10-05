@@ -33,6 +33,8 @@ final class FlezhaException extends RuntimeException
 
     public readonly ?string $hint;
 
+    private bool $nonRetryable = false;
+
     /** @param array<string, mixed> $details */
     public function __construct(string $code, array $details = [], ?Throwable $previous = null)
     {
@@ -62,6 +64,20 @@ final class FlezhaException extends RuntimeException
         $self->fill($error);
 
         return $self;
+    }
+
+    /** Whether the retry ladder parks the item at once rather than retrying it. */
+    public function isNonRetryable(): bool
+    {
+        return $this->nonRetryable;
+    }
+
+    /** Mark this refusal as one no retry can change. */
+    public function markNonRetryable(): self
+    {
+        $this->nonRetryable = true;
+
+        return $this;
     }
 
     /** @return array<string, mixed> */

@@ -6,7 +6,8 @@ namespace Flezha;
 
 /**
  * The effects a `Ctx` cannot compute: asking the controller to spawn or
- * deliver to a steps instance, and sending a part.
+ * deliver to a steps instance, sending a part, and keeping an outside call's
+ * result.
  *
  * An interface rather than the core itself, so the invocation context depends
  * on what it needs rather than on the FFI layer — which is also what lets the
@@ -44,4 +45,24 @@ interface SpawnBridge
      * throws its {@see Exception\FlezhaException}.
      */
     public function part(int $token, int $item, string $payload): void;
+
+    /**
+     * Begin `Ctx::effect($name)` in the activation `$token`'s work item
+     * `$item`, and return at once: `['kept', $result]`, whose function does
+     * not run, or `['run', null]` or `['unrecorded', null]`, whose function
+     * runs. A refusal throws its {@see Exception\FlezhaException}.
+     *
+     * @return array{0: 'kept'|'run'|'unrecorded', 1: string|null}
+     */
+    public function effectBegin(int $token, int $item, string $name): array;
+
+    /**
+     * Keep the encoded result of the function a `run` begin ran, waiting for
+     * the controller: null to return the call's own result, else the result
+     * kept first. A refusal throws its {@see Exception\FlezhaException}.
+     */
+    public function effectEnd(int $token, int $item, string $payload): ?string;
+
+    /** End a begun effect without keeping anything; a no-op when none is begun. */
+    public function effectRelease(int $token, int $item): void;
 }

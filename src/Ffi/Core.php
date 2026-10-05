@@ -325,6 +325,54 @@ final class Core implements SpawnBridge
         $this->check($this->ffi->flz_core_part($this->live(), $token, $item, $payload, strlen($payload)));
     }
 
+    public function effectBegin(int $token, int $item, string $name): array
+    {
+        $kept = null;
+        $status = $this->outBuffer(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_effect_begin(
+                $this->live(),
+                $token,
+                $item,
+                $name,
+                FFI::addr($out),
+                FFI::addr($len),
+            ),
+            $kept,
+        );
+        $this->check($status);
+
+        return [match ($status) {
+            Binding::EFFECT_KEPT => 'kept',
+            Binding::EFFECT_UNRECORDED => 'unrecorded',
+            default => 'run',
+        }, $kept];
+    }
+
+    public function effectEnd(int $token, int $item, string $payload): ?string
+    {
+        $first = null;
+        // The function's own result keeps no buffer, which leaves `$first` null.
+        $this->check($this->outBuffer(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_effect_end(
+                $this->live(),
+                $token,
+                $item,
+                $payload,
+                strlen($payload),
+                FFI::addr($out),
+                FFI::addr($len),
+            ),
+            $first,
+        ));
+
+        return $first;
+    }
+
+    public function effectRelease(int $token, int $item): void
+    {
+        $this->check($this->ffi->flz_core_effect_release($this->live(), $token, $item));
+    }
+
     /**
      * The handle's answer as JSON, or null while it is pending. A spawn that
      * reached no instance throws its {@see FlezhaException}: the controller's

@@ -170,7 +170,8 @@
       "timer_loop_steps",
       "event_timer_steps",
       "static_cell_steps"
-    ]
+    ],
+    "recorded_effects": ["effect_block_steps", "effect_flow"]
   },
   "docs": "docs/sdk/php_sdk.md"
 }

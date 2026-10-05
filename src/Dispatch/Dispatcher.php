@@ -225,7 +225,7 @@ final class Dispatcher
                 $index,
             );
 
-            return $ctx->effect($item['consumed_offset'] ?? null);
+            return $ctx->effectRecord($item['consumed_offset'] ?? null);
         } catch (Throwable $e) {
             // The backtrace is a host diagnostic, not a record: the verdict
             // below travels to the dead-letter entry and the controller's log.
@@ -423,7 +423,7 @@ final class Dispatcher
         return [
             'token' => $activation['token'],
             'outcome' => 'work',
-            'effects' => [$ctx->effect(null)],
+            'effects' => [$ctx->effectRecord(null)],
         ];
     }
 

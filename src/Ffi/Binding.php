@@ -93,6 +93,9 @@ final class Binding
         int32_t flz_core_spawn_request(uintptr_t ctx, uint64_t token, const char *factory_id, const char *id, const char *payload, size_t payload_len, const char *if_running, int32_t replay, int64_t offset, uint64_t *handle_out);
         int32_t flz_core_spawn_result(uintptr_t ctx, uint64_t handle, uint64_t timeout_ms, char **out, size_t *out_len);
         int32_t flz_core_part(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len);
+        int32_t flz_core_effect_begin(uintptr_t ctx, uint64_t token, uint32_t item, const char *name, char **out, size_t *out_len);
+        int32_t flz_core_effect_end(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len, char **out, size_t *out_len);
+        int32_t flz_core_effect_release(uintptr_t ctx, uint64_t token, uint32_t item);
         int32_t flz_core_admin_call(uintptr_t ctx, const char *verb, const char *args, char **result_out, size_t *result_len_out);
         int32_t flz_core_send_message(uintptr_t ctx, const char *relay_id, const char *channel, const char *message, size_t len, const char *msg_id, const char *key, int32_t local, char **result_out, size_t *result_len_out);
         int32_t flz_core_relays(uintptr_t ctx, char **buf_out, size_t *len_out);
@@ -114,6 +117,10 @@ final class Binding
     public const ERR = -1;
     /** Success for non-poll calls. */
     public const OK = 0;
+    /** An effect begin found its result kept, or an end found an earlier one; the out buffer holds it. */
+    public const EFFECT_KEPT = 1;
+    /** An effect begin in an invocation nothing re-runs: run the function and keep nothing. */
+    public const EFFECT_UNRECORDED = 2;
 
     private static ?FFI $handle = null;
 

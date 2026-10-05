@@ -189,6 +189,21 @@ final class PartTest extends TestCase
                     throw $this->refusal;
                 }
             }
+
+            public function effectBegin(int $token, int $item, string $name): array
+            {
+                throw new \LogicException('a part test began an effect');
+            }
+
+            public function effectEnd(int $token, int $item, string $payload): ?string
+            {
+                throw new \LogicException('a part test ended an effect');
+            }
+
+            public function effectRelease(int $token, int $item): void
+            {
+                throw new \LogicException('a part test released an effect');
+            }
         };
     }
 

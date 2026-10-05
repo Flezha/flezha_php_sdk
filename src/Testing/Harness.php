@@ -29,11 +29,19 @@ use Flezha\Timer;
  * {@see assertReplayEquals()} folds through {@see Restore::fold()}, the
  * function a real restore calls. So what it proves is what the runner does,
  * rather than something that agrees with it.
+ *
+ * A `Ctx::effect` keeps its result on a live {@see feed()}; the n-th
+ * `feed(..., replay: true)` replays the n-th live input and is served what it
+ * kept, and throws {@see EffectReplayMismatch} when a function runs there or
+ * a kept result is never asked for.
  */
 final class Harness implements SpawnBridge
 {
     /** The lowercase base32 a generated id's suffix is spelled in. */
     private const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
+
+    /** The longest effect name, in bytes, as the core refuses it. */
+    private const MAX_EFFECT_NAME = 255;
 
     private readonly Definition $definition;
     private readonly TaskNode $node;
@@ -48,6 +56,22 @@ final class Harness implements SpawnBridge
     private array $spawns = [];
 
     private int $spawnCount = 0;
+
+    /** @var list<array<string, list<string>>> each live input's effect results, by name in call order */
+    private array $keptEffects = [];
+
+    private int $replays = 0;
+
+    /** @var array<string, list<string>> this input's effect results */
+    private array $effects = [];
+
+    private bool $replaying = false;
+
+    /** @var array<string, int> this invocation's count of each effect name */
+    private array $ordinals = [];
+
+    /** @var array{string, int}|null the effect whose function is running */
+    private ?array $running = null;
 
     /** @param class-string<Tasklet>|class-string<Relay> $taskletClass */
     public function __construct(
@@ -88,14 +112,31 @@ final class Harness implements SpawnBridge
         return $this->registered->stateOf($this->node, $this->relay, $this->cellKey);
     }
 
-    /** Run the tasklet against one input. */
+    /** Run the tasklet against one input; `$replay` replays the next live input, in order. */
     public function feed(mixed $input, int $now = 0, bool $replay = false): Outcome
     {
-        return $this->drive(
+        if ($replay) {
+            $this->effects = $this->keptEffects[$this->replays++] ?? [];
+        } else {
+            $this->effects = [];
+            $this->keptEffects[] = [];
+        }
+        $this->replaying = $replay;
+        $this->ordinals = [];
+        $this->running = null;
+
+        $outcome = $this->drive(
             $now,
             $replay,
             fn (Ctx $ctx) => $this->definition->instance->run($input, $ctx),
         );
+        foreach ($replay ? $this->effects : [] as $name => $results) {
+            if (count($results) > ($this->ordinals[$name] ?? 0)) {
+                throw new EffectReplayMismatch($this->definition->name, (string) $name, 'was never asked for');
+            }
+        }
+
+        return $outcome;
     }
 
     /** Fire a per-cell timer. `now` IS the scheduled time, as it is live. */
@@ -212,6 +253,48 @@ final class Harness implements SpawnBridge
     /** A harness has no controller and no listener, so the part, already encoded, goes nowhere. */
     public function part(int $token, int $item, string $payload): void
     {
+    }
+
+    /**
+     * The core's answer to a begun `Ctx::effect`, over this input's results:
+     * the kept one, or run the function (on a live input only).
+     */
+    public function effectBegin(int $token, int $item, string $name): array
+    {
+        if ($name === '' || strlen($name) > self::MAX_EFFECT_NAME) {
+            throw new FlezhaException('effect.bad_name', ['name' => Json::encode($name)]);
+        }
+        if ($this->running !== null) {
+            throw new FlezhaException('effect.nested', ['name' => $name]);
+        }
+
+        $ordinal = $this->ordinals[$name] ?? 0;
+        $this->ordinals[$name] = $ordinal + 1;
+        if (isset($this->effects[$name][$ordinal])) {
+            return ['kept', $this->effects[$name][$ordinal]];
+        }
+        if ($this->replaying) {
+            throw new EffectReplayMismatch($this->definition->name, $name, 'ran its function');
+        }
+        $this->running = [$name, $ordinal];
+
+        return ['run', null];
+    }
+
+    /** Keep a live input's result, as the controller does. */
+    public function effectEnd(int $token, int $item, string $payload): ?string
+    {
+        [$name, $ordinal] = $this->running ?? throw new \LogicException('an end follows a begin that runs');
+        $this->effects[$name][$ordinal] = $payload;
+        $this->keptEffects[array_key_last($this->keptEffects)] = $this->effects;
+        $this->running = null;
+
+        return null;
+    }
+
+    public function effectRelease(int $token, int $item): void
+    {
+        $this->running = null;
     }
 
     /**
