@@ -34,6 +34,10 @@ final class Task
      * @param bool                 $logicalClock  serve the cell's change sequence as `now()`
      * @param class-string|null    $stateType   the class a cell's State is
      * @param class-string|null    $changeType  the class a recorded Change is
+     * @param class-string|null    $inputType   the class whose typed constructor-promoted
+     *                                          properties give the JSON Schema of the entry
+     *                                          channel feeding this tasklet, in the relay's API
+     * @param class-string|null    $outputType  the same for the output this tasklet answers on
      */
     public function __construct(
         public readonly ?string $name = null,
@@ -46,6 +50,8 @@ final class Task
         public readonly ?int $minReadableSchemaVersion = null,
         public readonly ?string $stateType = null,
         public readonly ?string $changeType = null,
+        public readonly ?string $inputType = null,
+        public readonly ?string $outputType = null,
     ) {
     }
 }

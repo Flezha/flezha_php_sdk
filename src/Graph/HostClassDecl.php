@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
+use Flezha\Codec\Json;
+
 /**
  * The declaration the core deserializes. The settings tree goes as the author
  * wrote it: the core judges it and refuses a misplaced setting by name.
@@ -53,7 +55,10 @@ final class HostClassDecl
             'sdk_version' => self::SDK_VERSION,
             'change_format_id' => self::FORMAT_ID_JSON,
             'compact_after_bytes' => $spec->compactAfterBytes,
-            'channels' => array_map(self::channel(...), $spec->channels),
+            'channels' => array_map(
+                static fn (ChannelSpec $channel): array => self::channel($spec, $channel),
+                $spec->channels,
+            ),
             'tasklets' => array_map(
                 static fn (TaskNode $node): array => self::tasklet($node, isset($keyed[$node->index])),
                 $spec->tasklets,
@@ -68,7 +73,7 @@ final class HostClassDecl
      *
      * @return array<string, mixed>
      */
-    private static function channel(ChannelSpec $channel): array
+    private static function channel(ClassSpec $spec, ChannelSpec $channel): array
     {
         return self::compact([
             'name' => $channel->name,
@@ -79,7 +84,35 @@ final class HostClassDecl
             'retry_backoff_ms' => $channel->retryBackoffMs,
             'overflow' => $channel->overflow->value,
             'keyed' => $channel->keyed,
+            'codec' => $channel->codec,
+            'schema' => $channel->schema
+                ?? ($channel->codec === 'json' ? Json::schemaOf(self::valueType($spec, $channel)) : null),
+            'description' => $channel->description === '' ? null : $channel->description,
         ]);
+    }
+
+    /**
+     * The class a channel's API values have, where the declaration names it:
+     * an entry's is the `inputType` of the tasklet a chain wires it into with
+     * no transform, an output's the `outputType` of the tasklet producing it.
+     */
+    private static function valueType(ClassSpec $spec, ChannelSpec $channel): ?string
+    {
+        if ($channel->kind === 'entry') {
+            foreach ($channel->chains as $links) {
+                $links = array_values(array_filter($links, static fn (array $link): bool => $link['link'] !== 'key'));
+                if ($links !== [] && $links[0]['link'] === 'into') {
+                    return $spec->tasklets[$links[0]['tasklet']]->definition->decl->inputType;
+                }
+            }
+
+            return null;
+        }
+        if ($channel->sink !== null && $channel->call === null && $channel->producer !== null) {
+            return $spec->tasklets[$channel->producer]->definition->decl->outputType;
+        }
+
+        return null;
     }
 
     /**

@@ -37,7 +37,8 @@
     "steps",
     "shorthand",
     "call",
-    "untyped_tree"
+    "untyped_tree",
+    "schema"
   ],
   "deferred": ["local_send"],
   "fixtures": {
@@ -171,7 +172,8 @@
       "event_timer_steps",
       "static_cell_steps"
     ],
-    "recorded_effects": ["effect_block_steps", "effect_flow"]
+    "recorded_effects": ["effect_block_steps", "effect_flow"],
+    "relay_api": ["orders"]
   },
   "docs": "docs/sdk/php_sdk.md"
 }

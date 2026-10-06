@@ -272,11 +272,62 @@ final class CallToolSession extends \Flezha\Relay
     }
 }
 
+final class OrderPlaced
+{
+    public function __construct(public string $pair, public float $amount, public string $status)
+    {
+    }
+}
+
+final class OrderToPlace
+{
+    public function __construct(public string $pair, public float $amount)
+    {
+    }
+}
+
+#[Task(name: 'orders_place', inputType: OrderToPlace::class, outputType: OrderPlaced::class)]
+final class OrdersPlace extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $ctx->emit(['pair' => $input['pair'], 'amount' => $input['amount'], 'status' => 'placed']);
+    }
+}
+
+#[Task(name: 'orders_audit')]
+final class OrdersAudit extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+    }
+}
+
+/**
+ * The `relay_api` fixture: `place` reads a JSON order, is described, and
+ * answers through `placed`; `audit` reads text and answers nothing.
+ */
+#[Relay(factoryId: 'orders')]
+final class Orders extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('place', description: 'Places an order')->into(OrdersPlace::class)->output('placed');
+        $c->input('audit', codec: ChannelCodec::Text)->into(OrdersAudit::class);
+    }
+}
+
 final class CallFixtures
 {
     /** @return list<class-string<\Flezha\Relay>> */
     public static function all(): array
     {
         return [CallPricing::class, CallOrders::class, CallAgent::class, CallGateway::class, CallToolSession::class];
+    }
+
+    /** @return list<class-string<\Flezha\Relay>> the `relay_api` fixtures */
+    public static function api(): array
+    {
+        return [Orders::class];
     }
 }

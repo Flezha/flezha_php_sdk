@@ -59,13 +59,26 @@ final class Builder
      * into the value a handler sees, `$codec` names a format instead, and with
      * neither the bytes are JSON.
      *
+     * `$description` says what the channel is for, in the relay's API. A JSON
+     * channel's schema is derived from the `inputType` the tasklet it feeds
+     * declares in its `#[Task]`; `$schema` declares one instead.
+     *
      * @param (callable(string):mixed)|null $decode
+     * @param mixed $schema a JSON Schema, as the array `json_encode` writes as an object
      */
-    public function input(string $name, ?callable $decode = null, ?ChannelCodec $codec = null): Edge
-    {
+    public function input(
+        string $name,
+        ?callable $decode = null,
+        ?ChannelCodec $codec = null,
+        string $description = '',
+        mixed $schema = null,
+    ): Edge {
         $channel = new ChannelSpec(index: count($this->channels), name: $name, kind: 'entry');
         $this->refuseCodecBesideCallable($channel, $codec, $decode);
         $channel->decode = $decode ?? ($codec ?? ChannelCodec::Json)->decoder($channel);
+        $channel->codec = $decode !== null ? 'custom' : ($codec ?? ChannelCodec::Json)->value;
+        $channel->description = $description;
+        $channel->schema = $schema;
         $this->channels[] = $channel;
 
         return new Edge($this, ['entry', $channel], []);

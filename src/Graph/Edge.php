@@ -285,6 +285,7 @@ final class Edge
         if ($channel->sink === null) {
             $channel->sink = $channel->name;
             $channel->sinkEncode = $encode ?? $codec?->encoder($channel) ?? ChannelCodec::defaultEncoder($channel);
+            $channel->codec = $encode !== null ? 'custom' : ($codec ?? ChannelCodec::Json)->value;
         }
 
         return $this;

@@ -185,6 +185,43 @@ final class Runner
     }
 
     /**
+     * Call the entry channel `$channel` of `$relayId` with `$value`, through
+     * the controller under the same role check as {@see send()}, answering what
+     * the relay answers through its outputs. `$value` is encoded as an output
+     * naming no codec encodes it: a string as it is, anything else as JSON. A
+     * JSON answer comes back decoded as arrays, a text or binary one as a
+     * string; a channel that does not answer gives `['accepted' => true]`.
+     *
+     * @throws FlezhaException the controller's code when it refuses the call
+     */
+    public function call(string $relayId, string $channel, mixed $value): mixed
+    {
+        $payload = base64_encode(ChannelCodec::plain($value, "call of '{$channel}'"));
+
+        return self::answerOf(
+            $this->control()->call('Relay.call_channel', $relayId, $channel, $payload, ['payload' => 'base64']),
+        );
+    }
+
+    /**
+     * A call's answer by its format: JSON and text as they decoded, a binary
+     * format's base64 as its bytes, and a channel that does not answer as the
+     * reply itself.
+     *
+     * @param array<string, mixed> $reply
+     */
+    private static function answerOf(array $reply): mixed
+    {
+        if (!isset($reply['answer_codec'])) {
+            return $reply;
+        }
+
+        return in_array($reply['answer_codec'], ['json', 'text'], true)
+            ? $reply['answer']
+            : base64_decode($reply['answer'], true);
+    }
+
+    /**
      * The ids of the relay instances bound on this runner now, read without
      * the controller.
      *

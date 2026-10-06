@@ -164,4 +164,72 @@ final class Json
             throw self::unrepresentable($typeName, '<root>', $e->getMessage());
         }
     }
+
+    /**
+     * The JSON Schema a class's typed constructor-promoted properties give, for
+     * a relay's API; null for a class with none, so derivation never refuses a
+     * class. A property with a default or a nullable type is not required, and
+     * one whose type is not a scalar, a backed enum or such a class accepts any
+     * value.
+     *
+     * @param class-string|null $class
+     * @return array<string, mixed>|null
+     */
+    public static function schemaOf(?string $class): ?array
+    {
+        if ($class === null || !class_exists($class)) {
+            return null;
+        }
+        $schema = self::objectSchema($class, []);
+
+        return is_array($schema) && $schema['properties'] instanceof \stdClass ? null : $schema;
+    }
+
+    /**
+     * @param class-string $class
+     * @param array<string, true> $open the classes being read, so one that contains itself stops
+     * @return array<string, mixed>|\stdClass
+     */
+    private static function objectSchema(string $class, array $open): array|\stdClass
+    {
+        if (isset($open[$class])) {
+            return new \stdClass();
+        }
+        $open[$class] = true;
+        $properties = [];
+        $required = [];
+        foreach ((new \ReflectionClass($class))->getConstructor()?->getParameters() ?? [] as $parameter) {
+            if (!$parameter->isPromoted()) {
+                continue;
+            }
+            $properties[$parameter->getName()] = self::typeSchema($parameter->getType(), $open);
+            if (!$parameter->isOptional() && !$parameter->allowsNull()) {
+                $required[] = $parameter->getName();
+            }
+        }
+        $schema = ['type' => 'object', 'properties' => $properties === [] ? new \stdClass() : $properties];
+
+        return $required === [] ? $schema : $schema + ['required' => $required];
+    }
+
+    /**
+     * @param array<string, true> $open
+     * @return array<string, mixed>|\stdClass
+     */
+    private static function typeSchema(?\ReflectionType $type, array $open): array|\stdClass
+    {
+        $name = $type instanceof \ReflectionNamedType ? $type->getName() : 'mixed';
+
+        return match (true) {
+            $name === 'string' => ['type' => 'string'],
+            $name === 'int' => ['type' => 'integer'],
+            $name === 'float' => ['type' => 'number'],
+            $name === 'bool' => ['type' => 'boolean'],
+            is_subclass_of($name, \BackedEnum::class) => [
+                'enum' => array_map(static fn (\BackedEnum $case): int|string => $case->value, $name::cases()),
+            ],
+            class_exists($name) => self::objectSchema($name, $open),
+            default => new \stdClass(),
+        };
+    }
 }

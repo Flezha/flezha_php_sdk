@@ -273,7 +273,7 @@ final class FullFlow extends \Flezha\Relay
     {
         $c->compactAfterBytes(4_096);
 
-        $edge = $c->input('input')->into(FullEntry::class);
+        $edge = $c->input('input', description: 'every key', schema: ['type' => 'object'])->into(FullEntry::class);
         $edge->named('hop')->keyBy(static fn (mixed $v): string => (string) $v)
             ->retryMax(5)->retryBackoffMs(50)->into(FullDownstream::class);
         $edge->named('fan')->into(FullFanned::class);

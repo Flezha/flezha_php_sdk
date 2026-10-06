@@ -71,6 +71,9 @@ final class ChannelSpec
         public $sinkEncode = null,
         /** The channel's call end, when a chain closes on one. */
         public ?CallEnd $call = null,
+        public ?string $codec = null,
+        public mixed $schema = null,
+        public string $description = '',
     ) {
     }
 }

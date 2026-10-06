@@ -163,6 +163,9 @@ final class RowInterpreter
     /** @var array<string, int> */
     private readonly array $mailbox;
 
+    /** @var array<string, mixed> */
+    private readonly array $schemas;
+
     /** The row the conformance classes declare. */
     public static ?self $row = null;
 
@@ -174,6 +177,7 @@ final class RowInterpreter
         ));
         $this->settings = $this->classSettings();
         $this->mailbox = $this->mailboxCapacities();
+        $this->schemas = $this->entrySchemas();
     }
 
     public static function loaded(): self
@@ -203,7 +207,7 @@ final class RowInterpreter
     {
         [$verb, $arg] = self::splitCall($step);
         match ($verb) {
-            'entry' => $this->handles[$arg] = $c->input($arg),
+            'entry' => $this->handles[$arg] = $c->input($arg, schema: $this->schemas[$arg] ?? null),
             'branch' => $this->branch($arg),
             'merge' => $this->merge($c, $arg),
             default => $this->dotted($c, $step),
@@ -245,9 +249,9 @@ final class RowInterpreter
             'on_full' => $edge->onFull(Overflow::from($arg)),
             'output' => $arg === '' ? $edge->output() : $edge->output($arg),
             'into' => $this->wire($edge, $arg),
-            // Declared on the tasklet in this SDK, and read as the palette
-            // class was bound — one step earlier than the step that names it.
-            'mailbox' => $edge,
+            // Declared on the tasklet or the entry in this SDK, and read as
+            // that was built, one step earlier than the step that names it.
+            'mailbox', 'schema' => $edge,
             default => throw new \RuntimeException(
                 "the fixture spells a link this interpreter does not map: $verb"
             ),
@@ -371,6 +375,25 @@ final class RowInterpreter
 
         return $capacities;
     }
+
+    /**
+     * The schemas a row declares on its entries, read BEFORE the steps run:
+     * `input` takes its schema as it declares the channel.
+     *
+     * @return array<string, mixed>
+     */
+    private function entrySchemas(): array
+    {
+        $schemas = [];
+        foreach ($this->steps as $step) {
+            $parts = explode('.', $step, 2);
+            if (count($parts) === 2 && str_starts_with($parts[1], 'schema(')) {
+                $schemas[$parts[0]] = json_decode(self::splitCall($parts[1])[1], true, 512, JSON_THROW_ON_ERROR);
+            }
+        }
+
+        return $schemas;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -463,6 +486,7 @@ final class Conformance
         'shorthand',
         'call',
         'untyped_tree',
+        'schema',
     ];
 
     /**

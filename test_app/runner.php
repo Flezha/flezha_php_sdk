@@ -51,6 +51,48 @@ if ($report !== false && $report !== '') {
 
 $namespace = $argv[1] ?? 'default';
 
+/**
+ * The call half of the local-send drill (`FLEZHA_LOCAL_SEND_SCRIPT`, entries
+ * with `"call": true`; this SDK defers the local sends). The synchronous loop
+ * runs nothing beside itself, so the calls are made by a forked process with
+ * a runner of its own in the same namespace, which declares no factory and
+ * claims no runner id of the app's. Each prints `call <relay> ok <answer JSON>`
+ * or `call <relay> err <code>` once the file its `when` names exists.
+ */
+function callDrill(string $namespace, string $script): void
+{
+    $calls = array_filter(
+        json_decode($script, true, 512, JSON_THROW_ON_ERROR),
+        static fn (array $entry): bool => ($entry['call'] ?? false) === true,
+    );
+    // Cleared before any worker thread re-enters this file, so only one drill runs.
+    putenv('FLEZHA_LOCAL_SEND_SCRIPT');
+    if ($calls === [] || pcntl_fork() !== 0) {
+        return;
+    }
+    putenv('FLEZHA_RUNNER_ID_PATH');
+    $runner = null;
+    foreach ($calls as $call) {
+        for ($waited = 0; !file_exists($call['when']) && $waited < 2400; $waited++) {
+            usleep(50_000);
+        }
+        // Connected only now, so the app's own runner is the one its test waited for.
+        $runner ??= Flezha::createRunner($namespace)->start();
+        try {
+            $answer = $runner->call($call['relay'], $call['channel'], $call['value']);
+            echo "call {$call['relay']} ok " . json_encode($answer, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . "\n";
+        } catch (FlezhaException $refusal) {
+            echo "call {$call['relay']} err {$refusal->getCode()}\n";
+        }
+    }
+    exit(0);
+}
+
+$drill = getenv('FLEZHA_LOCAL_SEND_SCRIPT');
+if ($drill !== false && $drill !== '') {
+    callDrill($namespace, $drill);
+}
+
 $runner = Flezha::createRunner($namespace)
     ->logger(new Logger((string) (getenv('FLEZHA_LOG_LEVEL') ?: 'info')));
 
@@ -70,7 +112,7 @@ try {
         foreach (PartFixtures::all() as $relay) {
             $runner->registerFactory($relay);
         }
-        foreach (CallFixtures::all() as $relay) {
+        foreach ([...CallFixtures::all(), ...CallFixtures::api()] as $relay) {
             $runner->registerFactory($relay);
         }
     }
