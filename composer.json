@@ -23,7 +23,9 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Flezha\\Tests\\": "tests/"
+            "Flezha\\Tests\\": "tests/",
+            "Flezha\\Examples\\Starter\\": "examples/starter/src/",
+            "Flezha\\Examples\\Starter\\Tests\\": "examples/starter/tests/"
         },
         "files": [
             "tests/Fixture.php"

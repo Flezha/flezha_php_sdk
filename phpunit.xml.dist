@@ -9,6 +9,7 @@
     <testsuites>
         <testsuite name="flezha">
             <directory>tests</directory>
+            <directory>examples/starter/tests</directory>
         </testsuite>
     </testsuites>
     <source>
