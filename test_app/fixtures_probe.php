@@ -60,6 +60,8 @@ final class PoisonProbeRelay extends \Flezha\Relay
  *     worker outright — the dispatcher catches per item and the throw rides
  *     the retry ladder — so what the scenario asserts is that the cell is
  *     served again and the aborting item does not produce twice.
+ *   "slow" — emits two seconds late, so the relay can be stopped or moved
+ *     while the activation still runs.
  */
 #[Task(name: 'wedge_probe_tasklet')]
 final class WedgeProbe extends Tasklet
@@ -77,6 +79,9 @@ final class WedgeProbe extends Tasklet
             self::$aborted = true;
 
             throw new \RuntimeException('wedge_probe: killing the worker holding this activation');
+        }
+        if ($input === 'slow') {
+            sleep(2);
         }
 
         $ctx->emit("ok:$input");
