@@ -127,10 +127,14 @@ final class Control
         return $this->call('PluginManager.list');
     }
 
-    /** One cell's live state, and the change sequence it was read at. */
-    public function cellState(string $relayId, string $cellKey): mixed
+    /**
+     * A relay's live state, and the change sequence it was read at. `$cell` is
+     * `<tasklet>[/<cell_key>]`: a tasklet's Cells, or one of them; null reads
+     * every Cell of the relay.
+     */
+    public function cellState(string $relayId, ?string $cell = null): mixed
     {
-        return $this->call('Relay.cell_state', $relayId, $cellKey);
+        return $this->call('Relay.cell_state', $relayId, $cell);
     }
 
     /**
