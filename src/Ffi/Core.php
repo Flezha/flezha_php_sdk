@@ -29,7 +29,7 @@ final class Core implements SpawnBridge
      * Moves in the same commit as `flz_core/src/schema.rs`; the fixture suite
      * is what makes forgetting it a red build.
      */
-    public const SCHEMA_VERSION = 3;
+    public const SCHEMA_VERSION = 4;
 
     /**
      * The context's address, or null once it has been released.

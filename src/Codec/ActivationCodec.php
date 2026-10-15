@@ -35,6 +35,7 @@ final class ActivationCodec
         'migration_serialize',
         'key_request',
         'compensate_run',
+        'leave',
     ];
 
     /** `ActivationOutcome` variants, in declaration order. */
@@ -168,6 +169,7 @@ final class ActivationCodec
             'compensate_run' => [
                 'outputs' => $c->seq('compensate outputs', fn (PostcardCursor $p): string => $p->bytes('output')),
             ],
+            'leave' => ['whole_relay' => $c->bool('whole relay')],
             default => [],
         };
     }

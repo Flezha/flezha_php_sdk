@@ -109,6 +109,7 @@ final class Dispatcher
                 'apply_state' => $this->applyState($activation, $registered, $node),
                 'key_request' => $this->prepare($activation, $registered),
                 'compensate_run' => $this->compensate($activation, $registered, $node),
+                'leave' => $this->leave($activation, $registered, $node),
                 default => self::failed($activation['token'], sprintf(
                     'unknown activation kind `%s`',
                     $activation['kind'],
@@ -320,6 +321,22 @@ final class Dispatcher
         ));
 
         return ['token' => $activation['token'], 'outcome' => 'restored'];
+    }
+
+    /**
+     * @param array<string, mixed> $activation
+     * @return array<string, mixed>
+     */
+    private function leave(array $activation, RegisteredClass $registered, TaskNode $node): array
+    {
+        $registered->forget(
+            $node,
+            (string) $activation['relay'],
+            $activation['cell_key'],
+            (bool) $activation['whole_relay'],
+        );
+
+        return ['token' => $activation['token'], 'outcome' => 'state_applied'];
     }
 
     /**

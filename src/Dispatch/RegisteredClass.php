@@ -60,6 +60,20 @@ final class RegisteredClass
         $this->cells[self::address($node, $relay, $cellKey)] = $state;
     }
 
+    /** Drop a cell that left this runner, or every cell of its relay. */
+    public function forget(TaskNode $node, string $relay, ?string $cellKey, bool $wholeRelay): void
+    {
+        if (!$wholeRelay) {
+            unset($this->cells[self::address($node, $relay, $cellKey)]);
+            return;
+        }
+        foreach (array_keys($this->cells) as $address) {
+            if (str_starts_with($address, $relay . "\0")) {
+                unset($this->cells[$address]);
+            }
+        }
+    }
+
     private static function address(TaskNode $node, string $relay, ?string $cellKey): string
     {
         return $relay . "\0" . $node->index . "\0" . $cellKey;

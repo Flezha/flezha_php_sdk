@@ -726,10 +726,13 @@ final class PartitionPassRelay extends \Flezha\Relay
 
 // -- dynamic_cell ----------------------------------------------------------
 
-// Rust reads the eviction TTL from `DYN_TEST_TTL_MS`; an attribute argument
-// must be a constant expression, so this fixture declares none. Only the
-// reference-runtime scenario arms a TTL, so nothing here reads one.
-#[Task(name: 'dynamic_cell_tasklet')]
+// The eviction TTL `DYN_TEST_TTL_MS` arms, rounded up to whole seconds as the
+// other SDKs' fixtures round it; none when the variable is unset.
+define(__NAMESPACE__ . '\\DYN_TTL_SECONDS', Wire::int(getenv('DYN_TEST_TTL_MS')) > 0
+    ? intdiv(Wire::int(getenv('DYN_TEST_TTL_MS')) + 999, 1000)
+    : null);
+
+#[Task(name: 'dynamic_cell_tasklet', idleTtlSeconds: DYN_TTL_SECONDS)]
 final class DynamicCell extends Tasklet
 {
     public function initState(?string $cellKey): mixed

@@ -109,6 +109,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
                 'want_event_time' => false,
             ]],
             'compensate_run' => ['outputs' => ["\x0A"]],
+            'leave' => ['whole_relay' => true],
         ];
 
         $tails = $this->commandKindHex();

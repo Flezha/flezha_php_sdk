@@ -110,6 +110,26 @@ final class CellStateTest extends TestCase
         }
     }
 
+    public function testALeaveDropsTheCellOrEveryCellOfItsRelay(): void
+    {
+        [$dispatcher, $core] = self::dispatcherFor(KeptRelay::class);
+        try {
+            foreach (['order_a', 'order_b', 'order_c'] as $relay) {
+                self::work($dispatcher, $relay, '"x"');
+            }
+
+            $left = $dispatcher->answer(self::activation('kept_relay', 'leave', 'order_a') + ['whole_relay' => false]);
+            $dispatcher->answer(self::activation('kept_relay', 'leave', 'order_b') + ['whole_relay' => true]);
+
+            self::assertSame(['token' => 1, 'outcome' => 'state_applied'], $left);
+            self::assertSame('{"seen":[]}', self::read($dispatcher, 'order_a'));
+            self::assertSame('{"seen":[]}', self::read($dispatcher, 'order_b'));
+            self::assertSame('{"seen":["x"]}', self::read($dispatcher, 'order_c'));
+        } finally {
+            $core->free();
+        }
+    }
+
     public function testAHarnessRestoreFillsTheCellItReads(): void
     {
         $harness = new Harness(Kept::class, relay: 'order_a');
