@@ -10,10 +10,10 @@ use Flezha\Ffi\Core;
 /**
  * The cross-language byte pin.
  *
- * The fixtures are read out of `flz_core/src/schema.rs` rather than copied
- * here, so a schema change is a red PHP build in the commit that makes it —
- * which is the whole of task "CI catches an unsynchronised bump". A copy would
- * only fail once someone remembered to update it.
+ * The bytes are the rows of `test/fixtures/postcard_bodies.txt`, which the core
+ * encodes from its own structs, rather than a copy here: a schema change is a
+ * red PHP build in the commit that makes it. A copy would only fail once
+ * someone remembered to update it.
  *
  * Both directions are pinned against the bytes rather than against each other:
  * decode-then-encode round trips pass a mistake that is symmetric, and every
@@ -41,7 +41,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
 
     public function testTheWorkActivationFixtureDecodesToTheValuesTheCoreEncoded(): void
     {
-        $activation = ActivationCodec::decodeActivation(self::bytes($this->pinnedHex()[0]));
+        $activation = ActivationCodec::decodeActivation(self::bytes($this->pinned('activation', 'work')));
 
         self::assertSame([
             'token' => 42,
@@ -68,25 +68,20 @@ final class SchemaFixtureTest extends RepositoryTestCase
 
     public function testTheResultFixtureIsEncodedByteForByte(): void
     {
-        self::assertSame($this->pinnedHex()[1], bin2hex(ActivationCodec::encodeResult(self::resultFixture())));
+        self::assertSame($this->pinned('result', 'work'), bin2hex(ActivationCodec::encodeResult(self::resultFixture())));
     }
 
-    /**
-     * The fixture's effect carries no completion, so its last byte is the
-     * absent option; a request replaces exactly that byte with the present
-     * one, which is what places it after the DLQ entry.
-     */
+    /** A completion is the effect's last field, after the DLQ entry. */
     public function testACompletionIsTheEffectsLastField(): void
     {
         $encoded = ActivationCodec::encodeResult(self::resultFixture(complete: 'done'));
 
-        self::assertSame(substr($this->pinnedHex()[1], 0, -2) . '0104' . bin2hex('done'), bin2hex($encoded));
+        self::assertSame($this->pinned('result', 'completing'), bin2hex($encoded));
     }
 
     /**
-     * Every command activation kind, against the same pinned table the Rust
-     * fixture walks — envelope prefix included, so a shim cannot pass by
-     * agreeing on the payload and disagreeing on the target.
+     * Every command activation kind the fixture pins, envelope included, so a
+     * shim cannot pass by agreeing on the payload and disagreeing on the target.
      */
     public function testEveryCommandKindDecodes(): void
     {
@@ -112,11 +107,12 @@ final class SchemaFixtureTest extends RepositoryTestCase
             'leave' => ['whole_relay' => true],
         ];
 
-        $tails = $this->commandKindHex();
-        self::assertCount(count($expected), $tails, 'the core changed its command-kind fixture table');
+        $commands = $this->rows('activation');
+        unset($commands['work']);
+        self::assertEqualsCanonicalizing(array_keys($expected), array_keys($commands));
 
-        foreach (array_combine(array_keys($expected), $tails) as $kind => $tail) {
-            $activation = ActivationCodec::decodeActivation(self::bytes('01016f0000' . $tail));
+        foreach ($commands as $kind => $hex) {
+            $activation = ActivationCodec::decodeActivation(self::bytes($hex));
 
             self::assertSame([
                 'token' => 1,
@@ -131,31 +127,26 @@ final class SchemaFixtureTest extends RepositoryTestCase
         }
     }
 
-    /** @return array{string, string} the work-activation and result fixtures */
-    private function pinnedHex(): array
+    /** @return array<string, string> the hex of every `<type>` row, by case */
+    private function rows(string $type): array
     {
-        preg_match_all('/^\s+"([0-9a-f]{16,})"$/m', $this->schemaSource(), $matches);
+        $rows = [];
+        foreach (file($this->repositoryFile('test/fixtures/postcard_bodies.txt'), FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            $fields = explode('|', $line);
+            if (count($fields) === 3 && $fields[0] === $type) {
+                $rows[$fields[1]] = $fields[2];
+            }
+        }
 
-        self::assertCount(
-            2,
-            $matches[1],
-            'flz_core/src/schema.rs no longer pins exactly the two long fixtures this reads',
-        );
-
-        return [$matches[1][0], $matches[1][1]];
+        return $rows;
     }
 
-    /** @return list<string> the seven command-kind encodings, in declaration order */
-    private function commandKindHex(): array
+    private function pinned(string $type, string $case): string
     {
-        $source = $this->schemaSource();
-        $start = strpos($source, 'fn command_kind_bytes_are_pinned');
-        self::assertNotFalse($start, 'flz_core/src/schema.rs no longer pins the command kinds');
+        $rows = $this->rows($type);
+        self::assertArrayHasKey($case, $rows, "test/fixtures/postcard_bodies.txt has no row $type|$case");
 
-        $table = substr($source, $start, (int) strpos($source, 'for (kind, expected) in kinds') - $start);
-        preg_match_all('/"([0-9a-f]{6,})"/', $table, $matches);
-
-        return $matches[1];
+        return $rows[$case];
     }
 
     /** @return array<string, mixed> the values the core's result fixture encodes */
