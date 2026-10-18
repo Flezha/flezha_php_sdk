@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Codec\ActivationCodec;
+use Flezha\Ctx;
 use Flezha\Ffi\Core;
 use Flezha\Graph\HostClassDecl;
 
@@ -31,6 +32,13 @@ final class SchemaFixtureTest extends RepositoryTestCase
         self::assertSame((int) $this->pinned('schema_version', 'activation', self::CONSTANTS), Core::SCHEMA_VERSION);
         self::assertSame((int) $this->pinned('sdk_lang', 'php', self::CONSTANTS), HostClassDecl::SDK_LANG_PHP);
         self::assertSame((int) $this->pinned('format_id', 'json', self::CONSTANTS), HostClassDecl::FORMAT_ID_JSON);
+    }
+
+    public function testTheOutputStampsAndTheReservedPrefixAreTheFixturesKeys(): void
+    {
+        $keys = $this->rows('flz_key', self::CONSTANTS);
+        self::assertSame([$keys['cell'], $keys['seq'], $keys['key']], [Ctx::CELL_STAMP, Ctx::SEQ_STAMP, Ctx::KEY_STAMP]);
+        self::assertSame(strstr($keys['key'], '.', true) . '.', Ctx::RESERVED_PREFIX);
     }
 
     public function testTheWorkActivationFixtureDecodesToTheValuesTheCoreEncoded(): void

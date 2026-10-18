@@ -26,6 +26,11 @@ final class Ctx
     /** Metadata keys the runtime owns. A handler that sets one is refused. */
     public const RESERVED_PREFIX = 'flz.';
 
+    /** The identity stamps a keyed plugin output carries when no effect record does. */
+    public const CELL_STAMP = 'flz.cell';
+    public const SEQ_STAMP = 'flz.seq';
+    public const KEY_STAMP = 'flz.key';
+
     /** @var list<string> */
     public array $changes = [];
     /** @var list<array<string, mixed>> */
@@ -540,14 +545,14 @@ final class Ctx
     private function stampIdentity(array &$pairs, ChannelSpec $channel, ?string $key): void
     {
         if ($channel->keyed && !$this->spec->recordsEffects()) {
-            $pairs['flz.cell'] = sprintf(
+            $pairs[self::CELL_STAMP] = sprintf(
                 '%s/%s/%s',
                 $this->relay,
                 $this->node->name,
                 (string) $this->cellKey,
             );
-            $pairs['flz.seq'] = $this->changeSeq . '.' . $this->emitOrdinal;
-            $pairs['flz.key'] = (string) $key;
+            $pairs[self::SEQ_STAMP] = $this->changeSeq . '.' . $this->emitOrdinal;
+            $pairs[self::KEY_STAMP] = (string) $key;
         }
         $this->emitOrdinal++;
     }
