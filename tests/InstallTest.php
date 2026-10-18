@@ -54,7 +54,10 @@ final class InstallTest extends TestCase
         self::assertSame(0, $status, $output);
 
         $installed = sprintf('%s/vendor/flezha/sdk/lib/%s/%s', $project, Binding::platform(), basename($library));
-        self::assertFileEquals($library, $installed);
+        // By digest: assertFileEquals exports both files, and a debug library
+        // outgrows a default 128M memory_limit.
+        self::assertFileExists($installed);
+        self::assertSame(hash_file('sha256', $library), hash_file('sha256', $installed));
 
         self::assertSame(
             $installed . '|' . Core::SCHEMA_VERSION,
