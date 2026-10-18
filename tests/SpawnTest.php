@@ -65,7 +65,7 @@ final class SpawnerRelay extends \Flezha\Relay
  * meaning pending. As in the core, a resolved handle answers every later read
  * the same.
  */
-final class ScriptedSpawns implements SpawnBridge
+final class ScriptedSpawns extends RefusingSpawnBridge
 {
     /** @var list<array{int, string, string, string, string, bool}> */
     public array $requests = [];
@@ -101,28 +101,6 @@ final class ScriptedSpawns implements SpawnBridge
         $answer = $this->resolved[$handle] ??= array_shift($this->answers);
 
         return $answer instanceof FlezhaException ? throw $answer : $answer;
-    }
-
-    /** A spawn test sends no part. */
-    public function part(int $token, int $item, string $payload): void
-    {
-        throw new \LogicException('a spawn test sent a part');
-    }
-
-    /** A spawn test keeps no effect. */
-    public function effectBegin(int $token, int $item, string $name): array
-    {
-        throw new \LogicException('a spawn test began an effect');
-    }
-
-    public function effectEnd(int $token, int $item, string $payload): ?string
-    {
-        throw new \LogicException('a spawn test ended an effect');
-    }
-
-    public function effectRelease(int $token, int $item): void
-    {
-        throw new \LogicException('a spawn test released an effect');
     }
 }
 

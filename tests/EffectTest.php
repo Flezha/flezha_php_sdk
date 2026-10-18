@@ -14,7 +14,6 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Graph\Builder;
 use Flezha\LocalOutput;
 use Flezha\LocalRelay;
-use Flezha\SpawnBridge;
 use Flezha\Tasklet;
 use Flezha\Testing\EffectReplayMismatch;
 use Flezha\Testing\Harness;
@@ -142,32 +141,10 @@ final class EffectLocal extends \Flezha\Relay
 }
 
 /** A controller that kept another result for the call first. */
-final class FirstKept implements SpawnBridge
+final class FirstKept extends RefusingSpawnBridge
 {
     /** @var list<string> */
     public array $calls = [];
-
-    public function spawnRequest(
-        int $token,
-        string $factoryId,
-        string $id,
-        string $payload,
-        string $ifRunning,
-        bool $replay,
-        ?int $offset,
-    ): int {
-        throw new \LogicException('an effect test sent a spawn');
-    }
-
-    public function spawnResult(int $handle, int $timeoutMs): ?string
-    {
-        throw new \LogicException('an effect test read a spawn');
-    }
-
-    public function part(int $token, int $item, string $payload): void
-    {
-        throw new \LogicException('an effect test sent a part');
-    }
 
     public function effectBegin(int $token, int $item, string $name): array
     {

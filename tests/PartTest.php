@@ -157,29 +157,12 @@ final class PartTest extends TestCase
     /** A bridge that records each part, or throws `$refusal` for every one. */
     private static function recording(?FlezhaException $refusal = null): SpawnBridge
     {
-        return new class ($refusal) implements SpawnBridge {
+        return new class ($refusal) extends RefusingSpawnBridge {
             /** @var list<array{int, int, string}> */
             public array $parts = [];
 
             public function __construct(private readonly ?FlezhaException $refusal)
             {
-            }
-
-            public function spawnRequest(
-                int $token,
-                string $factoryId,
-                string $id,
-                string $payload,
-                string $ifRunning,
-                bool $replay,
-                ?int $offset,
-            ): int {
-                throw new \LogicException('a part test sent a spawn');
-            }
-
-            public function spawnResult(int $handle, int $timeoutMs): ?string
-            {
-                throw new \LogicException('a part test read a spawn');
             }
 
             public function part(int $token, int $item, string $payload): void
@@ -188,21 +171,6 @@ final class PartTest extends TestCase
                 if ($this->refusal !== null) {
                     throw $this->refusal;
                 }
-            }
-
-            public function effectBegin(int $token, int $item, string $name): array
-            {
-                throw new \LogicException('a part test began an effect');
-            }
-
-            public function effectEnd(int $token, int $item, string $payload): ?string
-            {
-                throw new \LogicException('a part test ended an effect');
-            }
-
-            public function effectRelease(int $token, int $item): void
-            {
-                throw new \LogicException('a part test released an effect');
             }
         };
     }
