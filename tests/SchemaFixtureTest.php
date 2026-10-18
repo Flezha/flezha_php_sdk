@@ -6,6 +6,7 @@ namespace Flezha\Tests;
 
 use Flezha\Codec\ActivationCodec;
 use Flezha\Ffi\Core;
+use Flezha\Graph\HostClassDecl;
 
 /**
  * The cross-language byte pin.
@@ -21,22 +22,15 @@ use Flezha\Ffi\Core;
  */
 final class SchemaFixtureTest extends RepositoryTestCase
 {
-    private function schemaSource(): string
-    {
-        return file_get_contents($this->repositoryFile('flz_core/src/schema.rs')) ?: '';
-    }
+    private const BODIES = 'test/fixtures/postcard_bodies.txt';
 
-    public function testTheShimSpeaksTheCoresSchemaVersion(): void
-    {
-        preg_match('/pub const SCHEMA_VERSION: u32 = (\d+);/', $this->schemaSource(), $matches);
+    private const CONSTANTS = 'test/fixtures/wire_constants.txt';
 
-        self::assertNotEmpty($matches, 'flz_core/src/schema.rs no longer declares SCHEMA_VERSION');
-        self::assertSame(
-            (int) $matches[1],
-            Core::SCHEMA_VERSION,
-            'the core bumped its activation schema and this package still speaks the old one; '
-            . 'move Core::SCHEMA_VERSION and re-check the fixtures below',
-        );
+    public function testTheShimSpeaksTheFixturesConstants(): void
+    {
+        self::assertSame((int) $this->pinned('schema_version', 'activation', self::CONSTANTS), Core::SCHEMA_VERSION);
+        self::assertSame((int) $this->pinned('sdk_lang', 'php', self::CONSTANTS), HostClassDecl::SDK_LANG_PHP);
+        self::assertSame((int) $this->pinned('format_id', 'json', self::CONSTANTS), HostClassDecl::FORMAT_ID_JSON);
     }
 
     public function testTheWorkActivationFixtureDecodesToTheValuesTheCoreEncoded(): void
@@ -127,11 +121,11 @@ final class SchemaFixtureTest extends RepositoryTestCase
         }
     }
 
-    /** @return array<string, string> the hex of every `<type>` row, by case */
-    private function rows(string $type): array
+    /** @return array<string, string> the value of every `<type>` row of a `type|name|value` fixture, by name */
+    private function rows(string $type, string $fixture = self::BODIES): array
     {
         $rows = [];
-        foreach (file($this->repositoryFile('test/fixtures/postcard_bodies.txt'), FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+        foreach (file($this->repositoryFile($fixture), FILE_IGNORE_NEW_LINES) ?: [] as $line) {
             $fields = explode('|', $line);
             if (count($fields) === 3 && $fields[0] === $type) {
                 $rows[$fields[1]] = $fields[2];
@@ -141,10 +135,10 @@ final class SchemaFixtureTest extends RepositoryTestCase
         return $rows;
     }
 
-    private function pinned(string $type, string $case): string
+    private function pinned(string $type, string $case, string $fixture = self::BODIES): string
     {
-        $rows = $this->rows($type);
-        self::assertArrayHasKey($case, $rows, "test/fixtures/postcard_bodies.txt has no row $type|$case");
+        $rows = $this->rows($type, $fixture);
+        self::assertArrayHasKey($case, $rows, "$fixture has no row $type|$case");
 
         return $rows[$case];
     }

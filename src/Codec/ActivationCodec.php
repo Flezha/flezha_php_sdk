@@ -10,8 +10,9 @@ use Flezha\Exception\DecodeException;
  * The `Activation` / `ActivationResult` boundary contract, in PHP.
  *
  * Field order and variant index ARE the wire contract — the shapes here mirror
- * `flz_core/src/schema.rs` line for line, and the hex fixtures in that file's
- * test module are the cross-language pin every shim asserts against.
+ * `flz_core/src/schema.rs` line for line, and the rows of
+ * `test/fixtures/postcard_bodies.txt` are the cross-language pin every shim
+ * asserts against.
  *
  * Only the two directions a host actually uses exist: the core encodes
  * activations and decodes results, so this decodes the first and encodes the
