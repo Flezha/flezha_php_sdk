@@ -34,7 +34,7 @@ $runner = Flezha::createRunner($argv[1] ?? 'default')
 // PHP has no threads: the message is processed once `awaitTermination()` below
 // starts serving.
 //
-// docs/topics/core/sending_and_calling.md covers sending. An enforced
+// docs/public/topics/core/sending_and_calling.md covers sending. An enforced
 // controller refuses all of it until `flz role bind runner@default app default`.
 
 $runner->awaitTermination();
