@@ -140,6 +140,12 @@ final class Core implements SpawnBridge
         $this->check($this->ffi->flz_core_declare_class($this->live(), $json, strlen($json)));
     }
 
+    /** Undeclare one class; after start, refused while it has live instances. */
+    public function undeclareClass(string $factoryId): void
+    {
+        $this->check($this->ffi->flz_core_undeclare_class($this->live(), $factoryId));
+    }
+
     /**
      * Judge one class declaration without registering it, and answer the
      * DERIVED declaration as JSON: the consumers, channel kinds, output names
@@ -294,10 +300,10 @@ final class Core implements SpawnBridge
      * with no second thread of its own still observes a harness that stops it
      * by closing its pipes — even from inside an activation body.
      */
-    public function watchStdinEof(int $graceMs): void
+    public function watchStdinEof(): void
     {
         $this->live();
-        $this->ffi->flz_core_watch_stdin_eof($graceMs);
+        $this->ffi->flz_core_watch_stdin_eof();
     }
 
     public function spawnRequest(

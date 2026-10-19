@@ -76,6 +76,7 @@ final class Binding
         const char *flz_core_last_error(uintptr_t ctx);
         const char *flz_core_error_document(const char *code, const char *details_json);
         int32_t flz_core_declare_class(uintptr_t ctx, const char *json, size_t json_len);
+        int32_t flz_core_undeclare_class(uintptr_t ctx, const char *factory_id);
         int32_t flz_core_check_class(uintptr_t ctx, const char *json, size_t json_len, char **buf_out, size_t *len_out);
         int32_t flz_core_start(uintptr_t ctx, const char *ns);
         int32_t flz_core_start_with(uintptr_t ctx, const char *ns, const char *settings, size_t settings_len);
@@ -90,7 +91,7 @@ final class Binding
         int32_t flz_core_complete(uintptr_t ctx, const char *buf, size_t len);
         int32_t flz_core_abandon(uintptr_t ctx, uint64_t token);
         void flz_core_shutdown(uintptr_t ctx);
-        void flz_core_watch_stdin_eof(uint32_t grace_ms);
+        void flz_core_watch_stdin_eof(void);
         int32_t flz_core_spawn_request(uintptr_t ctx, uint64_t token, const char *factory_id, const char *id, const char *payload, size_t payload_len, const char *if_running, int32_t replay, int64_t offset, uint64_t *handle_out);
         int32_t flz_core_spawn_result(uintptr_t ctx, uint64_t handle, uint64_t timeout_ms, char **out, size_t *out_len);
         int32_t flz_core_part(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len);

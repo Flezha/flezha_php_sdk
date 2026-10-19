@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
+use Flezha\Dispatch\Dispatcher;
 use Flezha\Exception\FlezhaException;
 use Flezha\Executor\Executors;
 use Flezha\Executor\LocalLoopState;
 use Flezha\Executor\SyncExecutor;
+use Flezha\Ffi\Core;
 use PHPUnit\Framework\TestCase;
 
 /** The concurrency seam, and the budget and metrics every loop shares. */
 final class ExecutorTest extends TestCase
 {
+    use Dispatches;
+
     protected function tearDown(): void
     {
         putenv(Executors::ENV);
@@ -106,6 +110,69 @@ final class ExecutorTest extends TestCase
             self::declaredFactories($runner->unregisterFactory(CounterRelay::class)),
         );
         self::assertSame([], self::declaredFactories($runner->unregisterFactory(EchoRelay::class)));
+    }
+
+    /**
+     * A class registered after start is declared to the core and served by
+     * this thread's dispatcher; once removed, its next activation is refused
+     * as unregistered.
+     */
+    public function testAFactoryChangedAfterStartIsServedThenRefused(): void
+    {
+        // A runner holding a core is a started one; standing a core in lets
+        // the post-start path run with no controller.
+        $core = Core::create();
+        $runner = \Flezha\Flezha::createRunner('test');
+        (new \ReflectionProperty(\Flezha\Runner::class, 'core'))->setValue($runner, $core);
+        $registry = (new \ReflectionProperty(\Flezha\Runner::class, 'registry'))->getValue($runner);
+        $dispatcher = new Dispatcher($registry, $core);
+        $work = self::activation('echo_relay', 'work') + ['items' => [self::input('"hi"')]];
+        try {
+            $runner->registerFactory(EchoRelay::class);
+            $served = $dispatcher->answer($work);
+            self::assertSame(['work', 'ok'], [$served['outcome'], $served['effects'][0]['verdict']]);
+
+            $runner->unregisterFactory(EchoRelay::class);
+            $refused = $dispatcher->answer($work);
+            self::assertSame(
+                ['failed', 'no class registered for factory `echo_relay`', true],
+                [$refused['outcome'], $refused['error'], $refused['non_retryable']],
+            );
+            self::assertSame([], self::declaredFactories($runner));
+        } finally {
+            $core->free();
+        }
+    }
+
+    /**
+     * Under the Swoole executor each thread built its own registry at start,
+     * so a change after start would reach the calling thread only: it is
+     * refused, naming the executor, and nothing is declared or removed.
+     */
+    public function testUnderTheSwooleExecutorAFactoryChangeAfterStartIsRefused(): void
+    {
+        $core = Core::create();
+        $runner = \Flezha\Flezha::createRunner('test')->registerFactory(EchoRelay::class);
+        // A started runner on a build without Swoole: the executor stands in
+        // without the constructor that checks for one.
+        $swoole = (new \ReflectionClass(\Flezha\Executor\SwooleExecutor::class))->newInstanceWithoutConstructor();
+        $runner->executor($swoole);
+        (new \ReflectionProperty(\Flezha\Runner::class, 'core'))->setValue($runner, $core);
+        try {
+            foreach (['registerFactory' => CounterRelay::class, 'unregisterFactory' => EchoRelay::class] as $call => $class) {
+                try {
+                    $runner->{$call}($class);
+                    self::fail("{$call} after start was not refused");
+                } catch (FlezhaException $e) {
+                    self::assertSame('runtime.executor_unavailable', $e->getCode());
+                    self::assertStringStartsWith('the swoole executor cannot run here: ', $e->getMessage());
+                    self::assertStringContainsString('only the calling thread', $e->getMessage());
+                }
+            }
+            self::assertSame(['echo_relay'], self::declaredFactories($runner));
+        } finally {
+            $core->free();
+        }
     }
 
     /** @return list<string> */

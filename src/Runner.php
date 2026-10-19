@@ -63,8 +63,6 @@ final class Runner
     private readonly Registry $registry;
     private ?Core $core = null;
     private ?Executor $executor = null;
-    /** What a healthy runner has to drain in after standard input closes. */
-    private const STDIN_EOF_GRACE_MS = 5_000;
 
     private ?Dispatcher $dispatcher = null;
     private ?int $maxActivations = null;
@@ -87,7 +85,10 @@ final class Runner
     }
 
     /**
-     * Register a relay class, a full form or a §5 short form alike.
+     * Register a relay class, a full form or a §5 short form alike. After
+     * start the class is declared at once: this thread's executor serves it
+     * and the controller learns of it. Under the Swoole executor that is
+     * refused, because each thread serves the classes registered before start.
      *
      * @param class-string<Relay> $class
      */
@@ -95,29 +96,36 @@ final class Runner
     {
         // Resolved here so a malformed declaration is refused at the call the
         // author wrote, not at the first connection.
-        Relay::specFor($class);
+        $spec = Relay::specFor($class);
+        if ($this->core !== null) {
+            $this->refuseUnderThreads();
+            $this->admit($spec);
+            $this->core->declareClass(Json::encode(HostClassDecl::of($spec)));
+        }
         $this->classes[] = $class;
 
         return $this;
     }
 
     /**
-     * Undo a registration made before the runner starts — the inverse of
-     * {@see registerFactory()}, taking what it took.
-     *
-     * After start it refuses: a started PHP runner serves its declarations
-     * from a registry the executor already holds, and it cannot stop serving
-     * one. Saying so is what makes the call honest rather than ignored.
+     * Undo a registration — the inverse of {@see registerFactory()}, taking
+     * what it took. After start the core refuses a class with live instances
+     * on this runner; otherwise this thread's executor stops serving it and
+     * the controller learns of it. Under the Swoole executor it is refused,
+     * as {@see registerFactory()} is.
      *
      * @param class-string<Relay> $class
      */
     public function unregisterFactory(string $class): self
     {
-        if ($this->core !== null) {
-            throw new FlezhaException('runtime.factory_in_service', ['module' => $class]);
-        }
+        $factoryId = $class::declaration()->factoryId;
         if (!in_array($class, $this->classes, true)) {
-            throw new FlezhaException('runtime.class_not_registered', ['factory' => $class::declaration()->factoryId]);
+            throw new FlezhaException('runtime.class_not_registered', ['factory' => $factoryId]);
+        }
+        if ($this->core !== null) {
+            $this->refuseUnderThreads();
+            $this->core->undeclareClass($factoryId);
+            $this->registry->remove($factoryId);
         }
         $this->classes = array_values(array_filter(
             $this->classes,
@@ -295,7 +303,7 @@ final class Runner
         // an activation body, where a non-thread-safe PHP has nothing that
         // could look. The harness stops a runner by closing its standard input.
         if (!stream_isatty(STDIN)) {
-            $this->core->watchStdinEof(self::STDIN_EOF_GRACE_MS);
+            $this->core->watchStdinEof();
         }
 
         Logger::current()->info(sprintf(
@@ -464,13 +472,30 @@ final class Runner
     private function buildRegistry(): void
     {
         foreach ($this->classes as $class) {
-            $spec = Relay::specFor($class);
-            // The verdict before the registration: the core judges the record
-            // and this package renders it, so an author meets a declaration
-            // refusal rather than a native failure at the first connection.
-            Validate::spec($spec, $this->core());
-            $this->registry->add($spec);
+            $this->admit(Relay::specFor($class));
         }
+    }
+
+    private function refuseUnderThreads(): void
+    {
+        // Each Swoole thread built its own registry at start; a change now
+        // would reach this thread alone. By name, so the adapter stays unloaded.
+        if ($this->executor?->name() === 'swoole') {
+            throw new FlezhaException('runtime.executor_unavailable', [
+                'executor' => 'swoole',
+                'reason' => 'a class registered or unregistered after start reaches only the calling thread; '
+                    . 'register every class before start, or use the default SyncExecutor',
+            ]);
+        }
+    }
+
+    private function admit(ClassSpec $spec): void
+    {
+        // The verdict before the registration: the core judges the record and
+        // this package renders it, so an author meets a declaration refusal
+        // rather than a native failure at the first connection.
+        Validate::spec($spec, $this->core());
+        $this->registry->add($spec);
     }
 
     private function declareAll(): void

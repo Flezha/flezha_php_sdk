@@ -22,6 +22,11 @@ final class Registry
         $this->classes[$spec->factoryId] = new RegisteredClass($spec);
     }
 
+    public function remove(string $factoryId): void
+    {
+        unset($this->classes[$factoryId]);
+    }
+
     public function get(string $factoryId): ?RegisteredClass
     {
         return $this->classes[$factoryId] ?? null;
