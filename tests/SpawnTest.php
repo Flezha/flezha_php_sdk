@@ -119,7 +119,7 @@ final class SpawnTest extends TestCase
         $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p1'));
 
         self::assertSame(
-            [[self::TOKEN, 'worker', '', 'p1', 'deliver', false, self::OFFSET]],
+            [[self::TOKEN, 'worker', '', 'p1', '', false, self::OFFSET]],
             $bridge->requests,
             'no id asks the controller to generate one, from the activation and input offset the call ran under',
         );
@@ -138,7 +138,7 @@ final class SpawnTest extends TestCase
         $bridge = new ScriptedSpawns(['{"id":"w1","outcome":"delivered"}']);
         $handle = self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p2', id: 'w1'));
 
-        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', 'deliver', false, self::OFFSET]], $bridge->requests);
+        self::assertSame([[self::TOKEN, 'worker', 'w1', 'p2', '', false, self::OFFSET]], $bridge->requests);
         self::assertEquals(new SpawnResult('w1', SpawnOutcome::Delivered), $handle->wait());
     }
 
@@ -160,17 +160,17 @@ final class SpawnTest extends TestCase
         self::assertSame(['symbol' => 'AAPL', 'quantity' => 10], Json::decode($bridge->requests[1][3]));
     }
 
-    public function testIfRunningWithoutAnIdIsRefusedAtTheCallAndSendsNothing(): void
+    /** Through the real core, which refuses before anything is sent. */
+    public function testIfRunningWithoutAnIdThrowsTheCoresRefusal(): void
     {
-        $bridge = new ScriptedSpawns([]);
-
-        try {
-            self::spawn($bridge, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p', ifRunning: 'error'));
-            self::fail('a spawn with ifRunning and no id was accepted');
-        } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('ifRunning without an id', $e->getMessage());
-        }
-        self::assertSame([], $bridge->requests);
+        self::withActivation(static function (array $activation, Dispatcher $dispatcher, Core $core): void {
+            try {
+                self::spawn($core, static fn (Ctx $ctx): SpawnHandle => $ctx->spawnSteps('worker', 'p', ifRunning: 'error'));
+                self::fail('a spawn with ifRunning and no id was accepted');
+            } catch (FlezhaException $e) {
+                self::assertSame('spawn.if_running_without_id', $e->getCode());
+            }
+        });
     }
 
     /** @return iterable<string, array{string, array<string, mixed>}> */

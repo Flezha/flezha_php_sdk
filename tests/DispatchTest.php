@@ -196,15 +196,13 @@ final class DispatchTest extends TestCase
         self::assertSame(['count' => 1, 'seen' => ['a']], $this->stateOf('counter_relay'));
     }
 
-    public function testALiveStateReadAndAMigrationSerializeAnswerTheSameJson(): void
+    public function testALiveStateReadAnswersTheStateAsJson(): void
     {
         $this->work('counter_relay', 0, [self::input('"a"')]);
 
         $live = $this->command('counter_relay', 'live_state_read')['json'];
-        $migration = $this->command('counter_relay', 'migration_serialize')['json'];
 
         self::assertSame('{"count":1,"seen":["a"]}', $live);
-        self::assertSame($live, $migration);
     }
 
     public function testAnAppliedStateMaterializesTheMigratedValue(): void

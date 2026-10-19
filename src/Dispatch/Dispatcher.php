@@ -104,8 +104,7 @@ final class Dispatcher
             return match ($activation['kind']) {
                 'work' => $this->runWork($activation, $registered, $node),
                 'restore_fold' => $this->restoreFold($activation, $registered, $node),
-                'snapshot_request', 'live_state_read', 'migration_serialize' =>
-                    $this->serializedState($activation, $registered, $node),
+                'snapshot_request', 'live_state_read' => $this->serializedState($activation, $registered, $node),
                 'apply_state' => $this->applyState($activation, $registered, $node),
                 'key_request' => $this->prepare($activation, $registered),
                 'compensate_run' => $this->compensate($activation, $registered, $node),
@@ -445,11 +444,11 @@ final class Dispatcher
     }
 
     /**
-     * The three kinds that answer "the state, encoded".
+     * The two kinds that answer "the state, encoded".
      *
      * One arm, because they differ only in the field the core reads the bytes
-     * out of: this codec IS JSON, so a compaction snapshot, a live read and a
-     * migration handover carry the same bytes. There is no second encoding to
+     * out of: this codec IS JSON, so a compaction snapshot and a live read (or
+     * a migration handover) carry the same bytes. There is no second encoding to
      * convert between — the one place this host is simpler than a MessagePack
      * one rather than merely different.
      *
@@ -458,11 +457,9 @@ final class Dispatcher
      */
     private function serializedState(array $activation, RegisteredClass $registered, TaskNode $node): array
     {
-        [$outcome, $field] = match ($activation['kind']) {
-            'snapshot_request' => ['snapshot', 'state'],
-            'live_state_read' => ['state_json', 'json'],
-            default => ['migration_state', 'json'],
-        };
+        [$outcome, $field] = $activation['kind'] === 'snapshot_request'
+            ? ['snapshot', 'state']
+            : ['state_json', 'json'];
 
         return [
             'token' => $activation['token'],

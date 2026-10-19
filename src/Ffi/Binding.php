@@ -126,6 +126,8 @@ final class Binding
     public const EFFECT_KEPT = 1;
     /** An effect begin in an invocation nothing re-runs: run the function and keep nothing. */
     public const EFFECT_UNRECORDED = 2;
+    /** `FLZ_WAIT_CORE_BOUND` as far as a PHP int reaches: a spawn read waits to the core's own bound. */
+    public const WAIT_CORE_BOUND = PHP_INT_MAX;
 
     private static ?FFI $handle = null;
 

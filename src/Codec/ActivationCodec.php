@@ -33,7 +33,6 @@ final class ActivationCodec
         'snapshot_request',
         'live_state_read',
         'apply_state',
-        'migration_serialize',
         'key_request',
         'compensate_run',
         'leave',
@@ -46,7 +45,6 @@ final class ActivationCodec
         'snapshot',
         'state_json',
         'state_applied',
-        'migration_state',
         'prepared',
         'failed',
     ];
@@ -215,7 +213,7 @@ final class ActivationCodec
         return match ($outcome) {
             'work' => Postcard::seq($result['effects'] ?? [], self::encodeEffect(...)),
             'snapshot' => Postcard::bytes((string) ($result['state'] ?? '')),
-            'state_json', 'migration_state' => Postcard::bytes((string) ($result['json'] ?? '')),
+            'state_json' => Postcard::bytes((string) ($result['json'] ?? '')),
             'prepared' => Postcard::seq($result['prepared'] ?? [], self::encodePrepared(...)),
             'failed' => self::encodeWorkError(
                 (string) ($result['error'] ?? ''),

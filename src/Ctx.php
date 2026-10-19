@@ -241,7 +241,7 @@ final class Ctx
      * sent as an output naming no codec sends a value (a string as it stands,
      * anything else as JSON), so a `Text` or `Json` entry reads it.
      *
-     * @throws \InvalidArgumentException for an `$ifRunning` with no `$id`; nothing is sent
+     * @throws FlezhaException `spawn.if_running_without_id` for an `$ifRunning` with no `$id`; nothing is sent
      */
     public function spawnSteps(
         string $factoryId,
@@ -249,20 +249,12 @@ final class Ctx
         ?string $id = null,
         ?string $ifRunning = null,
     ): SpawnHandle {
-        if ($ifRunning !== null && ($id ?? '') === '') {
-            throw new \InvalidArgumentException(sprintf(
-                '%s: spawnSteps was given ifRunning without an id; ifRunning applies to a running '
-                . 'instance an id names, and a spawn without an id always starts a new one',
-                $this->node->name,
-            ));
-        }
-
         return new SpawnHandle($this->bridge, $this->bridge->spawnRequest(
             $this->token,
             $factoryId,
             $id ?? '',
             ChannelCodec::plain($payload, "tasklet '{$this->node->name}'"),
-            $ifRunning ?? 'deliver',
+            $ifRunning ?? '',
             $this->replay,
             $this->offset,
         ));

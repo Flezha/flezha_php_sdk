@@ -98,7 +98,6 @@ final class SchemaFixtureTest extends RepositoryTestCase
             'snapshot_request' => [],
             'live_state_read' => [],
             'apply_state' => ['state_json' => '{}'],
-            'migration_serialize' => [],
             'key_request' => ['key_request' => [
                 'channel' => 2,
                 'payloads' => ['p'],

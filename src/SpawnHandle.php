@@ -6,6 +6,7 @@ namespace Flezha;
 
 use Flezha\Codec\Json;
 use Flezha\Exception\FlezhaException;
+use Flezha\Ffi\Binding;
 
 /**
  * The answer to one {@see Ctx::spawnSteps()} request.
@@ -32,9 +33,7 @@ final class SpawnHandle
      */
     public function wait(): SpawnResult
     {
-        // Unbounded here because the core bounds it: at the request's deadline
-        // it resolves a timeout.
-        return $this->read(PHP_INT_MAX)
+        return $this->read(Binding::WAIT_CORE_BOUND)
             ?? throw new \LogicException("spawn handle {$this->handle} answered pending to a read with no bound");
     }
 
