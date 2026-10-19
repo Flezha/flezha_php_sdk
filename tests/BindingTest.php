@@ -7,6 +7,7 @@ namespace Flezha\Tests;
 use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
+use Flezha\Env;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
@@ -201,6 +202,23 @@ final class BindingTest extends TestCase
         } finally {
             $core->free();
         }
+    }
+
+    public function testAKnobIsParsedByTheCoreWhichAnswersUnsetForTextThatIsNoCount(): void
+    {
+        $name = 'FLZ_TEST_KNOB';
+        try {
+            foreach (['5' => 5, '0' => null, 'lots' => null] as $raw => $expected) {
+                putenv("$name=$raw");
+                self::assertSame($expected, Env::positive($name), (string) $raw);
+            }
+            putenv($name);
+            self::assertNull(Env::positive($name));
+        } finally {
+            putenv($name);
+        }
+        $this->expectException(\LogicException::class);
+        Core::knob('percent', '5');
     }
 
     public function testThePlatformIsOneAReleasePublishes(): void

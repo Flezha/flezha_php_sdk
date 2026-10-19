@@ -247,15 +247,6 @@ final class SessionsRelay extends \Flezha\Relay
     }
 }
 
-#[Relay(factoryId: 'form_unkeyed')]
-final class UnkeyedSessionsRelay extends \Flezha\Relay
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('orders')->into(Sessions::class);
-    }
-}
-
 #[Relay(factoryId: 'form_clocks')]
 final class ClocksRelay extends \Flezha\Relay
 {
@@ -356,18 +347,9 @@ final class TaskletFormTest extends TestCase
         self::assertTrue(Harness::replayEquals(TotalsBeforeRename::class, [5, 6]));
     }
 
-    public function testTheIdleTtlIsWholeSecondsAndKeyByAloneMakesATaskletDynamic(): void
+    public function testTheIdleTtlIsWholeSeconds(): void
     {
-        $tasklet = self::record(SessionsRelay::class, 'sessions');
-
-        self::assertSame(3_600_000, $tasklet['idle_ttl_ms']);
-        self::assertSame('dynamic', $tasklet['cell_mode']);
-    }
-
-    public function testOneClassTakesItsModeFromEachWiring(): void
-    {
-        self::assertSame('dynamic', self::record(SessionsRelay::class, 'sessions')['cell_mode']);
-        self::assertSame('single', self::record(UnkeyedSessionsRelay::class, 'sessions')['cell_mode']);
+        self::assertSame(3_600_000, self::record(SessionsRelay::class, 'sessions')['idle_ttl_ms']);
     }
 
     public function testTheClockFollowsFromWhatTheClassWrites(): void

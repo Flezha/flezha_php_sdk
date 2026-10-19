@@ -70,7 +70,7 @@ final class Runner
     public function __construct(public readonly string $namespace)
     {
         $this->registry = new Registry();
-        $this->maxActivations = self::budgetFromEnvironment();
+        $this->maxActivations = Env::positive('FLEZHA_MAX_ACTIVATIONS');
     }
 
     /**
@@ -520,12 +520,5 @@ final class Runner
             $meanBodyNanos / 1e6,
             $meanBodyNanos === 0 ? 0.0 : 1e9 / $meanBodyNanos,
         ));
-    }
-
-    private static function budgetFromEnvironment(): ?int
-    {
-        $raw = getenv('FLEZHA_MAX_ACTIVATIONS');
-
-        return Env::parsePositive($raw === false ? null : $raw);
     }
 }

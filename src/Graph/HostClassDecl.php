@@ -43,8 +43,6 @@ final class HostClassDecl
     /** @return array<string, mixed> */
     public static function of(ClassSpec $spec): array
     {
-        $keyed = self::keyedTasklets($spec->channels);
-
         return self::compact([
             'factory_id' => $spec->factoryId,
             'description' => $spec->description,
@@ -60,7 +58,7 @@ final class HostClassDecl
                 $spec->channels,
             ),
             'tasklets' => array_map(
-                static fn (TaskNode $node): array => self::tasklet($node, isset($keyed[$node->index])),
+                static fn (TaskNode $node): array => self::tasklet($node),
                 $spec->tasklets,
             ),
         ]);
@@ -115,59 +113,28 @@ final class HostClassDecl
         return null;
     }
 
-    /**
-     * The tasklets some chain keys its values for: a `key` link before the
-     * `into` or merge that names the tasklet. The cell mode belongs to the
-     * node, not the class, since one class may be wired keyed in one relay
-     * and unkeyed in another.
-     *
-     * @param list<ChannelSpec> $channels
-     * @return array<int, true>
-     */
-    private static function keyedTasklets(array $channels): array
-    {
-        $keyed = [];
-        foreach ($channels as $channel) {
-            foreach ($channel->chains as $links) {
-                $key = false;
-                foreach ($links as $link) {
-                    $key = $key || $link['link'] === 'key';
-                    if ($key && ($link['link'] === 'into' || $link['link'] === 'merge')) {
-                        $keyed[$link['tasklet']] = true;
-                    }
-                }
-            }
-        }
-
-        return $keyed;
-    }
-
     /** @return array<string, mixed> */
-    private static function tasklet(TaskNode $node, bool $keyed): array
+    private static function tasklet(TaskNode $node): array
     {
         $definition = $node->definition;
         $decl = $definition->decl;
 
         return self::compact([
             'name' => $node->name,
-            'cell_mode' => match (true) {
-                $decl->cellKeys !== null => 'static',
-                $keyed => 'dynamic',
-                default => 'single',
-            },
             'cell_keys' => $decl->cellKeys ?? [],
             'idle_ttl_ms' => $decl->idleTtlSeconds === null ? null : $decl->idleTtlSeconds * 1000,
             'max_cells' => $decl->maxCells,
             'cells_for_overridden' => $definition->declares('cellsFor'),
             'compensate_overridden' => $definition->declares('compensate'),
             'clock' => $definition->clock(),
-            'mailbox_capacity' => $decl->mailboxCapacity ?? 1024,
+            'mailbox_capacity' => $decl->mailboxCapacity,
             // A tasklet with no state journals nothing, so a logical clock
             // over it never advances. PHP has no per-tasklet Change type;
             // the presence of an initState method IS the same statement.
             'change_is_nochange' => !$definition->declares('initState'),
             'schema_version' => $decl->schemaVersion,
             'min_readable_schema_version' => $decl->minReadableSchemaVersion,
+            'migrates' => $definition->declares('migrateState') || $definition->declares('migrateChange'),
         ]);
     }
 

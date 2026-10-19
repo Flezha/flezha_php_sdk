@@ -103,6 +103,7 @@ final class Binding
         int32_t flz_core_send_message(uintptr_t ctx, const char *relay_id, const char *channel, const char *message, size_t len, const char *msg_id, const char *key, int32_t local, char **result_out, size_t *result_len_out);
         int32_t flz_core_relays(uintptr_t ctx, char **buf_out, size_t *len_out);
         uint64_t flz_core_monotonic_nanos(void);
+        int32_t flz_core_knob(const char *kind, const char *raw, int64_t *out);
         void flz_core_buf_free(char *buf, size_t len);
         void flz_core_context_free(uintptr_t ctx);
         void flz_core_set_log_callback(void (*callback)(int32_t level, const char *message));

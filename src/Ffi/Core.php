@@ -98,6 +98,22 @@ final class Core implements SpawnBridge
     }
 
     /**
+     * A knob's text parsed by the core's rule for `$kind`: null when it is no
+     * value of that kind, so the caller keeps its default.
+     */
+    public static function knob(string $kind, string $raw): ?int
+    {
+        $ffi = Binding::current();
+        $out = $ffi->new('int64_t');
+
+        return match ($ffi->flz_core_knob($kind, $raw, \FFI::addr($out))) {
+            0 => $out->cdata,
+            1 => null,
+            default => throw new \LogicException("'$kind' is not a knob kind"),
+        };
+    }
+
+    /**
      * Attach to a context another thread created, by the address it published.
      *
      * `flz_core_declare_class` is per context, not per thread, so a worker

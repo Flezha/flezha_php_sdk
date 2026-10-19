@@ -9,13 +9,11 @@ use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 
 /**
- * The verdict on one declaration, and the defect a record cannot carry.
+ * The verdict on one declaration.
  *
  * The topology is judged in ONE place, `flz_core::host::register::check`: this
  * class builds the record, submits it through `flz_core_check_class`, and the
- * core's refusal reaches the author as the {@see FlezhaException} it throws. What is refused
- * here instead is what the record cannot state: whether a PHP class supplies
- * the migration a schema floor needs. The core cannot see it.
+ * core's refusal reaches the author as the {@see FlezhaException} it throws.
  */
 final class Validate
 {
@@ -28,26 +26,9 @@ final class Validate
      * channel names, kinds, consumers, output names and acknowledgement
      * granularity it read off the record.
      *
-     * The defect this package can see is refused first, so an author reads
-     * "no migration" rather than a topology verdict.
-     *
      * @return array<string, mixed>
      */
     public static function spec(ClassSpec $spec, Core $core): array
-    {
-        foreach ($spec->tasklets as $node) {
-            self::schema($node);
-        }
-
-        return self::submit($spec, $core);
-    }
-
-    /**
-     * The record, over the ABI, and the verdict back.
-     *
-     * @return array<string, mixed>
-     */
-    private static function submit(ClassSpec $spec, Core $core): array
     {
         /** @var array<string, mixed> $decoded */
         $decoded = Json::decode($core->checkClass(Json::encode(HostClassDecl::of($spec))));
@@ -75,35 +56,6 @@ final class Validate
                 $consumers[] = $target->chainEdges[$edge['chain']];
             }
             $target->consumers = $consumers;
-        }
-    }
-
-    /**
-     * A schema floor promises a migration, and the migration is a method: the
-     * record carries the versions and this package carries the class.
-     */
-    private static function schema(TaskNode $node): void
-    {
-        $definition = $node->definition;
-        $decl = $definition->decl;
-        $floor = $decl->minReadableSchemaVersion;
-        if ($floor === null) {
-            return;
-        }
-
-        if ($floor > $decl->schemaVersion) {
-            throw new FlezhaException(
-                'topology.schema_floor_above_version',
-                ['tasklet' => $node->name, 'floor' => $floor, 'version' => $decl->schemaVersion],
-            );
-        }
-        if ($floor < $decl->schemaVersion
-            && !$definition->declares('migrateState')
-            && !$definition->declares('migrateChange')) {
-            throw new FlezhaException(
-                'topology.schema_floor_without_migration',
-                ['tasklet' => $node->name, 'floor' => $floor],
-            );
         }
     }
 }
