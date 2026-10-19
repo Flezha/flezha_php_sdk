@@ -122,15 +122,19 @@ final class LocalModeTest extends RepositoryTestCase
         self::assertSame(['a is 1', '{"a":1}'], $released);
     }
 
-    public function testTheBannerReachesTheSdkLoggerAtErrorWhichNoLevelHides(): void
+    public function testTheBannerReachesTheSdkLoggerAtErrorAsTheRunStarts(): void
     {
-        LocalRelay::start(WordCountRelay::class)->close();
+        $run = LocalRelay::start(WordCountRelay::class);
 
-        self::assertCount(1, $this->logged);
-        self::assertStringStartsWith(
-            'error: LOCAL MODE: state is held in memory and NOTHING is durable',
-            $this->logged[0],
-        );
+        try {
+            self::assertCount(1, $this->logged);
+            self::assertStringStartsWith(
+                'error: LOCAL MODE: state is held in memory and NOTHING is durable',
+                $this->logged[0],
+            );
+        } finally {
+            $run->close();
+        }
     }
 
     public function testARetryNoticeReachesTheSdkLogger(): void

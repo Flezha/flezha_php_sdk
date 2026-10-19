@@ -159,20 +159,40 @@ final class ExecutorTest extends TestCase
         $runner->executor($swoole);
         (new \ReflectionProperty(\Flezha\Runner::class, 'core'))->setValue($runner, $core);
         try {
-            foreach (['registerFactory' => CounterRelay::class, 'unregisterFactory' => EchoRelay::class] as $call => $class) {
-                try {
-                    $runner->{$call}($class);
-                    self::fail("{$call} after start was not refused");
-                } catch (FlezhaException $e) {
-                    self::assertSame('runtime.executor_unavailable', $e->getCode());
-                    self::assertStringStartsWith('the swoole executor cannot run here: ', $e->getMessage());
-                    self::assertStringContainsString('only the calling thread', $e->getMessage());
-                }
-            }
-            self::assertSame(['echo_relay'], self::declaredFactories($runner));
+            self::assertChangesRefused($runner);
         } finally {
             $core->free();
         }
+    }
+
+    /** A worker thread's runner, attached to the pool's context, refuses alike. */
+    public function testOnASwooleWorkerThreadAFactoryChangeIsRefused(): void
+    {
+        $core = Core::create();
+        $runner = \Flezha\Flezha::createRunner('test')->registerFactory(EchoRelay::class);
+        (new \ReflectionProperty(\Flezha\Runner::class, 'core'))->setValue($runner, $core);
+        \Flezha\Runner::attachInThread(0, new LocalLoopState());
+        try {
+            self::assertChangesRefused($runner);
+        } finally {
+            (new \ReflectionProperty(\Flezha\Runner::class, 'attachment'))->setValue(null, null);
+            $core->free();
+        }
+    }
+
+    private static function assertChangesRefused(\Flezha\Runner $runner): void
+    {
+        foreach (['registerFactory' => CounterRelay::class, 'unregisterFactory' => EchoRelay::class] as $call => $class) {
+            try {
+                $runner->{$call}($class);
+                self::fail("{$call} after start was not refused");
+            } catch (FlezhaException $e) {
+                self::assertSame('runtime.executor_unavailable', $e->getCode());
+                self::assertStringStartsWith('the swoole executor cannot run here: ', $e->getMessage());
+                self::assertStringContainsString('only the calling thread', $e->getMessage());
+            }
+        }
+        self::assertSame(['echo_relay'], self::declaredFactories($runner));
     }
 
     /** @return list<string> */

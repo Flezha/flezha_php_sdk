@@ -77,6 +77,8 @@ final class LocalRelay
             $core->declareClass(Json::encode(HostClassDecl::of($spec)));
             // Not `start`, which is the one call that dials a controller.
             $core->localStart($spec->factoryId, $spec->factoryId . '-local');
+            // The local-mode banner, said as the run starts rather than at close.
+            $core->drainNotices();
         } catch (\Throwable $failure) {
             $core->free();
 

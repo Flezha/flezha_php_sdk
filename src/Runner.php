@@ -295,7 +295,14 @@ final class Runner
         $this->dispatcher = new Dispatcher($this->registry, $this->core);
         $this->executor ??= Executors::fromEnvironment($this->maxActivations);
 
-        $this->core->start($this->namespace);
+        try {
+            $this->core->start($this->namespace);
+        } finally {
+            // What the core said while connecting: written now, not at the
+            // first idle poll, and on a failed start, after which nothing
+            // would take it.
+            $this->core->drainNotices();
+        }
         // Shutdown is observed three ways, because the harness, a user and
         // the controller each have their own: end of file on standard input, a
         // signal, and the core's own stop. The first two are the core's, on a
@@ -478,8 +485,10 @@ final class Runner
     private function refuseUnderThreads(): void
     {
         // Each Swoole thread built its own registry at start; a change now
-        // would reach this thread alone. By name, so the adapter stays unloaded.
-        if ($this->executor?->name() === 'swoole') {
+        // would reach this thread alone. A worker thread knows it by its
+        // attachment; the starting thread by name, so the adapter stays
+        // unloaded.
+        if (self::$attachment !== null || $this->executor?->name() === 'swoole') {
             throw new FlezhaException('runtime.executor_unavailable', [
                 'executor' => 'swoole',
                 'reason' => 'a class registered or unregistered after start reaches only the calling thread; '
