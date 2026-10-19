@@ -70,7 +70,7 @@ final class Runner
     public function __construct(public readonly string $namespace)
     {
         $this->registry = new Registry();
-        $this->maxActivations = Env::positive('FLEZHA_MAX_ACTIVATIONS');
+        $this->maxActivations = Core::knob('positive', (string) getenv('FLEZHA_MAX_ACTIVATIONS'));
     }
 
     /**
@@ -468,7 +468,6 @@ final class Runner
         $this->core = null;
     }
 
-    /** @param class-string<Relay> $class */
     private function buildRegistry(): void
     {
         foreach ($this->classes as $class) {

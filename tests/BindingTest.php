@@ -7,7 +7,6 @@ namespace Flezha\Tests;
 use Flezha\Attribute\Relay;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
-use Flezha\Env;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
@@ -210,10 +209,10 @@ final class BindingTest extends TestCase
         try {
             foreach (['5' => 5, '0' => null, 'lots' => null] as $raw => $expected) {
                 putenv("$name=$raw");
-                self::assertSame($expected, Env::positive($name), (string) $raw);
+                self::assertSame($expected, Core::knob('positive', (string) getenv($name)), (string) $raw);
             }
             putenv($name);
-            self::assertNull(Env::positive($name));
+            self::assertNull(Core::knob('positive', (string) getenv($name)));
         } finally {
             putenv($name);
         }
