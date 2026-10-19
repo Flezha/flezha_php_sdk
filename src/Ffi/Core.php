@@ -68,10 +68,7 @@ final class Core implements SpawnBridge
         $ffi = Binding::current();
         $ctx = (int) $ffi->flz_core_context_new(self::SCHEMA_VERSION);
         if ($ctx === 0) {
-            throw FlezhaException::fromDocument(
-                self::cstring($ffi->flz_core_init_error())
-                    ?? throw new \LogicException('flz_core refused this shim and reported no reason'),
-            );
+            throw self::initRefusal($ffi);
         }
 
         $core = new self($ffi, $ctx, true);
@@ -95,6 +92,27 @@ final class Core implements SpawnBridge
 
         return self::cstring(Binding::current()->flz_core_error_document($code, $json))
             ?? throw new \LogicException("flz_core rendered no error document for '$code'");
+    }
+
+    /**
+     * A `Response` channel payload as the core's decoder reads it, in postcard;
+     * a payload that is no call envelope throws `call.malformed_response`.
+     */
+    public static function responseDecode(string $payload): string
+    {
+        $core = self::contextFree();
+        $parts = null;
+        $status = $core->outBuffer(
+            fn (CData $out, CData $len): int => $core->ffi->flz_core_response_decode(
+                $payload,
+                strlen($payload),
+                FFI::addr($out),
+                FFI::addr($len),
+            ),
+            $parts,
+        );
+
+        return $status === Binding::OK ? (string) $parts : throw self::initRefusal($core->ffi);
     }
 
     /**
@@ -586,6 +604,15 @@ final class Core implements SpawnBridge
         throw FlezhaException::fromDocument(
             self::cstring($this->ffi->flz_core_last_error($this->live()))
                 ?? throw new \LogicException('the flezha core refused a call and recorded no reason'),
+        );
+    }
+
+    /** The refusal a context-free call left on this thread. */
+    private static function initRefusal(FFI $ffi): FlezhaException
+    {
+        return FlezhaException::fromDocument(
+            self::cstring($ffi->flz_core_init_error())
+                ?? throw new \LogicException('flz_core refused a call and reported no reason'),
         );
     }
 

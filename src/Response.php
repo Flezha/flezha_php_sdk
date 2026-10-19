@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Exception\DecodeException;
+use Flezha\Codec\PostcardCursor;
 use Flezha\Exception\FlezhaException;
+use Flezha\Ffi\Core;
 
 /**
  * One outcome of a `call(...)`, as its Response channel delivers it: the
@@ -31,33 +32,27 @@ final readonly class Response
     }
 
     /**
-     * The Response a controller's envelope carries: a JSON object whose
-     * `request` and `value` are padded base64 and whose `error` is an error
-     * object. `$decode` reads the request's and the answer's bytes.
+     * The Response a controller's envelope carries, read by the core's
+     * decoder; a payload that is no envelope throws `call.malformed_response`.
+     * `$decode` reads the request's and the answer's bytes.
      *
      * @param callable(string):mixed $decode
      */
     public static function decode(string $payload, callable $decode): self
     {
-        /** @var array{target: string, created: bool, request: string, value?: string, error?: array<string, mixed>} $envelope */
-        $envelope = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
-        $error = isset($envelope['error']) ? FlezhaException::fromObject($envelope['error']) : null;
+        $parts = new PostcardCursor(Core::responseDecode($payload));
+        $target = $parts->bytes('Response target');
+        $created = $parts->bool('Response created');
+        $request = $decode($parts->bytes('Response request'));
+        $answered = $parts->variant('Response result') === 0;
+        $answer = $parts->bytes('Response result');
 
         return new self(
-            request: $decode(self::bytes($envelope['request'])),
-            value: $error === null ? $decode(self::bytes($envelope['value'] ?? '')) : null,
-            error: $error,
-            target: $envelope['target'],
-            created: $envelope['created'],
+            request: $request,
+            value: $answered ? $decode($answer) : null,
+            error: $answered ? null : FlezhaException::fromDocument($answer),
+            target: $target,
+            created: $created,
         );
-    }
-
-    private static function bytes(string $base64): string
-    {
-        $bytes = base64_decode($base64, true);
-
-        return $bytes !== false
-            ? $bytes
-            : throw new DecodeException('a Response envelope carries bytes that are not base64');
     }
 }

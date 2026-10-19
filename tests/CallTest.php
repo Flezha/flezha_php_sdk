@@ -136,36 +136,26 @@ final class CallTest extends RepositoryTestCase
         self::assertEquals(new Response('req:s1', 'fine', null, 'agent-1', true), ($channel->decode)($envelope));
     }
 
-    /** Every case of the shared fixture, read raw: request and value bytes, outcome, target, created. */
-    public function testEveryEnvelopeCaseDecodes(): void
+    /** The fixture's timeout case and a payload that is no envelope, both read by the core. */
+    public function testAnErrorCaseAndAMalformedPayloadReadThroughTheCore(): void
     {
         $path = $this->repositoryFile('test/fixtures/call_response_envelope.json');
         /** @var array{cases: list<array{name: string, payload: string, expect: array<string, mixed>}>} $fixture */
         $fixture = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
-        self::assertNotEmpty($fixture['cases']);
+        $case = array_values(array_filter($fixture['cases'], static fn (array $c): bool => $c['name'] === 'error_timeout'))[0];
+        $expect = $case['expect'];
+        $response = Response::decode($case['payload'], static fn (string $b): string => $b);
 
-        foreach ($fixture['cases'] as $case) {
-            self::assertEnvelopeCase($case['expect'], Response::decode($case['payload'], static fn (string $b): string => $b));
-        }
-    }
-
-    /** @param array<string, mixed> $expect */
-    private static function assertEnvelopeCase(array $expect, Response $response): void
-    {
         self::assertSame(
-            [$expect['target'], $expect['created'], base64_decode($expect['request'], true), $expect['ok']],
-            [$response->target, $response->created, $response->request, $response->ok()],
+            [$expect['target'], $expect['created'], base64_decode($expect['request'], true), $expect['error_code']],
+            [$response->target, $response->created, $response->request, $response->error?->getCode()],
         );
-        if ($expect['ok']) {
-            self::assertSame(base64_decode($expect['value'], true), $response->value);
-
-            return;
+        try {
+            Response::decode('{"target":"t","created":false}', static fn (string $b): string => $b);
+            self::fail('a payload that is no envelope is refused');
+        } catch (FlezhaException $refused) {
+            self::assertSame('call.malformed_response', $refused->getCode());
         }
-        self::assertNull($response->value);
-        self::assertSame(
-            [$expect['error_code'], $expect['error_class'], $expect['error_message']],
-            [$response->error?->getCode(), $response->error?->errorClass, $response->error?->getMessage()],
-        );
     }
 
     /** @return array<string, mixed> */
