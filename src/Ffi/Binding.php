@@ -105,6 +105,7 @@ final class Binding
         void flz_core_buf_free(char *buf, size_t len);
         void flz_core_context_free(uintptr_t ctx);
         void flz_core_set_log_callback(void (*callback)(int32_t level, const char *message));
+        int32_t flz_core_take_notices(char **out, size_t *out_len);
         C;
 
     /** Poll produced an activation; the out buffer holds its encoded bytes. */

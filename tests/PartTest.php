@@ -87,6 +87,8 @@ final class PartFeederRelay extends \Flezha\Relay
  */
 final class PartTest extends TestCase
 {
+    use CapturesTheLog;
+
     private const BUDGET_MS = 20_000;
 
     public static function setUpBeforeClass(): void

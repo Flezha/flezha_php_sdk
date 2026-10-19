@@ -61,6 +61,21 @@ class Logger
         $this->write('error', $message);
     }
 
+    /**
+     * Write the core's notices, as `flz_core_take_notices` answers them: an
+     * error, and the local-mode banner (`always`), at `error`, which no level
+     * hides.
+     *
+     * @param list<array{level: string, target: string, text: string}> $taken
+     */
+    public function notices(array $taken): void
+    {
+        foreach ($taken as $notice) {
+            $level = in_array($notice['level'], ['info', 'warn'], true) ? $notice['level'] : 'error';
+            $this->{$level}($notice['text']);
+        }
+    }
+
     protected function write(string $level, string $message): void
     {
         if (self::ORDER[$level] < $this->level) {

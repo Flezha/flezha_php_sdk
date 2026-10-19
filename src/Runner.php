@@ -354,6 +354,9 @@ final class Runner
 
                 return;
             }
+            if ($status === Binding::POLL_TIMEOUT) {
+                $core->drainNotices();
+            }
             if ($status !== Binding::POLL_ACTIVATION || $bytes === null) {
                 continue;
             }
@@ -452,6 +455,7 @@ final class Runner
 
         // The context is released only when nothing is still running against
         // it; `abandonContext` is what a bounded drain that gave up leaves.
+        $this->core?->drainNotices();
         $this->core?->free();
         $this->core = null;
     }

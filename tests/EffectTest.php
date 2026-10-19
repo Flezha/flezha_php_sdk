@@ -173,6 +173,8 @@ final class FirstKept extends RefusingSpawnBridge
  */
 final class EffectTest extends TestCase
 {
+    use CapturesTheLog;
+
     public function testALiveInputRunsTheFunctionAndAReplayIsServedItsResult(): void
     {
         $harness = new Harness(EffectAsks::class);

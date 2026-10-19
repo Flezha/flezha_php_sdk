@@ -231,6 +231,7 @@ final class SwooleExecutor implements Executor
             if ($this->threads === []) {
                 $this->spawn();
             }
+            $runner->core()->drainNotices();
             $status = $runner->core()->waitStarvation(self::STARVATION_WAIT_MS);
             if ($status === Binding::POLL_SHUTTING_DOWN) {
                 $this->state?->stop();

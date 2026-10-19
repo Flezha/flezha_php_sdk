@@ -7,6 +7,7 @@ namespace Flezha\Ffi;
 use FFI;
 use FFI\CData;
 use Flezha\Exception\FlezhaException;
+use Flezha\Logger;
 use Flezha\SpawnBridge;
 
 /**
@@ -73,7 +74,12 @@ final class Core implements SpawnBridge
             );
         }
 
-        return new self($ffi, $ctx, true);
+        $core = new self($ffi, $ctx, true);
+        // The first take starts holding the core's notices for this host's
+        // drains; anything an earlier context left is written now.
+        $core->drainNotices();
+
+        return $core;
     }
 
     /**
@@ -469,6 +475,20 @@ final class Core implements SpawnBridge
         ));
 
         return array_values(json_decode((string) $ids, true, 512, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Write the core's notices held since the last take through the SDK's
+     * logger. Context-free; the first take starts the holding.
+     */
+    public function drainNotices(): void
+    {
+        $taken = null;
+        $this->outBuffer(
+            fn (CData $out, CData $len): int => $this->ffi->flz_core_take_notices(FFI::addr($out), FFI::addr($len)),
+            $taken,
+        );
+        Logger::current()->notices(json_decode((string) $taken, true, 512, JSON_THROW_ON_ERROR) ?? []);
     }
 
     /** The core's monotonic clock, in nanoseconds since a process origin. */

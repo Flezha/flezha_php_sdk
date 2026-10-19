@@ -30,6 +30,8 @@ use Flezha\LocalOutput;
  */
 final class LocalModeTest extends RepositoryTestCase
 {
+    use CapturesTheLog;
+
     /**
      * The scenario every core runs: the lines to feed, and the output values.
      *
@@ -118,6 +120,76 @@ final class LocalModeTest extends RepositoryTestCase
         }
 
         self::assertSame(['a is 1', '{"a":1}'], $released);
+    }
+
+    public function testTheBannerReachesTheSdkLoggerAtErrorWhichNoLevelHides(): void
+    {
+        LocalRelay::start(WordCountRelay::class)->close();
+
+        self::assertCount(1, $this->logged);
+        self::assertStringStartsWith(
+            'error: LOCAL MODE: state is held in memory and NOTHING is durable',
+            $this->logged[0],
+        );
+    }
+
+    public function testARetryNoticeReachesTheSdkLogger(): void
+    {
+        FlakyTasklet::$attempts = 0;
+        $run = LocalRelay::start(FlakyRelay::class);
+
+        try {
+            $run->onOutput('out', static function (): void {
+            });
+            $run->feed('in', '"x"');
+            $run->runUntilIdle(10_000);
+        } finally {
+            $run->close();
+        }
+
+        $retries = array_values(array_filter(
+            $this->logged->getArrayCopy(),
+            static fn (string $line): bool => str_starts_with($line, 'warn: tasklet flaky'),
+        ));
+        self::assertCount(1, $retries);
+        self::assertStringStartsWith(
+            'warn: tasklet flaky attempt 1/3 failed (retrying in ',
+            $retries[0],
+        );
+        self::assertStringContainsString('the first attempt fails', $retries[0]);
+        // The SDK's own line for the failed attempt, at `debug`.
+        $failed = array_values(array_filter(
+            $this->logged->getArrayCopy(),
+            static fn (string $line): bool => str_starts_with($line, 'debug: flaky failed an item: '),
+        ));
+        self::assertCount(1, $failed);
+        $this->logged->exchangeArray(array_values(
+            array_diff($this->logged->getArrayCopy(), $retries, $failed),
+        ));
+    }
+}
+
+/** Fails its first attempt, so the core retries it and says so. */
+#[Task(name: 'flaky')]
+final class FlakyTasklet extends Tasklet
+{
+    public static int $attempts = 0;
+
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        if (++self::$attempts === 1) {
+            throw new \RuntimeException('the first attempt fails');
+        }
+        $ctx->emit($input);
+    }
+}
+
+#[Relay(factoryId: 'local_flaky_php')]
+final class FlakyRelay extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(FlakyTasklet::class)->output('out');
     }
 }
 

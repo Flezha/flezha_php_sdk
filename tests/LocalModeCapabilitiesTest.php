@@ -34,6 +34,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class LocalModeCapabilitiesTest extends TestCase
 {
+    use CapturesTheLog;
+
     /** Long enough for a graph to settle, short enough that a wedge is a failure. */
     private const BUDGET_MS = 20_000;
 
