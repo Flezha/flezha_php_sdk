@@ -104,7 +104,7 @@ final class Binding
         int32_t flz_core_relays(uintptr_t ctx, char **buf_out, size_t *len_out);
         uint64_t flz_core_monotonic_nanos(void);
         int32_t flz_core_knob(const char *kind, const char *raw, int64_t *out);
-        int32_t flz_core_response_decode(const char *bytes, size_t len, char **out, size_t *out_len);
+        int32_t flz_core_response_decode(const char *bytes, size_t len, char *out, size_t *parts);
         void flz_core_buf_free(char *buf, size_t len);
         void flz_core_context_free(uintptr_t ctx);
         void flz_core_set_log_callback(void (*callback)(int32_t level, const char *message));

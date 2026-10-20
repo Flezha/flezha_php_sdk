@@ -41,6 +41,11 @@ final class Core implements SpawnBridge
      */
     private ?int $ctx;
 
+    /** The binding `responseDecode`'s reused buffers belong to, and the buffers. */
+    private static ?FFI $decodedBy = null;
+    private static CData $decoded;
+    private static CData $decodedParts;
+
     private function __construct(
         private readonly FFI $ffi,
         ?int $ctx,
@@ -95,24 +100,30 @@ final class Core implements SpawnBridge
     }
 
     /**
-     * A `Response` channel payload as the core's decoder reads it, in postcard;
-     * a payload that is no call envelope throws `call.malformed_response`.
+     * A `Response` channel payload as the core's decoder reads it: the target,
+     * `created`, the request's bytes, whether the call was answered, and the
+     * answer's bytes or the JSON error document. A payload that is no call
+     * envelope throws `call.malformed_response`.
+     *
+     * @return array{string, bool, string, bool, string}
      */
-    public static function responseDecode(string $payload): string
+    public static function responseDecode(string $payload): array
     {
-        $core = self::contextFree();
-        $parts = null;
-        $status = $core->outBuffer(
-            fn (CData $out, CData $len): int => $core->ffi->flz_core_response_decode(
-                $payload,
-                strlen($payload),
-                FFI::addr($out),
-                FFI::addr($len),
-            ),
-            $parts,
-        );
+        $ffi = Binding::current();
+        $length = strlen($payload);
+        // Buffers reused across calls: a per-call `FFI::new` costs more than the decode.
+        if (self::$decodedBy !== $ffi || FFI::sizeof(self::$decoded) < $length) {
+            self::$decoded = $ffi->new('char[' . max($length, 1024) . ']');
+            [self::$decodedBy, self::$decodedParts] = [$ffi, $ffi->new('size_t[5]')];
+        }
+        $parts = self::$decodedParts;
+        if ($ffi->flz_core_response_decode($payload, $length, self::$decoded, $parts) !== Binding::OK) {
+            throw self::initRefusal($ffi);
+        }
+        [$target, $request] = [$parts[0], $parts[1]];
+        $data = FFI::string(self::$decoded, $target + $request + $parts[2]);
 
-        return $status === Binding::OK ? (string) $parts : throw self::initRefusal($core->ffi);
+        return [substr($data, 0, $target), $parts[3] === 1, substr($data, $target, $request), $parts[4] === 1, substr($data, $target + $request)];
     }
 
     /**

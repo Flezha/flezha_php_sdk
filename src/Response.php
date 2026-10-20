@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Codec\PostcardCursor;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 
@@ -40,17 +39,13 @@ final readonly class Response
      */
     public static function decode(string $payload, callable $decode): self
     {
-        $parts = new PostcardCursor(Core::responseDecode($payload));
-        $target = $parts->bytes('Response target');
-        $created = $parts->bool('Response created');
-        $request = $decode($parts->bytes('Response request'));
-        $answered = $parts->variant('Response result') === 0;
-        $answer = $parts->bytes('Response result');
+        [$target, $created, $request, $answered, $result] = Core::responseDecode($payload);
+        $request = $decode($request);
 
         return new self(
             request: $request,
-            value: $answered ? $decode($answer) : null,
-            error: $answered ? null : FlezhaException::fromDocument($answer),
+            value: $answered ? $decode($result) : null,
+            error: $answered ? null : FlezhaException::fromDocument($result),
             target: $target,
             created: $created,
         );
