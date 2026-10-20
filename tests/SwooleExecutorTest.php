@@ -8,6 +8,7 @@ use Flezha\Executor\SwooleExecutor;
 use Flezha\Executor\SwooleLoopState;
 use Flezha\Executor\Executors;
 use Flezha\Ffi\Core;
+use Flezha\Runner;
 use PHPUnit\Framework\TestCase;
 use Swoole\Thread;
 use Swoole\Thread\Atomic;
@@ -91,6 +92,20 @@ final class SwooleExecutorTest extends TestCase
         self::assertFalse($state->stopping());
         $state->stop();
         self::assertSame(1, $stopping->get());
-        self::assertTrue((new SwooleLoopState(null, $stopping))->stopping());
+        self::assertTrue((new SwooleLoopState(null, 0, $stopping))->stopping());
+    }
+
+    public function testAGrownThreadLeavesAfterItsRetireTimeIdleAndABaseOneNever(): void
+    {
+        $grown = new SwooleLoopState(null, 2 * Runner::POLL_TIMEOUT_MS);
+        self::assertFalse($grown->idle());
+        $grown->observe(1);
+        self::assertFalse($grown->idle(), 'an activation restarts the idle time');
+        self::assertTrue($grown->idle());
+
+        $base = new SwooleLoopState();
+        for ($turn = 0; $turn < 1_000; $turn++) {
+            self::assertFalse($base->idle());
+        }
     }
 }

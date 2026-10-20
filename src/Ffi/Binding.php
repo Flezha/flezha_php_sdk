@@ -87,7 +87,9 @@ final class Binding
         int32_t flz_core_local_run_until_idle(uintptr_t ctx, uint64_t timeout_ms);
         int32_t flz_core_local_stop(uintptr_t ctx);
         int32_t flz_core_poll(uintptr_t ctx, uint64_t timeout_ms, char **buf_out, size_t *len_out);
-        int32_t flz_core_wait_starvation(uintptr_t ctx, uint64_t timeout_ms);
+        int32_t flz_core_pool_open(uintptr_t ctx, uint32_t default_base, uint32_t *policy_out);
+        int32_t flz_core_pool_supervise(uintptr_t ctx);
+        int32_t flz_core_pool_left(uintptr_t ctx);
         int32_t flz_core_complete(uintptr_t ctx, const char *buf, size_t len);
         int32_t flz_core_abandon(uintptr_t ctx, uint64_t token);
         void flz_core_shutdown(uintptr_t ctx);
@@ -112,8 +114,12 @@ final class Binding
 
     /** Poll produced an activation; the out buffer holds its encoded bytes. */
     public const POLL_ACTIVATION = 1;
-    /** The starvation wait observed starvation: the host owes a thread. */
-    public const STARVATION_OBSERVED = 1;
+    /** The pool governor's answer: spawn a worker that never retires. */
+    public const POOL_SPAWN_BASE = 1;
+    /** The pool governor's answer: the pool is over. */
+    public const POOL_STOP = 2;
+    /** The pool governor's answer: spawn a worker that leaves after its retire time idle. */
+    public const POOL_SPAWN_GROWN = 3;
     /** Poll timed out with no work. */
     public const POLL_TIMEOUT = 0;
     /** The context is shutting down; every blocked poller is released. */

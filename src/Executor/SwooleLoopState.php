@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Executor;
 
+use Flezha\Runner;
 use Swoole\Thread\Atomic;
 
 /**
@@ -25,14 +26,19 @@ final class SwooleLoopState implements LoopState
     private readonly Atomic $claimed;
     private readonly Atomic $observed;
     private readonly Atomic $bodyNanos;
+    /** This thread's polls without work since its last activation, in milliseconds. */
+    private int $idleMs = 0;
 
     /**
      * The atomics are constructor arguments so a worker thread rebuilds this
      * state over the ones the pool already shares: the thread receives them as
-     * bootstrap arguments and passes them straight back in.
+     * bootstrap arguments and passes them straight back in. `retireMs` is
+     * this thread's own: the governor's retire time for a grown one, 0 for
+     * one that never leaves.
      */
     public function __construct(
         private readonly ?int $budget = null,
+        private readonly int $retireMs = 0,
         ?Atomic $stopping = null,
         ?Atomic $claimed = null,
         ?Atomic $observed = null,
@@ -78,6 +84,14 @@ final class SwooleLoopState implements LoopState
     {
         $this->observed->add(1);
         $this->bodyNanos->add($bodyNanos);
+        $this->idleMs = 0;
+    }
+
+    public function idle(): bool
+    {
+        $this->idleMs += Runner::POLL_TIMEOUT_MS;
+
+        return $this->retireMs > 0 && $this->idleMs >= $this->retireMs;
     }
 
     public function report(): array

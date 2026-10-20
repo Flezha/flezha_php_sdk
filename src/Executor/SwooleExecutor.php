@@ -22,35 +22,29 @@ use Throwable;
  * context, not per thread. Ownership is asymmetric — the creating thread frees
  * the context, and only after every worker has been joined.
  *
- * The pool grows on the core's own signal rather than a guess: a supervisor
- * blocks in `flz_core_wait_starvation`, which the ABI documents as being "for
- * hosts whose fetch threads can be occupied by user code", and adds a thread
- * on each observation up to the maximum.
+ * How many threads is the core's pool governor's to say: the supervisor
+ * blocks in `flz_core_pool_supervise`, which waits on the core's starvation
+ * signal (for "hosts whose fetch threads can be occupied by user code"), and
+ * starts the thread each answer asks for, a grown one leaving after the
+ * governor's retire time idle. `FLEZHA_WORKER_POOL_SIZE` (default 1) and
+ * `FLEZHA_WORKER_POOL_MAX` (default ten times it) size it.
  *
  * Selected explicitly and never the default: it needs a thread-safe (ZTS) PHP
  * build and an extension most distributions do not ship.
  */
 final class SwooleExecutor implements Executor
 {
-    /** How long the supervisor parks in one starvation wait. */
-    private const STARVATION_WAIT_MS = 250;
-
-    /** How long `stop()` waits for the pool to leave user code. */
-    private const JOIN_TIMEOUT_S = 5.0;
-
     /** @var list<Thread> */
     private array $threads = [];
     private ?SwooleLoopState $state = null;
     private ?Runner $runner = null;
+    /** How long a grown thread polls without work before it leaves. */
+    private int $retireMs = 0;
+    /** How long `stop()` waits for the pool to leave user code. */
+    private float $drainS = 5.0;
 
-    /**
-     * @param int|null $maxThreads the ceiling the supervisor grows to; the
-     *                             host's processor count when not named
-     */
-    public function __construct(
-        private readonly ?int $maxThreads = null,
-        private readonly ?int $maxActivations = null,
-    ) {
+    public function __construct(private readonly ?int $maxActivations = null)
+    {
         self::assertRuntime();
     }
 
@@ -121,16 +115,19 @@ final class SwooleExecutor implements Executor
         $this->runner = $runner;
         $this->state = new SwooleLoopState($this->maxActivations);
 
-        // One thread to begin with. The pool finds its own width from the
-        // core's starvation signal, so an idle runner costs one thread and a
-        // busy one grows to the ceiling.
-        $this->spawn();
+        // One thread to begin with unless told otherwise. The pool finds its
+        // own width from the core's starvation signal, so an idle runner costs
+        // one thread and a busy one grows to the ceiling.
+        [$base, , , $this->retireMs, $drainMs] = $runner->core()->poolOpen(1);
+        $this->drainS = $drainMs / 1000;
+        for ($i = 0; $i < $base; $i++) {
+            $this->spawn(false);
+        }
 
         // The supervisor is this thread, not a fourth mechanism: `run` blocks
         // until the pool is done anyway, the main thread is otherwise idle,
-        // and it is the thread that owns the pool it grows. Its wait also
-        // gives the runner a place to observe a stop request, which is why the
-        // starvation wait is bounded rather than indefinite.
+        // and it is the thread that owns the pool it grows. Its bounded wait
+        // also gives the runner a place to observe a stop request.
         $this->supervise($runner);
         $this->joinAll();
     }
@@ -141,17 +138,6 @@ final class SwooleExecutor implements Executor
         $this->joinAll();
     }
 
-    /** Start one more worker, up to the ceiling. Answers whether it did. */
-    private function grow(): bool
-    {
-        if ($this->size() >= $this->ceiling()) {
-            return false;
-        }
-        $this->spawn();
-
-        return true;
-    }
-
     /** How many workers are alive now. */
     private function size(): int
     {
@@ -159,14 +145,15 @@ final class SwooleExecutor implements Executor
     }
 
     /**
-     * Forget the workers that have left, so the pool can replace them.
+     * Forget the workers that have left and give their seats back, so the
+     * governor can replace them.
      *
-     * A worker that ends for any reason other than shutdown must not consume
-     * capacity the pool budgets for: counting a dead thread against the
-     * ceiling is how a pool of eight corpses reports starvation forever and
-     * processes nothing. Measured, not hypothetical — a fatal error in the
-     * entry script killed every worker on bootstrap and the ceiling warning
-     * was the only thing that said so.
+     * Here and not in the worker, because a fatal error ends a thread with no
+     * `finally` run: a dead thread still counted against the ceiling is how a
+     * pool of eight corpses reports starvation forever and processes nothing.
+     * Measured, not hypothetical — a fatal error in the entry script killed
+     * every worker on bootstrap and the ceiling warning was the only thing
+     * that said so.
      *
      * A non-zero exit is reported once, because it is a defect in user code or
      * in the entry script and nothing else will name it.
@@ -179,6 +166,7 @@ final class SwooleExecutor implements Executor
                 $live[] = $thread;
                 continue;
             }
+            $this->runner?->core()->poolLeft();
             $status = $thread->getExitStatus();
             if ($status !== 0 && !($this->state?->stopping() ?? false)) {
                 Logger::current()->error(sprintf(
@@ -193,63 +181,47 @@ final class SwooleExecutor implements Executor
         $this->threads = $live;
     }
 
-    private function ceiling(): int
-    {
-        return $this->maxThreads ?? swoole_cpu_num();
-    }
-
-    private function spawn(): void
+    /** One worker into a seat the governor reserved; one that cannot start gives it back. */
+    private function spawn(bool $grown): void
     {
         $runner = $this->runner ?? throw new \LogicException('the pool has no runner to serve');
-        $this->threads[] = new Thread(
-            __DIR__ . '/swoole_worker.php',
-            $runner->autoloadPath(),
-            $runner->entryScript(),
-            $runner->coreAddress(),
-            $this->maxActivations ?? 0,
-            ...($this->state?->atomics() ?? []),
-        );
+        try {
+            $this->threads[] = new Thread(
+                __DIR__ . '/swoole_worker.php',
+                $runner->autoloadPath(),
+                $runner->entryScript(),
+                $runner->coreAddress(),
+                $this->maxActivations ?? 0,
+                $grown ? $this->retireMs : 0,
+                ...($this->state?->atomics() ?? []),
+            );
+        } catch (Throwable $e) {
+            $runner->core()->poolLeft();
+            Logger::current()->warn('could not start a worker thread: ' . $e->getMessage());
+        }
     }
 
     /**
-     * Grow the pool on the core's own signal, until the runner stops.
+     * Answer the governor until the runner stops: one decision per wait, at
+     * most a second apart, and the core's notices written on each.
      *
-     * `flz_core_wait_starvation` answers when work is queued and no thread is
-     * inside `poll` — which is precisely a PHP thread sitting inside a user's
-     * PDO call — so a pool that grows on an observation finds the width the
-     * workload needs rather than the one someone guessed.
+     * The governor waits on `flz_core_pool_supervise`'s starvation signal,
+     * which answers when work is queued and no thread is inside `poll` —
+     * precisely a PHP thread sitting inside a user's PDO call — so the pool
+     * finds the width the workload needs rather than the one someone guessed.
      */
     private function supervise(Runner $runner): void
     {
-        $atCeilingLogged = false;
-
         while (!($this->state?->stopping() ?? true)) {
             $this->prune();
-            // A pool that lost every worker starves and cannot say so from
-            // inside a loop nobody is running, so the replacement is
-            // unconditional rather than starvation-driven.
-            if ($this->threads === []) {
-                $this->spawn();
-            }
+            $answer = $runner->core()->poolSupervise();
             $runner->core()->drainNotices();
-            $status = $runner->core()->waitStarvation(self::STARVATION_WAIT_MS);
-            if ($status === Binding::POLL_SHUTTING_DOWN) {
+            if ($answer === Binding::POOL_STOP) {
                 $this->state?->stop();
                 break;
             }
-            if ($status !== Binding::STARVATION_OBSERVED) {
-                continue;
-            }
-
-            if ($this->grow()) {
-                $atCeilingLogged = false;
-            } elseif (!$atCeilingLogged) {
-                Logger::current()->warn(sprintf(
-                    'the core is starving and the thread pool is at its ceiling of %d; raise the '
-                    . "executor's maximum, or find what is holding the handlers",
-                    $this->ceiling(),
-                ));
-                $atCeilingLogged = true;
+            if ($answer === Binding::POOL_SPAWN_BASE || $answer === Binding::POOL_SPAWN_GROWN) {
+                $this->spawn($answer === Binding::POOL_SPAWN_GROWN);
             }
         }
     }
@@ -264,7 +236,7 @@ final class SwooleExecutor implements Executor
      */
     private function joinAll(): void
     {
-        $deadline = microtime(true) + self::JOIN_TIMEOUT_S;
+        $deadline = microtime(true) + $this->drainS;
         foreach ($this->threads as $thread) {
             try {
                 while ($thread->isAlive() && microtime(true) < $deadline) {
@@ -290,7 +262,7 @@ final class SwooleExecutor implements Executor
                 . 'call into it. The core re-hands unanswered work on the next bind — find the '
                 . 'handler that does not return.',
                 $alive,
-                self::JOIN_TIMEOUT_S,
+                $this->drainS,
             ));
             $this->runner?->abandonContext();
         }

@@ -32,6 +32,9 @@ interface LoopState
     /** Record one activation's tasklet-body time, in nanoseconds. */
     public function observe(int $bodyNanos): void;
 
+    /** A poll that timed out: whether this loop leaves, as an idle grown thread does. */
+    public function idle(): bool;
+
     /**
      * `[activations, mean body nanoseconds]` — the sizing arithmetic, measured
      * rather than assumed.

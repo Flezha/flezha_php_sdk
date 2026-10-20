@@ -371,6 +371,9 @@ final class Runner
             }
             if ($status === Binding::POLL_TIMEOUT) {
                 $core->drainNotices();
+                if ($state->idle()) {
+                    return;
+                }
             }
             if ($status !== Binding::POLL_ACTIVATION || $bytes === null) {
                 continue;

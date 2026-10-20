@@ -45,6 +45,11 @@ final class LocalLoopState implements LoopState
         $this->bodyNanos += $bodyNanos;
     }
 
+    public function idle(): bool
+    {
+        return false;
+    }
+
     public function report(): array
     {
         return [$this->observed, $this->observed === 0 ? 0 : intdiv($this->bodyNanos, $this->observed)];

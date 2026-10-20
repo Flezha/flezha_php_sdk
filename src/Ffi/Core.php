@@ -312,12 +312,32 @@ final class Core implements SpawnBridge
     }
 
     /**
-     * Block until the core observes starvation: work queued with no thread
-     * inside `poll`. Answers in `poll`'s three-way shape.
+     * Open the core's pool governor over this host's default base.
+     *
+     * @return array{int, int, int, int, int} base, ceiling, poll timeout,
+     *     retire time and drain bound, the last three in milliseconds
      */
-    public function waitStarvation(int $timeoutMs): int
+    public function poolOpen(int $defaultBase): array
     {
-        return $this->ffi->flz_core_wait_starvation($this->live(), $timeoutMs);
+        $policy = $this->ffi->new('uint32_t[5]');
+        $this->check($this->ffi->flz_core_pool_open($this->live(), $defaultBase, $policy));
+
+        return [$policy[0], $policy[1], $policy[2], $policy[3], $policy[4]];
+    }
+
+    /** The governor's next decision, a `Binding::POOL_*` or idle, at most a second away. */
+    public function poolSupervise(): int
+    {
+        $answer = $this->ffi->flz_core_pool_supervise($this->live());
+        $this->check($answer);
+
+        return $answer;
+    }
+
+    /** Give back one worker's seat. */
+    public function poolLeft(): void
+    {
+        $this->check($this->ffi->flz_core_pool_left($this->live()));
     }
 
     /** Complete an activation. Accepted from any thread. */

@@ -40,9 +40,9 @@ final class Executors
      * requires only php and ext-ffi, and a wrong build must produce an
      * instruction before the runner connects, not a fatal deep in the boot path.
      */
-    public static function swoole(?int $maxThreads = null, ?int $maxActivations = null): Executor
+    public static function swoole(?int $maxActivations = null): Executor
     {
-        return new SwooleExecutor($maxThreads, $maxActivations);
+        return new SwooleExecutor($maxActivations);
     }
 
     /**
@@ -56,7 +56,7 @@ final class Executors
 
         return match ($name) {
             '', 'sync' => self::sync($maxActivations),
-            'swoole' => self::swoole(null, $maxActivations),
+            'swoole' => self::swoole($maxActivations),
             // A host may also pass an executor of its own to Runner::executor().
             default => throw new FlezhaException(
                 'usage.unknown_word',
