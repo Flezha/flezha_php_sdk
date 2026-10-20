@@ -433,7 +433,7 @@ final class DispatchTest extends TestCase
             // The pinned work-activation fixture: a token the core never
             // handed out, so both `complete` and `abandon` refuse it.
             $this->dispatcher->dispatch((string) hex2bin(
-                '2a046f702d310301016b0002000102aabb010a666c7a2e6f66667365740137010701e8070100d00f090166',
+                '2a046f702d310301016b0002000102aabb010a666c7a2e6f66667365740137010701e8070201010c0100d00f09016601026964',
             ));
         } finally {
             Logger::use(new Logger('warn'));
@@ -740,6 +740,7 @@ final class DispatchTest extends TestCase
             'change_seq' => $changeSeq,
             'kind' => 'work',
             'items' => $items,
+            'cell_identity' => "op/$tasklet/$cellKey",
         ]);
     }
 

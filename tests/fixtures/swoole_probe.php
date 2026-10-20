@@ -19,7 +19,7 @@ require $autoload;
 $core = Flezha\Ffi\Core::attach($address);
 $schema->set($core->coreSchemaVersion());
 
-$state = new Flezha\Executor\SwooleLoopState($budget, new Swoole\Thread\Atomic(0), $claims);
+$state = new Flezha\Executor\SwooleLoopState($budget, 0, new Swoole\Thread\Atomic(0), $claims);
 for ($i = 0; $i < 10; $i++) {
     $state->claim();
 }
