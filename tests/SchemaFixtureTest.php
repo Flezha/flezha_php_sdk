@@ -59,7 +59,8 @@ final class SchemaFixtureTest extends RepositoryTestCase
                     'consumed_offset' => 7,
                     'replay' => true,
                     'now' => 1_000,
-                    'form' => 'transformed',
+                    'form' => 'prepared',
+                    'values' => ["\x0C"],
                 ],
                 ['kind' => 'timer', 'timer_kind' => 'event_time', 'scheduled_at' => 2_000],
             ],
@@ -72,6 +73,20 @@ final class SchemaFixtureTest extends RepositoryTestCase
     public function testTheResultFixtureIsEncodedByteForByte(): void
     {
         self::assertSame($this->pinned('result', 'work'), bin2hex(ActivationCodec::encodeResult(self::resultFixture())));
+    }
+
+    public function testThePreparedResultFixtureIsEncodedByteForByte(): void
+    {
+        $prepared = [
+            'token' => 42,
+            'outcome' => 'prepared',
+            'prepared' => [
+                ['values' => [['consumer' => 1, 'keys' => ['a'], 'bytes' => "\x0B"]], 'event_time' => 5],
+                ['error' => 'no', 'non_retryable' => true],
+            ],
+        ];
+
+        self::assertSame($this->pinned('result', 'prepared'), bin2hex(ActivationCodec::encodeResult($prepared)));
     }
 
     /** A completion is the effect's last field, after the DLQ entry. */

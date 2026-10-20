@@ -226,13 +226,14 @@ final class DispatchTest extends TestCase
     {
         $prepared = $this->prepare(['"a:1"', '"b:2"']);
 
-        self::assertSame([['keys' => ['a'], 'event_time' => null], ['keys' => ['b'], 'event_time' => null]], $prepared);
+        self::assertSame([['a'], ['b']], array_map(self::keysAnswered(...), $prepared));
+        self::assertSame([null, null], array_column($prepared, 'event_time'));
     }
 
     /** A filtered payload answers no key: the core never mints a cell. */
     public function testAFilteredPayloadAnswersNoKey(): void
     {
-        self::assertSame([['keys' => []]], $this->prepare(['"drop"']));
+        self::assertSame([['values' => [], 'event_time' => null]], $this->prepare(['"drop"']));
     }
 
     /** The keys answer the keyed consumer, whatever an unkeyed consumer declared before it filters. */
@@ -240,7 +241,7 @@ final class DispatchTest extends TestCase
     {
         $prepared = $this->prepare(['"a:1"', '"drop"'], 'split_keyed_relay');
 
-        self::assertSame([['keys' => ['a'], 'event_time' => null], ['keys' => []]], $prepared);
+        self::assertSame([['a'], []], array_map(self::keysAnswered(...), $prepared));
     }
 
     /** One payload's refusal is isolated to that payload. */
@@ -248,9 +249,9 @@ final class DispatchTest extends TestCase
     {
         $prepared = $this->prepare(['"a:1"', 'not json', '"b:2"']);
 
-        self::assertSame(['a'], $prepared[0]['keys']);
+        self::assertSame(['a'], self::keysAnswered($prepared[0]));
         self::assertArrayHasKey('error', $prepared[1]);
-        self::assertSame(['b'], $prepared[2]['keys']);
+        self::assertSame(['b'], self::keysAnswered($prepared[2]));
     }
 
     /**
@@ -625,10 +626,7 @@ final class DispatchTest extends TestCase
     /** The merge's key reads a field only the mapping sets. */
     public function testTheMergeKeyIsComputedOnTheMappedValue(): void
     {
-        self::assertSame(
-            [['keys' => ['B'], 'event_time' => null]],
-            $this->prepare(['"B:1"'], 'merge_relay', channel: 1),
-        );
+        self::assertSame([['B']], array_map(self::keysAnswered(...), $this->prepare(['"B:1"'], 'merge_relay', channel: 1)));
     }
 
     public function testRouteLatestHandsAKeyTheDocumentOnItsOwnTraffic(): void
@@ -657,21 +655,21 @@ final class DispatchTest extends TestCase
     public function testAFanOfNoneIsADrop(): void
     {
         self::assertSame([], $this->delivered('fanned_relay', 0, '"none"', channel: 0, cellKey: 'a'));
-        self::assertSame([['keys' => []]], $this->prepare(['"none"'], 'fanned_relay'));
+        self::assertSame([['values' => [], 'event_time' => null]], $this->prepare(['"none"'], 'fanned_relay'));
     }
 
     public function testAFanFollowedByAKeyAnswersEveryKeyAtTheCrossing(): void
     {
         self::assertSame(
-            [['keys' => ['a', 'b', 'c'], 'event_time' => null]],
-            $this->prepare(['"a:1,b:2,c:3"'], 'fanned_relay'),
+            [['a', 'b', 'c']],
+            array_map(self::keysAnswered(...), $this->prepare(['"a:1,b:2,c:3"'], 'fanned_relay')),
         );
     }
 
     /**
-     * The core admits a fanned entry payload whole to every cell its values
-     * keyed, so each cell keeps only its own: by the edge's key, or by a
-     * static tasklet's `cellsFor`.
+     * The crossing decodes a fanned entry payload and runs the chain once; each
+     * Cell then runs only the values its answer named for it, by the edge's key
+     * or by a static tasklet's `cellsFor`, with neither the decoder nor the edge.
      *
      * @return iterable<string, array{int, int}>
      */
@@ -682,11 +680,30 @@ final class DispatchTest extends TestCase
     }
 
     /** @dataProvider fannedAcrossCells */
-    public function testEachCellAFanReachesRunsOnlyTheValuesRoutedToIt(int $tasklet, int $channel): void
+    public function testEachCellAFanReachesRunsOnlyItsPreparedValues(int $tasklet, int $channel): void
     {
+        [$answer] = $this->prepare(['"a:1,b:2,a:3"'], 'fanned_relay', $channel);
         foreach (['a' => [['a', 'a:1'], ['a', 'a:3']], 'b' => [['b', 'b:2']]] as $cell => $routed) {
-            self::assertSame($routed, $this->delivered('fanned_relay', $tasklet, '"a:1,b:2,a:3"', $channel, $cell));
+            $mine = array_filter(
+                $answer['values'],
+                static fn (array $value): bool => $value['consumer'] === $tasklet && in_array($cell, $value['keys'], true),
+            );
+            $item = ['values' => array_column($mine, 'bytes')] + self::input('not json', channel: $channel, form: 'prepared');
+            Delivered::$values = [];
+            $this->work('fanned_relay', $tasklet, [$item], $cell);
+            self::assertSame($routed, Delivered::$values);
         }
+    }
+
+    /**
+     * Every Cell key one prepare answer's values name, in answer order.
+     *
+     * @param array<string, mixed> $answer
+     * @return list<string>
+     */
+    private static function keysAnswered(array $answer): array
+    {
+        return array_merge(...array_column($answer['values'], 'keys'));
     }
 
     /** @return array<string, mixed> */

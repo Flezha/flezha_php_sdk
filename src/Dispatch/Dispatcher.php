@@ -7,7 +7,6 @@ namespace Flezha\Dispatch;
 use Flezha\Codec\ActivationCodec;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
-use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Graph\ChannelSpec;
@@ -287,20 +286,15 @@ final class Dispatcher
             return;
         }
 
-        $channel = $registered->spec->channels[$item['channel']] ?? null;
         // A filtered value is consumed and reaches no handler. It still
         // produces an effect, so its offset advances and nothing is retried.
-        // A fanned one reaches the handler once per value routed to this cell.
-        // This node's own edge off the channel: a transform chain declared
-        // before one `into` belongs to that consumer and to no other. It runs
-        // only on a payload the core marks untransformed: a flow producer
-        // already ran it, and running it again would compose the chain with
-        // itself.
-        $edge = $item['form'] === 'untransformed' ? self::edgeInto($channel, $node->index) : null;
-        foreach (self::entryValues($channel, $edge, (string) $item['payload']) as $input) {
-            if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->cellKey)) {
-                continue;
-            }
+        // A fanned one reaches the handler once per value. The prepare crossing
+        // decoded a keyed payload and ran this node's edge already, so each of
+        // its values comes encoded as a value between tasklets.
+        $values = $item['form'] === 'prepared'
+            ? array_map(Json::decode(...), $item['values'])
+            : self::entryValues($registered->spec->channels[$item['channel']] ?? null, $node, $item);
+        foreach ($values as $input) {
             $definition->instance->run($input, $ctx);
         }
     }
@@ -361,44 +355,10 @@ final class Dispatcher
     {
         $request = $activation['key_request'];
         $channel = $registered->spec->channels[$request['channel']] ?? null;
-        // The crossing answers one key set for the whole payload, which the
-        // core hands every keyed consumer, so it reads the first keyed
-        // consumer's edge: an unkeyed one's filter must not drop the key.
-        $edges = $channel?->consumers ?? [];
-        $definitionOf = static fn (ConsumerEdge $edge): ?Definition
-            => ($registered->spec->tasklets[$edge->tasklet] ?? null)?->definition;
-        $edge = array_find(
-            $edges,
-            static fn (ConsumerEdge $edge): bool
-                => $edge->keyBy !== null || $definitionOf($edge)?->declares('cellsFor') === true,
-        ) ?? $edges[0] ?? null;
-        $definition = $edge === null ? null : $definitionOf($edge);
-
         $answers = [];
         foreach ($request['payloads'] as $payload) {
             try {
-                $values = self::valuesOf($channel, $edge, (string) $payload);
-                // A filtered payload answers no key. For a dynamic consumer
-                // that is what tells the core not to route it at all — the
-                // drop happens before a cell is minted rather than inside one.
-                if ($values === []) {
-                    $answers[] = ['keys' => []];
-                    continue;
-                }
-
-                $keys = [];
-                if ($request['want_keys']) {
-                    foreach ($values as $value) {
-                        array_push($keys, ...(self::keysOf($edge, $definition, $value) ?? []));
-                    }
-                }
-
-                $answers[] = [
-                    'keys' => array_values(array_unique($keys)),
-                    'event_time' => $request['want_event_time'] && $definition?->declares('eventTime') === true
-                        ? $definition->eventTimeOf($values[0])
-                        : null,
-                ];
+                $answers[] = self::prepared($registered, $channel, $request, self::decoded($channel, (string) $payload));
             } catch (Throwable $e) {
                 // A per-payload refusal enters the input channel's retry
                 // ladder; it is not a failure of the crossing, whose other
@@ -471,16 +431,54 @@ final class Dispatcher
     }
 
     /**
-     * `valuesOf` for a delivered item: a failure on an entry channel (the
-     * wire's bytes, not a producer's) is the entrance's, and is reported as
-     * such rather than as the handler's.
+     * One decoded payload's answer: every value each keyed consumer's own edge
+     * yields, with the Cells it names, and the event time the first timed
+     * consumer reads off its first value. A payload its chains filter answers
+     * no value, so the core mints no Cell for it.
      *
+     * @param array<string, mixed> $request
+     * @return array<string, mixed>
+     */
+    private static function prepared(RegisteredClass $registered, ?ChannelSpec $channel, array $request, mixed $value): array
+    {
+        $values = [];
+        $eventTime = null;
+        foreach ($channel?->consumers ?? [] as $edge) {
+            $definition = $registered->spec->tasklets[$edge->tasklet]->definition;
+            $keyed = $request['want_keys'] && ($edge->keyBy !== null || $definition->declares('cellsFor'));
+            $timed = $request['want_event_time'] && $eventTime === null && $definition->declares('eventTime');
+            if (!$keyed && !$timed) {
+                continue;
+            }
+            $yielded = Transforms::apply($edge->transforms, $value);
+            if ($timed && $yielded !== []) {
+                $eventTime = $definition->eventTimeOf($yielded[0]);
+            }
+            foreach ($keyed ? $yielded : [] as $each) {
+                $keys = $edge->keyBy !== null ? [(string) ($edge->keyBy)($each)] : $definition->cellsFor($each);
+                $values[] = ['consumer' => $edge->tasklet, 'keys' => $keys, 'bytes' => Json::encode($each)];
+            }
+        }
+
+        return ['values' => $values, 'event_time' => $eventTime];
+    }
+
+    /**
+     * A delivered payload as the handler sees it: decoded, then through this
+     * node's own edge off the channel when the core marks it untransformed. A
+     * flow producer already ran that edge, and running it again would compose
+     * the chain with itself. A failure on an entry channel (the wire's bytes,
+     * not a producer's) is the entrance's, and is reported as such rather than
+     * as the handler's.
+     *
+     * @param array<string, mixed> $item
      * @return list<mixed>
      */
-    private static function entryValues(?ChannelSpec $channel, ?ConsumerEdge $edge, string $payload): array
+    private static function entryValues(?ChannelSpec $channel, TaskNode $node, array $item): array
     {
+        $edge = $item['form'] === 'untransformed' ? self::edgeInto($channel, $node->index) : null;
         try {
-            return self::valuesOf($channel, $edge, $payload);
+            return Transforms::apply($edge?->transforms ?? [], self::decoded($channel, (string) $item['payload']));
         } catch (Throwable $e) {
             if ($channel === null || $channel->kind === 'entry') {
                 throw new UnreadablePayload(self::message($e), $e);
@@ -491,56 +489,13 @@ final class Dispatcher
     }
 
     /**
-     * A payload as the handler sees it: the entry channel's decoder, or JSON for
-     * a payload between tasklets, then the consuming edge's transforms in
-     * declaration order.
-     *
-     * One function for the two places a payload crosses in — an input item and
-     * a payload at the prepare crossing — so a filter cannot mean one thing on
-     * one path and another on the other.
-     *
-     * @return list<mixed>
+     * A payload as its channel reads it: the entry channel's decoder, or JSON
+     * for a payload between tasklets. The one decoder for an input item and
+     * for a payload at the prepare crossing.
      */
-    private static function valuesOf(?ChannelSpec $channel, ?ConsumerEdge $edge, string $payload): array
+    private static function decoded(?ChannelSpec $channel, string $payload): mixed
     {
-        $decoded = $channel?->decode !== null ? ($channel->decode)($payload) : Json::decode($payload);
-
-        return Transforms::apply($edge?->transforms ?? [], $decoded);
-    }
-
-    /**
-     * The cell keys one value routes to: the edge's key, else the consumer's
-     * `cellsFor`, else null when neither routes it.
-     *
-     * The prepare crossing and the delivery filter both read this, so a cell
-     * keeps exactly the values the crossing named it for.
-     *
-     * @return list<string>|null
-     */
-    private static function keysOf(?ConsumerEdge $edge, ?Definition $definition, mixed $value): ?array
-    {
-        if ($edge?->keyBy !== null) {
-            return [(string) ($edge->keyBy)($value)];
-        }
-        if ($definition?->declares('cellsFor') === true) {
-            return $definition->cellsFor($value);
-        }
-
-        return null;
-    }
-
-    /**
-     * Whether one value of an untransformed payload belongs to this cell.
-     *
-     * The core admits the payload to every cell the prepare crossing named
-     * for any of its values, so a payload fanned across keys reaches each of
-     * them whole, and each keeps only the values routed to it.
-     */
-    private static function routesTo(ConsumerEdge $edge, Definition $definition, mixed $value, ?string $cellKey): bool
-    {
-        $keys = $cellKey === null ? null : self::keysOf($edge, $definition, $value);
-
-        return $keys === null || in_array($cellKey, $keys, true);
+        return $channel?->decode !== null ? ($channel->decode)($payload) : Json::decode($payload);
     }
 
     /** The channel's edge that feeds `$node`, or null when it feeds none. */

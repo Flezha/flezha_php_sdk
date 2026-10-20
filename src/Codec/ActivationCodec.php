@@ -53,7 +53,7 @@ final class ActivationCodec
     private const TIMER_KINDS = ['event_time', 'processing_time'];
 
     /** `InputForm` variants, in declaration order. */
-    private const INPUT_FORMS = ['untransformed', 'transformed'];
+    private const INPUT_FORMS = ['untransformed', 'transformed', 'prepared'];
 
     /** `Verdict` variants, in the core's order; `unreadable` is an entry decode the core parks. */
     private const VERDICTS = ['ok', 'retryable', 'non_retryable', 'unreadable'];
@@ -181,17 +181,7 @@ final class ActivationCodec
     private static function decodeWorkItem(PostcardCursor $c): array
     {
         return match ($variant = $c->variant('work item')) {
-            0 => [
-                'kind' => 'input',
-                'channel' => $c->varint('input channel'),
-                'payload' => $c->bytes('input payload'),
-                'metadata' => $c->metadata('input metadata'),
-                'consumed_offset' => $c->optionalVarint('consumed offset'),
-                'replay' => $c->bool('replay'),
-                'now' => $c->varint('now'),
-                'form' => self::INPUT_FORMS[$c->variant('input form')]
-                    ?? throw new DecodeException('an input named a form this shim does not know'),
-            ],
+            0 => self::decodeInput($c),
             1 => [
                 'kind' => 'timer',
                 'timer_kind' => self::TIMER_KINDS[$c->variant('timer kind')]
@@ -282,6 +272,30 @@ final class ActivationCodec
     }
 
     /**
+     * An input item; a `prepared` one carries its Cell's values.
+     *
+     * @return array<string, mixed>
+     */
+    private static function decodeInput(PostcardCursor $c): array
+    {
+        $input = [
+            'kind' => 'input',
+            'channel' => $c->varint('input channel'),
+            'payload' => $c->bytes('input payload'),
+            'metadata' => $c->metadata('input metadata'),
+            'consumed_offset' => $c->optionalVarint('consumed offset'),
+            'replay' => $c->bool('replay'),
+            'now' => $c->varint('now'),
+            'form' => self::INPUT_FORMS[$c->variant('input form')]
+                ?? throw new DecodeException('an input named a form this shim does not know'),
+        ];
+
+        return $input['form'] === 'prepared'
+            ? $input + ['values' => $c->seq('prepared values', static fn (PostcardCursor $v): string => $v->bytes('prepared value'))]
+            : $input;
+    }
+
+    /**
      * One payload's prepare answer, or the refusal that sends it up the input
      * channel's retry ladder.
      *
@@ -295,7 +309,9 @@ final class ActivationCodec
         }
 
         return Postcard::variant(0)
-            . Postcard::seq($answer['keys'] ?? [], Postcard::bytes(...))
+            . Postcard::seq($answer['values'] ?? [], static fn (array $value): string => Postcard::varint($value['consumer'])
+                . Postcard::seq($value['keys'], Postcard::bytes(...))
+                . Postcard::bytes($value['bytes']))
             . Postcard::optionalVarint($answer['event_time'] ?? null);
     }
 
