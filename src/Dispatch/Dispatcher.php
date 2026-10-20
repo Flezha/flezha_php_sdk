@@ -292,16 +292,11 @@ final class Dispatcher
         // produces an effect, so its offset advances and nothing is retried.
         // A fanned one reaches the handler once per value routed to this cell.
         // This node's own edge off the channel: a transform chain declared
-        // before one `into` belongs to that consumer and to no other. It is
-        // evaluated here only for a payload that reached us untransformed — an
-        // entry payload, whose producer is the wire, or a steps stage's
-        // released value. A flow producer evaluated it as its activation
-        // completed, and evaluating it again would compose the chain with
+        // before one `into` belongs to that consumer and to no other. It runs
+        // only on a payload the core marks untransformed: a flow producer
+        // already ran it, and running it again would compose the chain with
         // itself.
-        $untransformed = $channel === null
-            || $channel->kind === 'entry'
-            || $registered->spec->runsInSteps();
-        $edge = $untransformed ? self::edgeInto($channel, $node->index) : null;
+        $edge = $item['form'] === 'untransformed' ? self::edgeInto($channel, $node->index) : null;
         foreach (self::entryValues($channel, $edge, (string) $item['payload']) as $input) {
             if ($edge !== null && !self::routesTo($edge, $definition, $input, $ctx->cellKey)) {
                 continue;

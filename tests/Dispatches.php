@@ -40,9 +40,17 @@ trait Dispatches
         ];
     }
 
-    /** @return array<string, mixed> */
-    private static function input(string $payload, ?int $offset = null, int $channel = 0): array
-    {
+    /**
+     * One input item, by default as the core hands an entry payload.
+     *
+     * @return array<string, mixed>
+     */
+    private static function input(
+        string $payload,
+        ?int $offset = null,
+        int $channel = 0,
+        string $form = 'untransformed',
+    ): array {
         return [
             'kind' => 'input',
             'channel' => $channel,
@@ -51,6 +59,7 @@ trait Dispatches
             'consumed_offset' => $offset,
             'replay' => false,
             'now' => 1_000,
+            'form' => $form,
         ];
     }
 }

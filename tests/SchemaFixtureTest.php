@@ -59,6 +59,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
                     'consumed_offset' => 7,
                     'replay' => true,
                     'now' => 1_000,
+                    'form' => 'transformed',
                 ],
                 ['kind' => 'timer', 'timer_kind' => 'event_time', 'scheduled_at' => 2_000],
             ],

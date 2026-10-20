@@ -52,6 +52,9 @@ final class ActivationCodec
     /** `TimerKind` variants, in declaration order. */
     private const TIMER_KINDS = ['event_time', 'processing_time'];
 
+    /** `InputForm` variants, in declaration order. */
+    private const INPUT_FORMS = ['untransformed', 'transformed'];
+
     /** `Verdict` variants, in the core's order; `unreadable` is an entry decode the core parks. */
     private const VERDICTS = ['ok', 'retryable', 'non_retryable', 'unreadable'];
 
@@ -186,6 +189,8 @@ final class ActivationCodec
                 'consumed_offset' => $c->optionalVarint('consumed offset'),
                 'replay' => $c->bool('replay'),
                 'now' => $c->varint('now'),
+                'form' => self::INPUT_FORMS[$c->variant('input form')]
+                    ?? throw new DecodeException('an input named a form this shim does not know'),
             ],
             1 => [
                 'kind' => 'timer',

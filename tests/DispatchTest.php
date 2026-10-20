@@ -550,7 +550,24 @@ final class DispatchTest extends TestCase
     {
         $produced = $this->work('steps_emit_flow', 0, [self::input('10')])['effects'][0]['outputs'];
 
-        self::assertSame([11], $this->delivered('steps_emit_flow', 1, $produced[0]['payload']));
+        self::assertSame([11], $this->delivered('steps_emit_flow', 1, $produced[0]['payload'], form: 'transformed'));
+    }
+
+    /**
+     * The consumer applies its edge to what the core marks untransformed
+     * only, whatever the relay's run: an entry payload and a steps release
+     * arrive so, a stream producer's output arrives transformed.
+     */
+    public function testTheInputFormComesFromTheCore(): void
+    {
+        Delivered::$values = [];
+        $result = $this->work('steps_emit_flow', 1, [
+            self::input('10', channel: 1),
+            self::input('10', channel: 1, form: 'transformed'),
+        ]);
+
+        self::assertSame(['ok', 'ok'], array_column($result['effects'], 'verdict'));
+        self::assertSame([11, 10], Delivered::$values);
     }
 
     public function testABoundedConsumerAppliesItsOwnEdgeExactlyOnceAtDelivery(): void
@@ -575,9 +592,11 @@ final class DispatchTest extends TestCase
         string $payload,
         int $channel = 1,
         ?string $cellKey = null,
+        string $form = 'untransformed',
     ): array {
         Delivered::$values = [];
-        $effect = $this->work($factory, $tasklet, [self::input($payload, channel: $channel)], $cellKey)['effects'][0];
+        $item = self::input($payload, channel: $channel, form: $form);
+        $effect = $this->work($factory, $tasklet, [$item], $cellKey)['effects'][0];
         self::assertSame('ok', $effect['verdict']);
 
         return Delivered::$values;
