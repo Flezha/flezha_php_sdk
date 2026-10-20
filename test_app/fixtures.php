@@ -23,7 +23,7 @@ use Flezha\Exception\NonRetryableException;
 use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\Tasklet;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 
 /** The readings of a text input every fixture that talks to another SDK shares. */
 final class Wire
@@ -548,7 +548,7 @@ final class Candle extends Tasklet
         // One row per candle bucket, so a corrected replay overwrites by key
         // rather than appending a second row.
         $bucket = intdiv($eventTime, 1000);
-        $ctx->emitKeyed("candle/$bucket", "$bucket=$input");
+        $ctx->emit("$bucket=$input", key: "candle/$bucket");
     }
 }
 
@@ -595,7 +595,7 @@ final class SessionTimeout extends Tasklet
         $ctx->timerAfter(Wire::int(getenv('TIMER_TEST_TIMEOUT_MS')) ?: 1000);
     }
 
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
         $ctx->change(['closed' => $timer->scheduledAt]);
         $ctx->emit("closed@{$timer->scheduledAt}");
@@ -709,7 +709,7 @@ final class PartitionPass extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $ctx->change(['push' => $input]);
-        $ctx->emitKeyed(Wire::prefix($input), $input);
+        $ctx->emit($input, key: Wire::prefix($input));
     }
 }
 
@@ -892,6 +892,7 @@ final class Fixtures
             WedgeProbeRelay::class,
             SessionTimeoutRelay::class,
             TimerCapRelay::class,
+            TimerChurnRelay::class,
             BoundedMailboxDropNothingRelay::class,
             BoundedMailboxDropNewestRelay::class,
             BoundedMailboxDropOldestRelay::class,

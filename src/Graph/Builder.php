@@ -41,17 +41,8 @@ final class Builder
 
     private int $mergeGroups = 0;
 
-    public ?int $compactAfterBytes = null;
-
     public function __construct(public readonly string $factoryId)
     {
-    }
-
-    public function compactAfterBytes(int $bytes): self
-    {
-        $this->compactAfterBytes = $bytes;
-
-        return $this;
     }
 
     /**

@@ -149,16 +149,6 @@ final class Ctx
     }
 
     /**
-     * Emit with an explicit routing key — the spelling for a keyed channel.
-     *
-     * @param array<string, string>|null $metadata
-     */
-    public function emitKeyed(string $key, mixed $value, ?string $channel = null, ?array $metadata = null): void
-    {
-        $this->emit($value, $key, $channel, $metadata);
-    }
-
-    /**
      * Register a processing-time timer `$milliseconds` from `now`. Answers its time.
      *
      * Inside a `compensate` hook each of the three timer calls throws
@@ -301,6 +291,8 @@ final class Ctx
 
     /**
      * The effect record for this item, as the core folds it.
+     *
+     * @internal read by the dispatcher and the test harness
      *
      * @return array<string, mixed>
      */

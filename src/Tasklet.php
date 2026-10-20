@@ -54,7 +54,7 @@ abstract class Tasklet
     }
 
     /** A fired timer. Override to declare that this tasklet registers them. */
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
     }
 

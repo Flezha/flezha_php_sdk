@@ -22,7 +22,7 @@ use Flezha\Ctx;
 use Flezha\Flezha;
 use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 
 #[Task(name: 'session', idleTtlSeconds: 3_600)]
 final class Session extends Tasklet
@@ -56,7 +56,7 @@ final class Session extends Tasklet
         $ctx->change(['kind' => 'event', 'deadline' => $ctx->timerAfter(self::QUIET_MS)]);
     }
 
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
         $events = $ctx->state['events'];
         $ctx->change(['kind' => 'closed', 'deadline' => null]);

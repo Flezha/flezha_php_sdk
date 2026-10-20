@@ -39,6 +39,8 @@ final class Task
      *                                          channel feeding this tasklet, in the relay's API
      * @param class-string|null    $outputType  the same for the output this tasklet answers on
      * @param int|null             $maxTimersPerCell  the pending timers one cell may hold; null 10 000
+     * @param int|null             $compactAfterBytes  the cell log size that asks for a snapshot;
+     *                                                 null the controller's default
      */
     public function __construct(
         public readonly ?string $name = null,
@@ -54,6 +56,7 @@ final class Task
         public readonly ?string $inputType = null,
         public readonly ?string $outputType = null,
         public readonly ?int $maxTimersPerCell = null,
+        public readonly ?int $compactAfterBytes = null,
     ) {
     }
 }

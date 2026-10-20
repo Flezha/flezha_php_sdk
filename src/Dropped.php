@@ -12,6 +12,8 @@ namespace Flezha;
  * stops the transform chain: the item is consumed without reaching a handler,
  * and at the prepare crossing it answers no key, which is how the core learns
  * not to route it.
+ *
+ * @internal
  */
 final class Dropped
 {

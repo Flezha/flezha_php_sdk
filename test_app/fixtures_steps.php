@@ -32,7 +32,7 @@ use Flezha\Definition;
 use Flezha\Graph\Builder;
 use Flezha\Graph\Edge;
 use Flezha\Tasklet;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 
 // -- the release gate --------------------------------------------------------
 
@@ -511,7 +511,7 @@ final class OutboxA extends DurableStep
 {
     protected function release(mixed $input, Ctx $ctx): void
     {
-        $ctx->emitKeyed('k', $input, metadata: ['trace' => 't1']);
+        $ctx->emit($input, key: 'k', metadata: ['trace' => 't1']);
     }
 }
 
@@ -852,7 +852,7 @@ final class TimerTick extends DurableStep
         $ctx->emit($input);
     }
 
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
         StepsGate::holdAt('timer');
         $ctx->emit("fired:{$timer->scheduledAt}");
@@ -909,7 +909,7 @@ final class EventTick extends DurableStep
         $ctx->emit("seen:{$ctx->now()}");
     }
 
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
         $ctx->emit("fired:{$timer->scheduledAt}");
     }

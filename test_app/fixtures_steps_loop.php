@@ -21,7 +21,7 @@ use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 
 // -- the durable loop family -------------------------------------------------
 //
@@ -618,7 +618,7 @@ final class BenchTurn extends Tasklet
         $ctx->emit($input);
     }
 
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
         $ctx->emit("wake:{$timer->scheduledAt}");
     }

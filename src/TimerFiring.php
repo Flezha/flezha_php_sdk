@@ -9,7 +9,7 @@ namespace Flezha;
  * `scheduledAt`, so a chained `timerAfter` anchors on the firing that woke it
  * and is replay-stable.
  */
-final class Timer
+final class TimerFiring
 {
     public function __construct(
         /** `event_time` | `processing_time` */

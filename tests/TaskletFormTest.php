@@ -189,7 +189,10 @@ final class EmitsOrSkips extends Tasklet
     {
         if ($input === 'both') {
             $ctx->emit('a');
-            $ctx->emitKeyed('k', 'b');
+            $ctx->emit('b', key: 'k');
+        }
+        if ($input === 'elsewhere') {
+            $ctx->emit('c', channel: 'elsewhere');
         }
     }
 }
@@ -450,6 +453,22 @@ final class TaskletFormTest extends TestCase
 
         self::assertSame(['a', 'b'], array_column($result['effects'][0]['outputs'], 'payload'));
         self::assertSame([], $result['effects'][1]['outputs']);
+    }
+
+    /** `channel` picks among the tasklet's own outgoing channels, so one it does not produce fails the item. */
+    public function testAnEmitOnAChannelTheTaskletDoesNotProduceFailsTheItem(): void
+    {
+        [$dispatcher, $core] = self::dispatcherFor(EmitsRelay::class);
+        try {
+            $result = $dispatcher->answer(self::activation('form_emits', 'work') + [
+                'items' => [self::input('"elsewhere"')],
+            ]);
+        } finally {
+            $core->free();
+        }
+
+        self::assertNotSame('ok', $result['effects'][0]['verdict']);
+        self::assertStringContainsString('elsewhere', $result['effects'][0]['message']);
     }
 
     /** A steps short form's `run` emits as a tasklet's does, and the value reaches its output. */

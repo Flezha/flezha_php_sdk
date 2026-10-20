@@ -54,7 +54,7 @@ final class Counter extends Tasklet
         $ctx->change(['push' => $input]);
     }
 
-    public function onTimer(\Flezha\Timer $timer, Ctx $ctx): void
+    public function onTimer(\Flezha\TimerFiring $timer, Ctx $ctx): void
     {
         $ctx->change(['push' => 'timer:' . $timer->scheduledAt]);
     }
@@ -369,7 +369,7 @@ final class Timing extends Tasklet
         $ctx->cancelTimer('processing_time', $after);
     }
 
-    public function onTimer(\Flezha\Timer $timer, Ctx $ctx): void
+    public function onTimer(\Flezha\TimerFiring $timer, Ctx $ctx): void
     {
         $ctx->change(['kind' => $timer->kind, 'at' => $timer->scheduledAt, 'now' => $ctx->now()]);
     }

@@ -14,7 +14,7 @@ use Flezha\Graph\ConsumerEdge;
 use Flezha\Graph\TaskNode;
 use Flezha\Logger;
 use Flezha\SpawnBridge;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 use Flezha\Transforms;
 use Throwable;
 
@@ -281,7 +281,7 @@ final class Dispatcher
                 // declaration time.
                 throw new FlezhaException('runtime.timer_without_on_timer', ['tasklet' => $node->name]);
             }
-            $definition->instance->onTimer(new Timer((string) $item['timer_kind'], $now), $ctx);
+            $definition->instance->onTimer(new TimerFiring((string) $item['timer_kind'], $now), $ctx);
 
             return;
         }

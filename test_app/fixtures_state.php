@@ -18,6 +18,7 @@ use Flezha\Ctx;
 use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\Tasklet;
+use Flezha\TimerFiring;
 
 // -- bench_keyed_nopersist / bench_keyed / the tier stores -------------------
 //
@@ -43,7 +44,7 @@ abstract class KeyedUpsert extends Tasklet
     {
         [$key, $value] = self::split($input);
         $ctx->change(['key' => $key, 'value' => $value]);
-        $ctx->emitKeyed($key, "$key=$value");
+        $ctx->emit("$key=$value", key: $key);
     }
 
     /** A `key:value` input as its two halves; the value keeps any later colon. */
@@ -193,7 +194,7 @@ final class TierTally extends Counting
             throw new \RuntimeException('held until released');
         }
         $ctx->change(['delta' => 1]);
-        $ctx->emitKeyed($key, "{$key}={$ctx->state['value']}");
+        $ctx->emit("{$key}={$ctx->state['value']}", key: $key);
     }
 }
 
@@ -630,5 +631,52 @@ final class TimerCapRelay extends \Flezha\Relay
         $c->input('input', codec: ChannelCodec::Text)
             ->into(TimerCap::class)
             ->output('kafka');
+    }
+}
+
+// -- timer_churn -------------------------------------------------------------
+//
+// The bench factory for `mix bench --shape timer`: each input arms a 1 ms
+// processing-time timer and cancels the one the previous input armed; the
+// input is echoed, and a firing emits `fired:<at>`.
+
+#[Task(name: 'timer_churn_tasklet')]
+final class TimerChurn extends Tasklet
+{
+    public function initState(?string $cellKey): mixed
+    {
+        return ['last' => 0];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['last'] = $change['armed'];
+    }
+
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        $at = $ctx->timerAfter(1);
+        $last = $ctx->state['last'];
+        if ($last !== 0 && $last !== $at) {
+            $ctx->cancelTimer('processing_time', $last);
+        }
+        $ctx->change(['armed' => $at]);
+        $ctx->emit($input);
+    }
+
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
+    {
+        $ctx->emit("fired:{$timer->scheduledAt}");
+    }
+}
+
+#[Relay(factoryId: 'timer_churn')]
+final class TimerChurnRelay extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input', codec: ChannelCodec::Text)
+            ->into(TimerChurn::class)
+            ->output('echo');
     }
 }

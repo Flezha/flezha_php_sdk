@@ -18,7 +18,7 @@ use Flezha\Graph\TaskNode;
 use Flezha\Relay;
 use Flezha\Tasklet;
 use Flezha\SpawnBridge;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 
 /**
  * Driving one tasklet without a controller, for the author's own tests.
@@ -96,7 +96,6 @@ final class Harness implements SpawnBridge
             maxDurationMs: null,
             run: null,
             durable: null,
-            compactAfterBytes: null,
             tasklets: $builder->tasklets,
             channels: $builder->channels,
         );
@@ -146,7 +145,7 @@ final class Harness implements SpawnBridge
     {
         return $this->drive($scheduledAt, false, function (Ctx $ctx) use ($kind, $scheduledAt): void {
             if ($this->definition->declares('onTimer')) {
-                $this->definition->instance->onTimer(new Timer($kind, $scheduledAt), $ctx);
+                $this->definition->instance->onTimer(new TimerFiring($kind, $scheduledAt), $ctx);
             }
         });
     }

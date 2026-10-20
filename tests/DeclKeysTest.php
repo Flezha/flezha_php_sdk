@@ -200,7 +200,14 @@ final class DeclKeysTest extends RepositoryTestCase
 }
 
 /** A declaration populated far enough that every optional key is present. */
-#[Task(name: 'entry', mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1, maxTimersPerCell: 16)]
+#[Task(
+    name: 'entry',
+    mailboxCapacity: 8,
+    schemaVersion: 3,
+    minReadableSchemaVersion: 1,
+    maxTimersPerCell: 16,
+    compactAfterBytes: 4_096,
+)]
 final class FullEntry extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -271,8 +278,6 @@ final class FullFlow extends \Flezha\Relay
 {
     public static function channels(Builder $c): void
     {
-        $c->compactAfterBytes(4_096);
-
         $edge = $c->input('input', description: 'every key', schema: ['type' => 'object'])->into(FullEntry::class);
         $edge->named('hop')->keyBy(static fn (mixed $v): string => (string) $v)
             ->retryMax(5)->retryBackoffMs(50)->into(FullDownstream::class);

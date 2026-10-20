@@ -15,11 +15,11 @@ final class Admit extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         $user = $input['message']['user'];
-        $ctx->emitKeyed($user, Budget::admitted($input)
+        $ctx->emit(Budget::admitted($input)
             ? ['status' => 202, 'body' => "sent to $user"]
             : [
                 'status' => 429,
                 'body' => "$user has used {$input['spent']} of today's " . Budget::DAILY_TOKENS . ' tokens',
-            ]);
+            ], key: $user);
     }
 }

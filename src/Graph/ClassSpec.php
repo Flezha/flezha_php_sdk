@@ -22,7 +22,6 @@ final class ClassSpec
         public readonly ?int $maxDurationMs,
         public readonly string|array|null $run,
         public readonly bool|string|array|null $durable,
-        public readonly ?int $compactAfterBytes,
         public readonly array $tasklets,
         public readonly array $channels,
     ) {

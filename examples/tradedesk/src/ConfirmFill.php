@@ -7,7 +7,7 @@ namespace Flezha\Examples\Tradedesk;
 use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 
 /**
  * Asks the exchange whether the order filled, on one arm of the fan-out. The paper exchange
@@ -45,7 +45,7 @@ final class ConfirmFill extends Tasklet
         $ctx->timerAfter(10_000);                            // the paper exchange answers ten seconds later
     }
 
-    public function onTimer(Timer $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx): void
     {
         $placed = $ctx->state['placed'];
         $quantity = $placed['order']['quantity'];

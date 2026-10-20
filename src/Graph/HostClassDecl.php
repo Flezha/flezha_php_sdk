@@ -52,7 +52,7 @@ final class HostClassDecl
             'sdk_lang' => self::SDK_LANG_PHP,
             'sdk_version' => self::SDK_VERSION,
             'change_format_id' => self::FORMAT_ID_JSON,
-            'compact_after_bytes' => $spec->compactAfterBytes,
+            'compact_after_bytes' => self::compactAfterBytes($spec),
             'channels' => array_map(
                 static fn (ChannelSpec $channel): array => self::channel($spec, $channel),
                 $spec->channels,
@@ -111,6 +111,17 @@ final class HostClassDecl
         }
 
         return null;
+    }
+
+    /** The smallest size any tasklet of the class declares: the class compacts at the first. */
+    private static function compactAfterBytes(ClassSpec $spec): ?int
+    {
+        $declared = array_filter(array_map(
+            static fn (TaskNode $node): ?int => $node->definition->decl->compactAfterBytes,
+            $spec->tasklets,
+        ), static fn (?int $bytes): bool => $bytes !== null);
+
+        return $declared === [] ? null : min($declared);
     }
 
     /** @return array<string, mixed> */

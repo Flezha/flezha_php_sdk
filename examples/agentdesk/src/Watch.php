@@ -15,8 +15,8 @@ final class Watch extends Tasklet
     public function run(mixed $input, Ctx $ctx): void
     {
         // keyed by the user: an output of an effectively-once relay needs a key
-        $ctx->emitKeyed($input->user(), $input->listens()
+        $ctx->emit($input->listens()
             ? ['stream' => $input->user()]
-            : ['status' => 404, 'body' => 'no such route']);
+            : ['status' => 404, 'body' => 'no such route'], key: $input->user());
     }
 }

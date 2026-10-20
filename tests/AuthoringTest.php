@@ -23,7 +23,7 @@ use Flezha\Relay as RelayBase;
 use Flezha\Tasklet;
 use Flezha\Runner;
 use Flezha\Testing\Harness;
-use Flezha\Timer;
+use Flezha\TimerFiring;
 use Flezha\Transforms;
 
 // ---------------------------------------------------------------------------
@@ -204,7 +204,7 @@ final class ShortExtraArgument extends RelayBase
 {
     use Echoes;
 
-    public function onTimer(Timer $timer, Ctx $ctx, int $extra): void
+    public function onTimer(TimerFiring $timer, Ctx $ctx, int $extra): void
     {
     }
 }
@@ -214,7 +214,7 @@ final class ShortDroppedArgument extends RelayBase
 {
     use Echoes;
 
-    public function onTimer(Timer $timer): void
+    public function onTimer(TimerFiring $timer): void
     {
     }
 }
@@ -224,7 +224,7 @@ final class ShortIntersectedTimer extends RelayBase
 {
     use Echoes;
 
-    public function onTimer(Timer&\Countable $timer, Ctx $ctx): void
+    public function onTimer(TimerFiring&\Countable $timer, Ctx $ctx): void
     {
     }
 }
@@ -541,7 +541,6 @@ final class AuthoringTest extends RepositoryTestCase
             maxDurationMs: null,
             run: $run,
             durable: $durable,
-            compactAfterBytes: $builder->compactAfterBytes,
             tasklets: $builder->tasklets,
             channels: $builder->channels,
         );
@@ -1215,7 +1214,7 @@ final class AuthoringTest extends RepositoryTestCase
         yield 'a narrowing intersection' => [
             ShortIntersectedTimer::class,
             'onTimer',
-            '`$timer` is typed `Flezha\Timer&Countable`, which does not accept every `Flezha\Timer`',
+            '`$timer` is typed `Flezha\TimerFiring&Countable`, which does not accept every `Flezha\TimerFiring`',
         ];
         yield 'a static hook' => [ShortStaticHook::class, 'eventTime', 'it must be a public instance method'];
         yield 'a protected hook' => [ShortHiddenHook::class, 'compensate', 'it must be a public instance method'];

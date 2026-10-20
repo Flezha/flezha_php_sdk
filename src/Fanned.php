@@ -10,6 +10,8 @@ namespace Flezha;
  * Each is delivered independently — through the rest of the chain, and then to
  * the consumer — so `flatMap` followed by `keyBy` is how one input reaches
  * several cells.
+ *
+ * @internal
  */
 final class Fanned
 {

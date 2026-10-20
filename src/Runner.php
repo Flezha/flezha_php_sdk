@@ -78,6 +78,8 @@ final class Runner
      *
      * Called by the Swoole adapter's thread bootstrap before it re-enters the
      * entry script; nothing else has any reason to.
+     *
+     * @internal
      */
     public static function attachInThread(int $address, LoopState $state): void
     {
@@ -334,8 +336,11 @@ final class Runner
         }
     }
 
-    /** Stop fetching. What is in flight finishes; nothing new is polled. */
-    public function stop(): void
+    /**
+     * Shut the runner down: stop fetching, let what is in flight finish, and
+     * end `awaitTermination`, which then drains and releases the core.
+     */
+    public function close(): void
     {
         // The core says when: every loop keeps polling until its poll reports
         // the core shutting down, which the core reports only once the
@@ -354,6 +359,8 @@ final class Runner
      * no activation crosses a thread boundary and there is no queue, no
      * saturation and no backpressure question — a busy thread simply does not
      * poll.
+     *
+     * @internal
      */
     public function serve(LoopState $state): void
     {
@@ -394,18 +401,27 @@ final class Runner
         }
     }
 
+    /** @internal */
     public function core(): Core
     {
         return $this->core ?? throw new \LogicException('the runner has no core');
     }
 
-    /** The context address a worker thread attaches to. */
+    /**
+     * The context address a worker thread attaches to.
+     *
+     * @internal
+     */
     public function coreAddress(): int
     {
         return $this->core()->address();
     }
 
-    /** The autoloader a worker thread's fresh interpreter has to load first. */
+    /**
+     * The autoloader a worker thread's fresh interpreter has to load first.
+     *
+     * @internal
+     */
     public function autoloadPath(): string
     {
         // Installed, the package sits at `vendor/flezha/sdk/src`; in a
@@ -428,7 +444,11 @@ final class Runner
         ]);
     }
 
-    /** The entry script a worker thread re-enters to rebuild the registry. */
+    /**
+     * The entry script a worker thread re-enters to rebuild the registry.
+     *
+     * @internal
+     */
     public function entryScript(): string
     {
         $script = $_SERVER['SCRIPT_FILENAME'] ?? '';
@@ -448,6 +468,8 @@ final class Runner
      * call the core; freeing the context under it would be a use-after-free in
      * native code. The process is on its way out either way, so the kernel
      * reclaims what this skips.
+     *
+     * @internal
      */
     public function abandonContext(): void
     {

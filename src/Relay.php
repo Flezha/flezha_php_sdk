@@ -95,7 +95,6 @@ abstract class Relay
             maxDurationMs: $declaration->maxDurationMs,
             run: $declaration->run,
             durable: $declaration->durable,
-            compactAfterBytes: $builder->compactAfterBytes,
             tasklets: $builder->tasklets,
             channels: $builder->channels,
         );
