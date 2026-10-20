@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Fixtures whose subject is persisted Cell state: the keyed upsert the bench
- * shares, and the counter and resume twins — the same partition as
+ * shares, the counter and resume twins and the timer cap — the same partition as
  * test/apps/python_runner/fixtures_state.py and the reference's state.rs.
  */
 
@@ -588,5 +588,47 @@ final class SchemaEvolutionV2Relay extends \Flezha\Relay
         $c->input('input', codec: ChannelCodec::Text)
             ->into(EvolvingCartV2::class)
             ->output('total');
+    }
+}
+
+// -- timer_cap ---------------------------------------------------------------
+//
+// The core's refusal of a Cell's timers when the item settles (`cell_timers`):
+// past the cap of two pending timers, or an event-time timer under a tasklet
+// whose clock is not event time. `event` asks for the event-time timer, a
+// number `n` for a processing-time one `n` hours ahead; the change follows.
+
+#[Task(name: 'timer_cap_tasklet', maxTimersPerCell: 2)]
+final class TimerCap extends Tasklet
+{
+    public function initState(?string $cellKey): mixed
+    {
+        return ['touched' => []];
+    }
+
+    public function applyChange(mixed &$state, mixed $change): void
+    {
+        $state['touched'][] = $change['touched'];
+    }
+
+    public function run(mixed $input, Ctx $ctx): void
+    {
+        if ($input === 'event') {
+            $ctx->timerAtEventTime(1);
+        } else {
+            $ctx->timerAfter(Wire::int($input) * 3_600_000);
+        }
+        $ctx->change(['touched' => $input]);
+    }
+}
+
+#[Relay(factoryId: 'timer_cap')]
+final class TimerCapRelay extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('input', codec: ChannelCodec::Text)
+            ->into(TimerCap::class)
+            ->output('kafka');
     }
 }

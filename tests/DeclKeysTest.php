@@ -200,7 +200,7 @@ final class DeclKeysTest extends RepositoryTestCase
 }
 
 /** A declaration populated far enough that every optional key is present. */
-#[Task(name: 'entry', mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1)]
+#[Task(name: 'entry', mailboxCapacity: 8, schemaVersion: 3, minReadableSchemaVersion: 1, maxTimersPerCell: 16)]
 final class FullEntry extends Tasklet
 {
     public function initState(?string $cellKey): mixed

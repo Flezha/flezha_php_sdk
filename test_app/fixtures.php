@@ -891,6 +891,7 @@ final class Fixtures
             PoisonProbeRelay::class,
             WedgeProbeRelay::class,
             SessionTimeoutRelay::class,
+            TimerCapRelay::class,
             BoundedMailboxDropNothingRelay::class,
             BoundedMailboxDropNewestRelay::class,
             BoundedMailboxDropOldestRelay::class,

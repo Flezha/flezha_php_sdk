@@ -128,6 +128,7 @@ final class HostClassDecl
             'compensate_overridden' => $definition->declares('compensate'),
             'clock' => $definition->clock(),
             'mailbox_capacity' => $decl->mailboxCapacity,
+            'max_timers_per_cell' => $decl->maxTimersPerCell,
             // A tasklet with no state journals nothing, so a logical clock
             // over it never advances. PHP has no per-tasklet Change type;
             // the presence of an initState method IS the same statement.

@@ -38,6 +38,7 @@ final class Task
      *                                          properties give the JSON Schema of the entry
      *                                          channel feeding this tasklet, in the relay's API
      * @param class-string|null    $outputType  the same for the output this tasklet answers on
+     * @param int|null             $maxTimersPerCell  the pending timers one cell may hold; null 10 000
      */
     public function __construct(
         public readonly ?string $name = null,
@@ -52,6 +53,7 @@ final class Task
         public readonly ?string $changeType = null,
         public readonly ?string $inputType = null,
         public readonly ?string $outputType = null,
+        public readonly ?int $maxTimersPerCell = null,
     ) {
     }
 }

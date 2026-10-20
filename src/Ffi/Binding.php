@@ -95,7 +95,6 @@ final class Binding
         int32_t flz_core_spawn_request(uintptr_t ctx, uint64_t token, const char *factory_id, const char *id, const char *payload, size_t payload_len, const char *if_running, int32_t replay, int64_t offset, uint64_t *handle_out);
         int32_t flz_core_spawn_result(uintptr_t ctx, uint64_t handle, uint64_t timeout_ms, char **out, size_t *out_len);
         int32_t flz_core_part(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len);
-        int32_t flz_core_pending_timers(uintptr_t ctx, uint64_t token, char **buf_out, size_t *len_out);
         int32_t flz_core_effect_begin(uintptr_t ctx, uint64_t token, uint32_t item, const char *name, char **out, size_t *out_len);
         int32_t flz_core_effect_end(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len, char **out, size_t *out_len);
         int32_t flz_core_effect_release(uintptr_t ctx, uint64_t token, uint32_t item);
