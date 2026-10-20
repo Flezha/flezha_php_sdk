@@ -12,6 +12,9 @@ use Flezha\Overflow;
  */
 final class ChannelSpec
 {
+    /** The kind the core derived, which `$kind` (as declared) need not be. */
+    public ?string $derivedKind = null;
+
     /** @param list<ConsumerEdge> $consumers */
     public function __construct(
         public readonly int $index,

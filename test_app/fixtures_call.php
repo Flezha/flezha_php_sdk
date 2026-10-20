@@ -20,6 +20,8 @@ declare(strict_types=1);
  *   its calling tasklet.
  * - `call_tool_session`: a durable per-input session calling `pricing` from a
  *   turn and reading the outcome as its next turn.
+ * - `call_orders_steps`: `call_orders` as a durable per-input session, so
+ *   `order_ask`'s channel ends only in the call.
  *
  * Every outcome is written to an output as one line,
  * `<request>=ok:<answer>@<target>/<created>` or
@@ -147,6 +149,20 @@ final class CallOrders extends \Flezha\Relay
             )
             ->into(OrderPriced::class)
             ->output('priced');
+    }
+}
+
+#[Relay(
+    factoryId: 'call_orders_steps',
+    run: ['steps' => ['each' => 'per_input']],
+    durable: FIXTURE_DURABLE,
+    maxDurationMs: 600_000,
+)]
+final class CallOrdersSteps extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        CallOrders::channels($c);
     }
 }
 
@@ -322,7 +338,14 @@ final class CallFixtures
     /** @return list<class-string<\Flezha\Relay>> */
     public static function all(): array
     {
-        return [CallPricing::class, CallOrders::class, CallAgent::class, CallGateway::class, CallToolSession::class];
+        return [
+            CallPricing::class,
+            CallOrders::class,
+            CallAgent::class,
+            CallGateway::class,
+            CallToolSession::class,
+            CallOrdersSteps::class,
+        ];
     }
 
     /** @return list<class-string<\Flezha\Relay>> the `relay_api` fixtures */

@@ -47,7 +47,7 @@ final class Validate
      */
     private static function bindEdges(ClassSpec $spec, array $derived): void
     {
-        /** @var list<array{index: int, consumers: list<array{tasklet: int, chain: int}>}> $channels */
+        /** @var list<array{index: int, kind: string, consumers: list<array{tasklet: int, chain: int}>}> $channels */
         $channels = $derived['channels'];
         foreach ($channels as $channel) {
             $target = $spec->channels[$channel['index']];
@@ -56,6 +56,7 @@ final class Validate
                 $consumers[] = $target->chainEdges[$edge['chain']];
             }
             $target->consumers = $consumers;
+            $target->derivedKind = $channel['kind'];
         }
     }
 }

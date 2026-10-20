@@ -362,15 +362,12 @@ final class Ctx
     /** @param array<string, string>|null $metadata */
     private function release(ChannelSpec $channel, mixed $value, ?string $key, ?array $metadata): void
     {
-        // In steps a value rides the edge path to its first consumer, and an
-        // inter-tasklet terminal's value to the core as the pass's handoff (a
-        // chained loop's carry, whose consumer the core does not read); a
-        // plugin-bound terminal releases nothing there.
+        // In steps a value rides the edge path to its first consumer, and a
+        // terminal the core derived inter-tasklet hands it to the core as the
+        // pass's handoff (a chained loop's carry); any other releases nothing.
         if ($this->spec->runsInSteps()) {
             $consumer = ($channel->consumers[0] ?? null)?->tasklet
-                ?? ($channel->kind === 'inter_task' && $channel->sink === null && $channel->call === null
-                    ? $channel->producer
-                    : null);
+                ?? ($channel->derivedKind === 'inter_task' ? $channel->producer : null);
             if ($consumer !== null) {
                 $this->outputs[] = [
                     'target' => 'edge',

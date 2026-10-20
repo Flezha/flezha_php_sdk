@@ -480,6 +480,17 @@ final class StepsCarryRelay extends \Flezha\Relay
     }
 }
 
+/** A per-input session whose producer's channel ends only in a call. */
+#[Relay(factoryId: 'steps_call_end', run: ['steps' => ['each' => 'per_input']])]
+final class StepsCallEndRelay extends \Flezha\Relay
+{
+    public static function channels(Builder $c): void
+    {
+        $c->input('in')->into(StepsProducer::class)->named('ask')
+            ->call('pricing', deadlineMs: 1_000)->into(StepsProducer::class);
+    }
+}
+
 // -- merges, the router and fanned keys -------------------------------------
 
 /** What it was handed, under which cell. */

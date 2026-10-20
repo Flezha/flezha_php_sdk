@@ -47,7 +47,8 @@ final class DispatchTest extends TestCase
         foreach (
             [EchoRelay::class, CounterRelay::class, KeyedRelay::class,
                 MixedStampRelay::class, StepsEmitRelay::class,
-                StepsEmitFlowRelay::class, StepsCarryRelay::class, JsonEntryRelay::class,
+                StepsEmitFlowRelay::class, StepsCarryRelay::class, StepsCallEndRelay::class,
+                JsonEntryRelay::class,
                 MergeRelay::class,
                 RouteLatestRelay::class, FannedRelay::class, CompletingSteps::class,
                 CompletingFlow::class, FlakyEntryRelay::class, TimingSteps::class,
@@ -510,6 +511,16 @@ final class DispatchTest extends TestCase
                 static fn (array $o): array => [$o['target'], $o['channel'], $o['consumer'], $o['payload']],
                 $outputs,
             ),
+        );
+    }
+
+    public function testAStepsTerminalEndingInACallHandsTheCoreNoEdgeOutput(): void
+    {
+        $outputs = $this->work('steps_call_end', 0, [self::input('3')])['effects'][0]['outputs'];
+
+        self::assertSame(
+            [['plugin', 'ask']],
+            array_map(static fn (array $o): array => [$o['target'], $o['plugin_channel']], $outputs),
         );
     }
 
