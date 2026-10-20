@@ -284,6 +284,7 @@ final class KeyedStaticRelay extends \Flezha\Relay
  */
 final class TaskletFormTest extends TestCase
 {
+    use CapturesTheLog;
     use Dispatches;
 
     /** @return iterable<string, array{class-string}> */

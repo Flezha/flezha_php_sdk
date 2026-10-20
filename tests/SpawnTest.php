@@ -110,6 +110,8 @@ final class ScriptedSpawns extends RefusingSpawnBridge
  */
 final class SpawnTest extends TestCase
 {
+    use CapturesTheLog;
+
     private const TOKEN = 7;
     private const OFFSET = 11;
 
