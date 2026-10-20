@@ -43,25 +43,6 @@ final class ClassSpec
         return self::branch($this->run) === 'steps';
     }
 
-    /** Whether an instance keeps its work anywhere: `durable` is not `false`. */
-    public function keepsWork(): bool
-    {
-        return self::branch($this->durable) !== 'false';
-    }
-
-    /**
-     * Whether each invocation's output rides one effect record the controller
-     * stamps at flush: under the effectively-once tier, and for a durable
-     * steps relay, whose stage commit names the record.
-     */
-    public function recordsEffects(): bool
-    {
-        $flow = is_array($this->run) ? ($this->run['flow'] ?? null) : null;
-        $exactly = is_array($flow) ? ($flow['exactly'] ?? null) : null;
-
-        return self::branch($exactly) === 'effectively_once' || ($this->runsInSteps() && $this->keepsWork());
-    }
-
     /** The branch a tree setting names: its bare name, or its one key. */
     private static function branch(mixed $tree): ?string
     {

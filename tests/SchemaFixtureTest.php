@@ -34,10 +34,9 @@ final class SchemaFixtureTest extends RepositoryTestCase
         self::assertSame((int) $this->pinned('format_id', 'json', self::CONSTANTS), HostClassDecl::FORMAT_ID_JSON);
     }
 
-    public function testTheOutputStampsAndTheReservedPrefixAreTheFixturesKeys(): void
+    public function testTheReservedPrefixIsTheFixturesKeys(): void
     {
         $keys = $this->rows('flz_key', self::CONSTANTS);
-        self::assertSame([$keys['cell'], $keys['seq'], $keys['key']], [Ctx::CELL_STAMP, Ctx::SEQ_STAMP, Ctx::KEY_STAMP]);
         self::assertSame(strstr($keys['key'], '.', true) . '.', Ctx::RESERVED_PREFIX);
     }
 

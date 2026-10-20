@@ -45,7 +45,7 @@ final class DispatchTest extends TestCase
     {
         $this->registry = new Registry();
         foreach (
-            [EchoRelay::class, CounterRelay::class, KeyedRelay::class, StampRelay::class,
+            [EchoRelay::class, CounterRelay::class, KeyedRelay::class,
                 MixedStampRelay::class, StepsEmitRelay::class,
                 StepsEmitFlowRelay::class, StepsCarryRelay::class, JsonEntryRelay::class,
                 MergeRelay::class,
@@ -441,58 +441,27 @@ final class DispatchTest extends TestCase
         self::assertStringContainsString('abandoning activation 42 failed', implode("\n", $said));
     }
 
-    // --- output identity stamps ---------------------------------------------
+    // --- a keyed plugin output --------------------------------------------
     //
-    // One invocation, several emits: the per-emit ordinal is the half a
-    // single-emit assertion cannot see, and the e2e golden checks stamp NAMES
-    // only.
+    // The core stamps a keyed output's identity at settle; the host hands it
+    // the key and the user's metadata only.
 
-    public function testAKeyedPluginEmitCarriesTheStampsAndTheOrdinalAdvancesPerEmit(): void
+    public function testAKeyedPluginOutputCarriesItsKeyAndTheUsersMetadataOnly(): void
     {
-        $outputs = $this->stamped('"twice"')['effects'][0]['outputs'];
-
-        self::assertCount(2, $outputs);
-        self::assertSame(
-            ['flz.cell' => 'op/stamp_emitter/ek', 'flz.seq' => '5.0', 'flz.key' => 'ek'],
-            $outputs[0]['metadata'],
-        );
-        self::assertSame(
-            ['flz.cell' => 'op/stamp_emitter/ek', 'flz.seq' => '5.1', 'flz.key' => 'ek'],
-            $outputs[1]['metadata'],
-        );
-    }
-
-    public function testANonKeyedPluginEmitCarriesNoStamps(): void
-    {
-        [$plain] = $this->mixed('"mixed"', tasklet: 0)['effects'][0]['outputs'];
-
-        self::assertSame('plain_out', $plain['plugin_channel']);
-        self::assertSame([], $plain['metadata']);
-    }
-
-    public function testUserMetadataRidesAKeyedPluginFrameWithTheStampsAfterIt(): void
-    {
-        $outputs = $this->mixed('"mixed"', tasklet: 1)['effects'][0]['outputs'];
+        $outputs = $this->mixed('"mixed"')['effects'][0]['outputs'];
         $keyed = array_values(array_filter(
             $outputs,
             static fn (array $o): bool => $o['target'] === 'plugin',
         ))[0];
 
         self::assertSame('keyed_out', $keyed['plugin_channel']);
-        self::assertSame(
-            [
-                'user' => 'meta',
-                'flz.cell' => 'op/stamp_emitter/ek',
-                'flz.seq' => '5.0',
-                'flz.key' => 'ek',
-            ],
-            $keyed['metadata'],
-        );
+        self::assertSame('ek', $keyed['key']);
+        self::assertSame(['user' => 'meta'], $keyed['metadata']);
     }
 
     public function testAFlatMapFansTheConsumerEdgeAndNotThePluginFrame(): void
     {
-        $outputs = $this->mixed('"fanned"', tasklet: 1)['effects'][0]['outputs'];
+        $outputs = $this->mixed('"fanned"')['effects'][0]['outputs'];
 
         // Two edge frames from the `flatMap`, and ONE plugin frame: the
         // serializer runs once per emit, from the value as emitted.
@@ -500,41 +469,14 @@ final class DispatchTest extends TestCase
             ['edge', 'edge', 'plugin'],
             array_map(static fn (array $o): string => $o['target'], $outputs),
         );
-        self::assertSame('5.0', $outputs[2]['metadata']['flz.seq']);
-    }
-
-    public function testAFreshWorkItemRestartsTheEmitOrdinal(): void
-    {
-        $result = $this->work(
-            'stamp_relay',
-            0,
-            [self::input('"twice"'), self::input('"twice"')],
-            'ek',
-            5,
-        );
-
-        $seqs = array_map(
-            static fn (array $effect): array => array_map(
-                static fn (array $output): string => $output['metadata']['flz.seq'],
-                $effect['outputs'],
-            ),
-            $result['effects'],
-        );
-        self::assertSame([['5.0', '5.1'], ['5.0', '5.1']], $seqs);
     }
 
     public function testASpoofedStampIsRefusedBeforeAnyOutput(): void
     {
-        $effect = $this->stamped('"spoof"')['effects'][0];
+        $effect = $this->mixed('"spoof"')['effects'][0];
 
         self::assertSame('retryable', $effect['verdict']);
         self::assertArrayNotHasKey('outputs', $effect);
-    }
-
-    /** @return array<string, mixed> */
-    private function stamped(string $payload): array
-    {
-        return $this->work('stamp_relay', 0, [self::input($payload)], 'ek', 5);
     }
 
     public function testAStructuredStepsReleasesOneUntransformedEdgeOutput(): void
@@ -729,9 +671,9 @@ final class DispatchTest extends TestCase
     }
 
     /** @return array<string, mixed> */
-    private function mixed(string $payload, int $tasklet = 0): array
+    private function mixed(string $payload): array
     {
-        return $this->work('mixed_stamp_relay', $tasklet, [self::input($payload)], 'ek', 5);
+        return $this->work('mixed_stamp_relay', 1, [self::input($payload)], 'ek', 5);
     }
 
     /** @param list<array<string, mixed>> $items @return array<string, mixed> */

@@ -154,40 +154,20 @@ final class SplitKeyedRelay extends \Flezha\Relay
 }
 
 /**
- * The keyed plugin emitter: one output channel, carrying the identity stamps.
+ * The keyed plugin emitter: one output channel.
  */
 #[Task(name: 'stamp_emitter')]
 final class StampEmitter extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
     {
-        if ($input === 'twice') {
-            $ctx->emit('a', channel: 'keyed_out');
-            $ctx->emit('b', channel: 'keyed_out');
-        } elseif ($input === 'spoof') {
+        if ($input === 'spoof') {
             $ctx->emit('v', channel: 'keyed_out', metadata: ['flz.seq' => '999.0']);
         } elseif ($input === 'fanned') {
             $ctx->emit('x', channel: 'keyed_out');
         } else {
             $ctx->emit('k', channel: 'keyed_out', metadata: ['user' => 'meta']);
         }
-    }
-}
-
-/**
- * One keyed plugin channel: the topology every SDK can express, and where the
- * per-emit ordinal has to be right.
- */
-#[Relay(factoryId: 'stamp_relay')]
-final class StampRelay extends \Flezha\Relay
-{
-    public static function channels(Builder $c): void
-    {
-        $c->input('input')
-            ->keyBy(static fn (mixed $v): string => 'ek')
-            ->into(StampEmitter::class)
-            ->keyed()
-            ->output('keyed_out');
     }
 }
 

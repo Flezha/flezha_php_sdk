@@ -26,11 +26,6 @@ final class Ctx
     /** Metadata keys the runtime owns. A handler that sets one is refused. */
     public const RESERVED_PREFIX = 'flz.';
 
-    /** The identity stamps a keyed plugin output carries when no effect record does. */
-    public const CELL_STAMP = 'flz.cell';
-    public const SEQ_STAMP = 'flz.seq';
-    public const KEY_STAMP = 'flz.key';
-
     /** @var list<string> */
     public array $changes = [];
     /** @var list<array<string, mixed>> */
@@ -41,7 +36,6 @@ final class Ctx
     private bool $checkpointed = false;
     private ?string $completion = null;
     private int $ordinal = 0;
-    private int $emitOrdinal = 0;
     private ?string $identity = null;
 
     /** @param list<ChannelSpec> $outgoing */
@@ -491,9 +485,6 @@ final class Ctx
             throw new FlezhaException('runtime.key_required_on_keyed_channel', ['channel' => $channel->name]);
         }
 
-        $pairs = $this->metadata($metadata);
-        $this->stampIdentity($pairs, $channel, $resolved);
-
         return [
             'target' => 'plugin',
             'channel' => null,
@@ -501,7 +492,7 @@ final class Ctx
             'plugin_channel' => $channel->name,
             'key' => $resolved,
             'event_time' => null,
-            'metadata' => $pairs,
+            'metadata' => $this->metadata($metadata),
             'payload' => $this->pluginPayload($channel, $value),
         ];
     }
@@ -520,33 +511,6 @@ final class Ctx
     private function pluginPayload(ChannelSpec $channel, mixed $value): string
     {
         return ($channel->sinkEncode)($value);
-    }
-
-    /**
-     * Output identity for one plugin frame, appended after the user's metadata.
-     *
-     * Written only when the class records no effects: under the tier, and for
-     * a durable steps relay, the controller derives the identity from the durable
-     * effect record, and a second answer here would contradict it. The
-     * ordinal advances on every plugin output, stamped or not, so hosts of one
-     * topology agree on the sequence, and a `flatMap` fan-out produces
-     * several outputs from one emit, which is why this runs per output.
-     *
-     * @param array<string, string> $pairs
-     */
-    private function stampIdentity(array &$pairs, ChannelSpec $channel, ?string $key): void
-    {
-        if ($channel->keyed && !$this->spec->recordsEffects()) {
-            $pairs[self::CELL_STAMP] = sprintf(
-                '%s/%s/%s',
-                $this->relay,
-                $this->node->name,
-                (string) $this->cellKey,
-            );
-            $pairs[self::SEQ_STAMP] = $this->changeSeq . '.' . $this->emitOrdinal;
-            $pairs[self::KEY_STAMP] = (string) $key;
-        }
-        $this->emitOrdinal++;
     }
 
     /**
