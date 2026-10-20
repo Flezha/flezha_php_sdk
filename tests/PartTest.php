@@ -5,22 +5,21 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\RegisteredClass;
 use Flezha\Exception\FlezhaException;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 use Flezha\LocalRelay;
 use Flezha\LocalOutput;
 use Flezha\SpawnBridge;
 use Flezha\Tasklet;
-use Flezha\Testing\Harness;
+use Flezha\Testing\TaskletTestHarness;
 use Flezha\TestApp\PartEcho;
 use PHPUnit\Framework\TestCase;
 
-#[Task(name: 'previewer')]
+#[Tasklet\Spec(name: 'previewer')]
 final class Previewer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -34,7 +33,7 @@ final class Previewer extends Tasklet
 #[Relay(factoryId: 'preview_op')]
 final class PreviewRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(Previewer::class)
             ->output('answer', encode: static fn (mixed $v): string => '<' . json_encode($v) . '>');
@@ -42,7 +41,7 @@ final class PreviewRelay extends \Flezha\Relay
 }
 
 /** Records every part refusal the no-output tasklets met, then emits its input. */
-#[Task(name: 'part_feeder')]
+#[Tasklet\Spec(name: 'part_feeder')]
 final class PartFeeder extends Tasklet
 {
     /** @var list<string> */
@@ -59,7 +58,7 @@ final class PartFeeder extends Tasklet
     }
 }
 
-#[Task(name: 'part_pass')]
+#[Tasklet\Spec(name: 'part_pass')]
 final class PartPass extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -71,7 +70,7 @@ final class PartPass extends Tasklet
 #[Relay(factoryId: 'part_feeder_op')]
 final class PartFeederRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(PartFeeder::class)
             ->into(PartPass::class)->output('answer');
@@ -118,7 +117,7 @@ final class PartTest extends TestCase
 
     public function testTheTestingHarnessSendsAPartNowhere(): void
     {
-        self::assertSame(['a'], (new Harness(Previewer::class))->feed('a')->outputs);
+        self::assertSame(['a'], (new TaskletTestHarness(Previewer::class))->feed('a')->outputs);
     }
 
     /** Through the real core: a local run has no controller, so no listener, and drops every part. */

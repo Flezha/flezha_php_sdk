@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -14,7 +13,7 @@ use Flezha\Tasklet;
  * The reservation id comes from `$ctx->stableId()`, and the step both remembers it and hands it
  * on, beside the order.
  */
-#[Task(name: 'reserve_funds')]
+#[Tasklet\Spec(name: 'reserve_funds')]
 final class ReserveFunds extends Tasklet
 {
     public function initState(?string $cellKey): mixed

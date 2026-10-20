@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Echo;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -20,7 +19,7 @@ use Flezha\Tasklet;
  * Where the result goes is not decided here. The relay decides that, so the
  * graph can be rewired without touching this class.
  */
-#[Task(name: 'echo')] // state is saved under this name, so choose it once
+#[Tasklet\Spec(name: 'echo')] // state is saved under this name, so choose it once
 final class EchoTasklet extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void

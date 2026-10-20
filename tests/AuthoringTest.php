@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
@@ -14,15 +13,15 @@ use Flezha\Exception\DecodeException;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
 use Flezha\Flezha;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 use Flezha\Graph\ClassSpec;
-use Flezha\Graph\Edge;
+use Flezha\Stream;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Relay as RelayBase;
 use Flezha\Tasklet;
 use Flezha\Runner;
-use Flezha\Testing\Harness;
+use Flezha\Testing\TaskletTestHarness;
 use Flezha\TimerFiring;
 use Flezha\Transforms;
 
@@ -39,7 +38,7 @@ final class ShortUpcase extends RelayBase
 #[Relay(factoryId: 'sf_upcase')]
 final class ShortUpcaseTwinRelay extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(Echoer::class, 'sf_upcase')
@@ -56,7 +55,7 @@ final class ShortPlace extends RelayBase
 #[Relay(factoryId: 'sf_place', run: 'steps')]
 final class ShortPlaceTwinRelay extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('order', codec: ChannelCodec::Text)
             ->into(Echoer::class, 'sf_place')
@@ -76,7 +75,7 @@ final class ShortWithTopology extends RelayBase
 {
     use Echoes;
 
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Echoer::class)->output('out');
     }
@@ -93,7 +92,7 @@ final class ShortUnattributed extends RelayBase
 }
 
 #[Relay(factoryId: 'sf_renamed')]
-#[Task(name: 'elsewhere')]
+#[Tasklet\Spec(name: 'elsewhere')]
 final class ShortRenamed extends RelayBase
 {
     use Echoes;
@@ -124,17 +123,17 @@ final class ShortPerInputTimeLimited extends RelayBase
 #[Relay(factoryId: 'sf_codec_on_topology', codec: ChannelCodec::Text)]
 final class ShortCodecOnTopology extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Echoer::class)->output('out');
     }
 }
 
 #[Relay(factoryId: 'sf_task_on_topology')]
-#[Task(mailboxCapacity: 8)]
+#[Tasklet\Spec(mailboxCapacity: 8)]
 final class ShortTaskOnTopology extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Echoer::class)->output('out');
     }
@@ -279,31 +278,31 @@ final class ShortWidenedHooks extends RelayBase
     }
 }
 
-#[Task(name: 'sf_task_run', run: 'steps')]
+#[Tasklet\Spec(name: 'sf_task_run', run: 'steps')]
 final class TaskWithRun extends Tasklet
 {
     use Echoes;
 }
 
-#[Task(name: 'sf_task_sink', output: 'out')]
+#[Tasklet\Spec(name: 'sf_task_sink', output: 'out')]
 final class TaskWithOutput extends Tasklet
 {
     use Echoes;
 }
 
-#[Task(name: 'sf_task_input', input: 'prices')]
+#[Tasklet\Spec(name: 'sf_task_input', input: 'prices')]
 final class TaskWithInput extends Tasklet
 {
     use Echoes;
 }
 
-#[Task(name: 'sf_task_codec', codec: ChannelCodec::Text)]
+#[Tasklet\Spec(name: 'sf_task_codec', codec: ChannelCodec::Text)]
 final class TaskWithCodec extends Tasklet
 {
     use Echoes;
 }
 
-#[Task(name: 'fold_without_state')]
+#[Tasklet\Spec(name: 'fold_without_state')]
 final class FoldWithoutState extends Tasklet
 {
     public function applyChange(mixed &$state, mixed $change): void
@@ -340,7 +339,7 @@ final class AuthoringTest extends RepositoryTestCase
         // no value to serialize, and the core reads an output as the terminal of
         // the channel it sits on — it cannot see this one is controller-fed.
         yield 'a sink fed by an entry channel' => [
-            static fn (): mixed => self::validate(static function (Builder $c): void {
+            static fn (): mixed => self::validate(static function (ChannelBuilder $c): void {
                 $c->input('in')->output();
             }),
             'topology.output_on_entry',
@@ -348,7 +347,7 @@ final class AuthoringTest extends RepositoryTestCase
         ];
         // The one refusal the builder raises under a code of the core's.
         yield 'two tasklets claiming one node identity' => [
-            static fn (): mixed => self::validate(static function (Builder $c): void {
+            static fn (): mixed => self::validate(static function (ChannelBuilder $c): void {
                 $in = $c->input('in');
                 $in->into(Echoer::class, 'twin');
                 $in->into(Keyed::class, 'twin');
@@ -360,7 +359,7 @@ final class AuthoringTest extends RepositoryTestCase
         // the core's verdict comes back as this package's own refusal, in the
         // core's vocabulary.
         yield 'the core verdict, rendered here' => [
-            static fn (): mixed => self::validate(static function (Builder $c): void {
+            static fn (): mixed => self::validate(static function (ChannelBuilder $c): void {
                 $c->input('in')
                     ->keyBy(static fn (mixed $v): string => 'a')
                     ->keyBy(static fn (mixed $v): string => 'b')
@@ -390,7 +389,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testARefusedDeclarationCarriesTheCoresOwnCodes(): void
     {
         try {
-            self::validate(static function (Builder $c): void {
+            self::validate(static function (ChannelBuilder $c): void {
                 $c->input('in')
                     ->keyBy(static fn (mixed $v): string => 'a')
                     ->keyBy(static fn (mixed $v): string => 'b')
@@ -416,7 +415,7 @@ final class AuthoringTest extends RepositoryTestCase
         $this->expectException(FlezhaException::class);
         $this->expectExceptionCode('topology.no_tasklets');
 
-        self::validate(static function (Builder $c): void {
+        self::validate(static function (ChannelBuilder $c): void {
         }, 'steps');
     }
 
@@ -531,7 +530,7 @@ final class AuthoringTest extends RepositoryTestCase
     /** A class declared inline, with the settings tree as written. */
     private static function spec(callable $channels, mixed $run = null, mixed $durable = null): ClassSpec
     {
-        $builder = new Builder('under_test');
+        $builder = new ChannelBuilder('under_test');
         $channels($builder);
         $builder->seal();
 
@@ -610,7 +609,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testAnOutputBesideACallOnOneChannelIsRefused(): void
     {
         try {
-            self::validate(static function (Builder $c): void {
+            self::validate(static function (ChannelBuilder $c): void {
                 $c->input('in')->into(Echoer::class)->output('out')
                     ->call('pricing', deadlineMs: 500)->into(Counter::class);
             });
@@ -668,7 +667,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testABareReDeclaredEdgeIsANoOpNotASecondEdge(): void
     {
         $builder = null;
-        self::validate(static function (Builder $c) use (&$builder): void {
+        self::validate(static function (ChannelBuilder $c) use (&$builder): void {
             $edge = $c->input('in');
             $edge->into(Echoer::class);
             $edge->into(Echoer::class);
@@ -701,7 +700,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testAnEntryAndATaskletOutputMergeIntoOneNode(): void
     {
         $same = static fn (mixed $v): mixed => $v;
-        $derived = self::validate(static function (Builder $c) use ($same): void {
+        $derived = self::validate(static function (ChannelBuilder $c) use ($same): void {
             $upstream = $c->input('a')->into(Echoer::class);
             $c->merge()->from($upstream, $same)->from($c->input('b'), $same)->into(Counter::class);
         });
@@ -712,18 +711,18 @@ final class AuthoringTest extends RepositoryTestCase
         );
     }
 
-    /** @return iterable<string, array{callable(Builder):void, string}> */
+    /** @return iterable<string, array{callable(ChannelBuilder):void, string}> */
     public static function malformedMerges(): iterable
     {
         $same = static fn (mixed $v): mixed => $v;
         yield 'one source' => [
-            static function (Builder $c) use ($same): void {
+            static function (ChannelBuilder $c) use ($same): void {
                 $c->merge()->from($c->input('in'), $same)->into(Echoer::class);
             },
             'topology.merge_too_few_sources',
         ];
         yield 'one source twice' => [
-            static function (Builder $c) use ($same): void {
+            static function (ChannelBuilder $c) use ($same): void {
                 $in = $c->input('in');
                 $c->input('other');
                 $c->merge()->from($in, $same)->from($in, $same)->into(Echoer::class);
@@ -731,7 +730,7 @@ final class AuthoringTest extends RepositoryTestCase
             'topology.duplicate_merge_source',
         ];
         yield 'a source already mapped into the node' => [
-            static function (Builder $c) use ($same): void {
+            static function (ChannelBuilder $c) use ($same): void {
                 $in = $c->input('in');
                 $in->map($same)->into(Echoer::class);
                 $c->merge()->from($in, $same)->from($c->input('other'), $same)->into(Echoer::class);
@@ -756,7 +755,7 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $builder = null;
         $key = static fn (array $t): string => $t['symbol'];
-        $derived = self::validate(static function (Builder $c) use (&$builder, $key): void {
+        $derived = self::validate(static function (ChannelBuilder $c) use (&$builder, $key): void {
             $c->routeLatest($c->input('config'), $c->input('trades'), $key)->output('routed');
             $c->routeLatestNamed($c->input('limits'), $c->input('orders'), $key, 'limits_router')->output('limited');
             $builder = $c;
@@ -843,7 +842,7 @@ final class AuthoringTest extends RepositoryTestCase
         string $parent,
     ): void {
         try {
-            self::validate(static fn (Builder $c) => $c->input('in')->into(Echoer::class), ...[$setting => $tree]);
+            self::validate(static fn (ChannelBuilder $c) => $c->input('in')->into(Echoer::class), ...[$setting => $tree]);
             self::fail("$field under $parent was accepted");
         } catch (FlezhaException $e) {
             self::assertSame(['topology.unknown_field'], array_column($e->details['issues'], 'code'));
@@ -854,7 +853,7 @@ final class AuthoringTest extends RepositoryTestCase
 
     public function testAFlowClassMayKeepItsWorkRemote(): void
     {
-        $channels = static fn (Builder $c) => $c->input('in')->into(Echoer::class);
+        $channels = static fn (ChannelBuilder $c) => $c->input('in')->into(Echoer::class);
         self::validate($channels, durable: 'remote');
         self::assertSame('remote', HostClassDecl::of(self::spec($channels, durable: 'remote'))['durable']);
     }
@@ -874,7 +873,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testAValueOutsideItsChoiceIsRefusedNamingIt(string|array $run, string $value): void
     {
         try {
-            self::validate(static fn (Builder $c) => $c->input('in')->into(Echoer::class), $run);
+            self::validate(static fn (ChannelBuilder $c) => $c->input('in')->into(Echoer::class), $run);
             self::fail("the run $value was accepted");
         } catch (FlezhaException $e) {
             self::assertSame(['topology.invalid_setting'], array_column($e->details['issues'], 'code'));
@@ -885,7 +884,7 @@ final class AuthoringTest extends RepositoryTestCase
     public function testTheDurabilityReachesTheDeclarationAsWritten(): void
     {
         $durable = static fn (mixed $tree): mixed => HostClassDecl::of(self::spec(
-            static fn (Builder $c) => $c->input('in')->into(Echoer::class),
+            static fn (ChannelBuilder $c) => $c->input('in')->into(Echoer::class),
             'steps',
             $tree,
         ))['durable'] ?? null;
@@ -911,7 +910,7 @@ final class AuthoringTest extends RepositoryTestCase
      */
     private static function codecSlots(array $input = [], array $sink = []): array
     {
-        $builder = new Builder('codecs');
+        $builder = new ChannelBuilder('codecs');
         $builder->input('in', ...$input)->into(Echoer::class)->output('out', ...$sink);
 
         return [$builder->channels[0]->decode, $builder->channels[1]->sinkEncode];
@@ -1108,12 +1107,12 @@ final class AuthoringTest extends RepositoryTestCase
 
     public function testAShortFormsTaskletRunsItsBodyThroughItsOwnHooks(): void
     {
-        $harness = new Harness(ShortCounter::class);
+        $harness = new TaskletTestHarness(ShortCounter::class);
         $harness->feed('one');
         $harness->feed('two');
 
         self::assertSame(['seen' => ['one', 'two']], $harness->state());
-        self::assertTrue(Harness::replayEquals(ShortCounter::class, ['one', 'two']));
+        $harness->replayEquals();
     }
 
     public function testAChannelsBodyStillDeclaresAFullForm(): void
@@ -1164,7 +1163,7 @@ final class AuthoringTest extends RepositoryTestCase
         yield 'a tasklet setting beside a topology body' => [
             static fn (): mixed => ShortTaskOnTopology::spec(),
             'topology.short_form_field_on_full_form',
-            'declares #[Task] beside its channels body',
+            'declares #[Tasklet\Spec] beside its channels body',
         ];
         yield 'a relay with no run wired as a tasklet' => [
             static fn (): mixed => Definition::of(ShortUpcaseTwinRelay::class),
@@ -1263,7 +1262,7 @@ final class AuthoringTest extends RepositoryTestCase
     {
         $this->expectException(FlezhaException::class);
         $this->expectExceptionCode('topology.relay_field_on_tasklet');
-        $this->expectExceptionMessageMatches("/declares `$argument` on #\\[Task\\].*#\\[Relay\\]/");
+        $this->expectExceptionMessageMatches("/declares `$argument` on #\\[Tasklet\\\\Spec\\].*#\\[Relay\\]/");
 
         Flezha::createRunner('test')->registerFactory($class);
     }
@@ -1299,7 +1298,7 @@ final class AuthoringTest extends RepositoryTestCase
 #[Relay(factoryId: 'fan_out')]
 final class FanOut extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $edge = $c->input('in')->into(Counter::class);
         $edge->into(Echoer::class, 'b');
@@ -1310,11 +1309,11 @@ final class FanOut extends RelayBase
 #[Relay(factoryId: 'branched')]
 final class Branched extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Counter::class)->branch(
-            static fn (Edge $e) => $e->into(Echoer::class, 'b'),
-            static fn (Edge $e) => $e->into(Echoer::class, 'c'),
+            static fn (Stream $e) => $e->into(Echoer::class, 'b'),
+            static fn (Stream $e) => $e->into(Echoer::class, 'c'),
         );
     }
 }
@@ -1322,7 +1321,7 @@ final class Branched extends RelayBase
 #[Relay(factoryId: 'hybrid')]
 final class Hybrid extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Counter::class)
             ->output('hybrid_indicator')->into(Echoer::class);
@@ -1332,7 +1331,7 @@ final class Hybrid extends RelayBase
 #[Relay(factoryId: 'keyed_hybrid')]
 final class KeyedHybrid extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Counter::class)->keyed()
             ->output('mid')->into(Echoer::class);
@@ -1342,7 +1341,7 @@ final class KeyedHybrid extends RelayBase
 #[Relay(factoryId: 'per_edge_transform')]
 final class PerEdgeTransform extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $edge = $c->input('in')->into(Counter::class);
         $edge->map(static fn (mixed $v): mixed => $v)->into(Echoer::class, 'b');
@@ -1357,7 +1356,7 @@ final class Unattributed extends RelayBase
 #[Relay(factoryId: 'named_sink')]
 final class NamedSink extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Echoer::class)->output('input');
     }
@@ -1366,7 +1365,7 @@ final class NamedSink extends RelayBase
 #[Relay(factoryId: 'unnamed_sink')]
 final class UnnamedSink extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Counter::class)->output();
     }
@@ -1375,7 +1374,7 @@ final class UnnamedSink extends RelayBase
 #[Relay(factoryId: 'named_twice')]
 final class NamedTwice extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Echoer::class)->named('a')->output('b');
     }
@@ -1384,7 +1383,7 @@ final class NamedTwice extends RelayBase
 #[Relay(factoryId: 'trailing_named')]
 final class TrailingNamed extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Echoer::class)->named('renamed');
     }
@@ -1393,7 +1392,7 @@ final class TrailingNamed extends RelayBase
 #[Relay(factoryId: 'trailing_keyed')]
 final class TrailingKeyed extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Echoer::class)->keyed();
     }
@@ -1402,7 +1401,7 @@ final class TrailingKeyed extends RelayBase
 #[Relay(factoryId: 'one_sink_two_channels')]
 final class OneSinkTwoChannels extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Echoer::class)->output('shared')
             ->into(Counter::class)->output('shared');
@@ -1412,7 +1411,7 @@ final class OneSinkTwoChannels extends RelayBase
 #[Relay(factoryId: 'diamond')]
 final class Diamond extends RelayBase
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $edge = $c->input('in')->into(Echoer::class);
         $edge->named('left')->into(Counter::class);
@@ -1420,7 +1419,7 @@ final class Diamond extends RelayBase
     }
 }
 
-#[Task(name: 'declaring_base', cellKeys: ['a', 'b'], mailboxCapacity: 8, schemaVersion: 3)]
+#[Tasklet\Spec(name: 'declaring_base', cellKeys: ['a', 'b'], mailboxCapacity: 8, schemaVersion: 3)]
 class DeclaringBase extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -1435,12 +1434,12 @@ class DeclaringBase extends Tasklet
 }
 
 /** Declares only its name: everything else is the parent's. */
-#[Task(name: 'silent_subclass')]
+#[Tasklet\Spec(name: 'silent_subclass')]
 final class SilentSubclass extends DeclaringBase
 {
 }
 
-#[Task(name: 'renamed')]
+#[Tasklet\Spec(name: 'renamed')]
 final class RenamingSubclass extends DeclaringBase
 {
 }

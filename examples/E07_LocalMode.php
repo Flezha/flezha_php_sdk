@@ -21,16 +21,15 @@ namespace Flezha\Examples\E07;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 use Flezha\LocalRelay;
 use Flezha\Tasklet;
 use Flezha\LocalOutput;
 
 /** One line into its words: the hop to `Tally` is the runtime's job. */
-#[Task(name: 'split')]
+#[Tasklet\Spec(name: 'split')]
 final class Split extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -42,7 +41,7 @@ final class Split extends Tasklet
 }
 
 /** One Cell per word, minted on first sight of it. */
-#[Task(name: 'tally')]
+#[Tasklet\Spec(name: 'tally')]
 final class Tally extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -67,7 +66,7 @@ final class Tally extends Tasklet
 #[Relay(factoryId: 'local_word_count_example')]
 final class WordCountRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('lines', codec: ChannelCodec::Text)
             ->into(Split::class)

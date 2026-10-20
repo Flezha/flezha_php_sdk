@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Tasklet;
 use PHPUnit\Framework\TestCase;
@@ -263,7 +262,7 @@ final class BindingTest extends TestCase
     }
 }
 
-#[Task(name: 'checkpoint_tasklet')]
+#[Tasklet\Spec(name: 'checkpoint_tasklet')]
 final class CheckpointTasklet extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -280,7 +279,7 @@ final class CheckpointTasklet extends Tasklet
 )]
 final class CheckpointOutputsOnly extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(CheckpointTasklet::class)->keyed()->output('sink');
     }
@@ -292,7 +291,7 @@ final class CheckpointOutputsOnly extends \Flezha\Relay
 )]
 final class CheckpointAckOnly extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(CheckpointTasklet::class)->keyed()->output('sink');
     }

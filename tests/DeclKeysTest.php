@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
@@ -110,7 +109,7 @@ final class DeclKeysTest extends RepositoryTestCase
         );
 
         $same = static fn (mixed $v): mixed => $v;
-        $c = new Builder('two_merges');
+        $c = new ChannelBuilder('two_merges');
         $a = $c->input('a');
         $b = $c->input('b');
         $c->merge()->from($a, $same)->from($b, $same)->into(Echoer::class);
@@ -200,7 +199,7 @@ final class DeclKeysTest extends RepositoryTestCase
 }
 
 /** A declaration populated far enough that every optional key is present. */
-#[Task(
+#[Tasklet\Spec(
     name: 'entry',
     mailboxCapacity: 8,
     schemaVersion: 3,
@@ -236,7 +235,7 @@ final class FullEntry extends Tasklet
     }
 }
 
-#[Task(name: 'downstream', idleTtlSeconds: 1, maxCells: 16)]
+#[Tasklet\Spec(name: 'downstream', idleTtlSeconds: 1, maxCells: 16)]
 final class FullDownstream extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -249,7 +248,7 @@ final class FullDownstream extends Tasklet
     }
 }
 
-#[Task(name: 'fanned', cellKeys: ['a', 'b'])]
+#[Tasklet\Spec(name: 'fanned', cellKeys: ['a', 'b'])]
 final class FullFanned extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -276,7 +275,7 @@ final class FullFanned extends Tasklet
 )]
 final class FullFlow extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $edge = $c->input('input', description: 'every key', schema: ['type' => 'object'])->into(FullEntry::class);
         $edge->named('hop')->keyBy(static fn (mixed $v): string => (string) $v)
@@ -286,7 +285,7 @@ final class FullFlow extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'hybrid_producer_tasklet')]
+#[Tasklet\Spec(name: 'hybrid_producer_tasklet')]
 final class HybridProducer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -295,7 +294,7 @@ final class HybridProducer extends Tasklet
     }
 }
 
-#[Task(name: 'hybrid_consumer_tasklet')]
+#[Tasklet\Spec(name: 'hybrid_consumer_tasklet')]
 final class HybridConsumer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -307,7 +306,7 @@ final class HybridConsumer extends Tasklet
 #[Relay(factoryId: 'hybrid_channel')]
 final class HybridChannelTopology extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(HybridProducer::class)
             ->output('hybrid_indicator', static fn (mixed $v): string => (string) $v)
@@ -315,7 +314,7 @@ final class HybridChannelTopology extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'tier_commit_a')]
+#[Tasklet\Spec(name: 'tier_commit_a')]
 final class TierCommitA extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -324,7 +323,7 @@ final class TierCommitA extends Tasklet
     }
 }
 
-#[Task(name: 'block_b')]
+#[Tasklet\Spec(name: 'block_b')]
 final class BlockB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -336,7 +335,7 @@ final class BlockB extends Tasklet
 #[Relay(factoryId: 'commit_block_chain', run: 'steps')]
 final class CommitBlockChainTopology extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(TierCommitA::class)->keyed()
             ->output('mid', static fn (mixed $v): string => (string) $v)

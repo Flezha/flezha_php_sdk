@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Response;
@@ -97,7 +96,7 @@ final class CallTest extends RepositoryTestCase
     public function testACallOnAnEntryChannelIsRefusedAsAnOutputThereIs(): void
     {
         try {
-            $builder = new Builder('on_entry');
+            $builder = new ChannelBuilder('on_entry');
             $builder->input('in')->call('p', deadlineMs: 5);
             self::fail('a call on an entry channel was accepted');
         } catch (FlezhaException $e) {
@@ -170,7 +169,7 @@ final class CallTest extends RepositoryTestCase
     }
 }
 
-#[Task(name: 'call_ask')]
+#[Tasklet\Spec(name: 'call_ask')]
 final class CallAsk extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -182,7 +181,7 @@ final class CallAsk extends Tasklet
 #[Relay(factoryId: 'call_back')]
 final class CallingBack extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->named('quote')->call('pricing', deadlineMs: 500)->into(CallAsk::class);
     }
@@ -191,7 +190,7 @@ final class CallingBack extends \Flezha\Relay
 #[Relay(factoryId: 'call_factory')]
 final class CallingFactory extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)
             ->filter(static fn (mixed $line): bool => $line !== 'drop')
@@ -212,7 +211,7 @@ final class CallingFactory extends \Flezha\Relay
 #[Relay(factoryId: 'call_beside_sink')]
 final class CallingBesideSink extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->output('out')->call('p', deadlineMs: 5)->into(CallAsk::class);
     }
@@ -221,7 +220,7 @@ final class CallingBesideSink extends \Flezha\Relay
 #[Relay(factoryId: 'call_zero')]
 final class CallingZero extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->call('p', deadlineMs: 0)->into(CallAsk::class);
     }
@@ -230,7 +229,7 @@ final class CallingZero extends \Flezha\Relay
 #[Relay(factoryId: 'call_unkeyed')]
 final class CallingUnkeyed extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->call(factory: 'a', deadlineMs: 5, create: false)->into(CallAsk::class);
     }
@@ -239,7 +238,7 @@ final class CallingUnkeyed extends \Flezha\Relay
 #[Relay(factoryId: 'call_unread')]
 final class CallingUnread extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->call('p', deadlineMs: 5);
     }
@@ -248,7 +247,7 @@ final class CallingUnread extends \Flezha\Relay
 #[Relay(factoryId: 'call_once', run: 'steps')]
 final class CallingOnce extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->call('p', deadlineMs: 5)->into(CallAsk::class);
     }
@@ -257,7 +256,7 @@ final class CallingOnce extends \Flezha\Relay
 #[Relay(factoryId: 'call_per_input', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 60_000)]
 final class CallingPerInput extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(CallAsk::class)->call('p', deadlineMs: 5)->into(CallAsk::class);
     }

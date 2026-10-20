@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Flezha\Attribute;
+namespace Flezha\Tasklet;
 
 use Attribute;
 
@@ -16,7 +16,7 @@ use Attribute;
  * from. `name` is required because it is part of every cell's durable path:
  * renaming the class never moves saved state.
  *
- *     #[Task(name: 'totals', cellKeys: ['a', 'b'], logicalClock: true)]
+ *     #[Tasklet\Spec(name: 'totals', cellKeys: ['a', 'b'], logicalClock: true)]
  *     final class Totals extends Tasklet { ... }
  *
  * The cell mode is not declared here: a tasklet fed through `keyBy` is
@@ -26,7 +26,7 @@ use Attribute;
  * settings here too, all but `name`: that tasklet is named its factory id.
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-final class Task
+final class Spec
 {
     /**
      * @param list<string>|null    $cellKeys  a static key set

@@ -17,13 +17,12 @@ namespace Flezha\Examples\E03;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Flezha;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 
-#[Task(name: 'ledger')]
+#[Tasklet\Spec(name: 'ledger')]
 final class Ledger extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -57,7 +56,7 @@ final class Ledger extends Tasklet
 )]
 final class LedgerRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('entries')
             ->keyBy(static fn (array $e): string => (string) $e['account'])

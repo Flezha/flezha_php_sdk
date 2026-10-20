@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Agentdesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Response;
 use Flezha\Tasklet;
@@ -16,7 +15,7 @@ use Flezha\Tasklet;
  * What reaches a user's cell is a message to admit, or the tokens an answer used; what it hands on
  * is a verdict, the message and the tokens the user had spent when it arrived.
  */
-#[Task(name: 'budget')]
+#[Tasklet\Spec(name: 'budget')]
 final class Budget extends Tasklet
 {
     public const DAILY_TOKENS = 40;

@@ -16,13 +16,12 @@ namespace Flezha\Examples\E06;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Flezha;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 
-#[Task(name: 'chat_turn')]
+#[Tasklet\Spec(name: 'chat_turn')]
 final class ChatTurn extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -52,7 +51,7 @@ final class ChatTurn extends Tasklet
 #[Relay(factoryId: 'chat', run: ['steps' => ['each' => 'per_input']], maxDurationMs: 3_600_000)]
 final class ChatSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('messages')->into(ChatTurn::class)->output('replies');
     }

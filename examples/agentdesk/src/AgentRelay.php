@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Flezha\Examples\Agentdesk;
 
 use Flezha\Attribute\Relay;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
-use Flezha\Graph\Builder;
 
 /**
  * One conversation: a relay that runs in steps, one turn per message it is sent, for as long
@@ -22,7 +22,7 @@ use Flezha\Graph\Builder;
 )]
 final class AgentRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('turn', codec: ChannelCodec::Text) // entry 1: `flz relay call`
             ->into(Reply::class)

@@ -5,16 +5,15 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Dispatch\Dispatcher;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
-use Flezha\Testing\Harness;
+use Flezha\Testing\TaskletTestHarness;
 use PHPUnit\Framework\TestCase;
 
 /** Keeps what it was sent, and undoes by emitting what its own cell holds. */
-#[Task(name: 'kept')]
+#[Tasklet\Spec(name: 'kept')]
 final class Kept extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -41,7 +40,7 @@ final class Kept extends Tasklet
 #[Relay(factoryId: 'kept_relay')]
 final class KeptRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Kept::class)->output('out');
     }
@@ -132,7 +131,7 @@ final class CellStateTest extends TestCase
 
     public function testAHarnessRestoreFillsTheCellItReads(): void
     {
-        $harness = new Harness(Kept::class, relay: 'order_a');
+        $harness = new TaskletTestHarness(Kept::class, relay: 'order_a');
         $harness->restore(changes: ['"r"']);
 
         self::assertSame(['seen' => ['r']], $harness->state());

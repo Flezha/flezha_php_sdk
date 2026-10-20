@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
-use Flezha\Graph\Builder;
-use Flezha\Graph\Edge;
 use Flezha\Overflow;
+use Flezha\Stream;
 use Flezha\Tasklet;
 
 /**
@@ -29,13 +28,13 @@ trait Echoes
     }
 }
 
-#[Task(name: 'echoer')]
+#[Tasklet\Spec(name: 'echoer')]
 final class Echoer extends Tasklet
 {
     use Echoes;
 }
 
-#[Task(name: 'counter')]
+#[Tasklet\Spec(name: 'counter')]
 final class Counter extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -60,7 +59,7 @@ final class Counter extends Tasklet
     }
 }
 
-#[Task(name: 'keyed')]
+#[Tasklet\Spec(name: 'keyed')]
 final class Keyed extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -83,7 +82,7 @@ final class Keyed extends Tasklet
 #[Relay(factoryId: 'echo_relay')]
 final class EchoRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Echoer::class)->output('out');
     }
@@ -92,7 +91,7 @@ final class EchoRelay extends \Flezha\Relay
 #[Relay(factoryId: 'counter_relay')]
 final class CounterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Counter::class)->output('out');
     }
@@ -121,7 +120,7 @@ final class ShortCounter extends \Flezha\Relay
 #[Relay(factoryId: 'keyed_relay')]
 final class KeyedRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')
             ->onFull(Overflow::DropNothing)
@@ -140,7 +139,7 @@ final class KeyedRelay extends \Flezha\Relay
 #[Relay(factoryId: 'split_keyed_relay')]
 final class SplitKeyedRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $input = $c->input('input');
         $input->filter(static fn (mixed $v): bool => $v === 'drop')
@@ -156,7 +155,7 @@ final class SplitKeyedRelay extends \Flezha\Relay
 /**
  * The keyed plugin emitter: one output channel.
  */
-#[Task(name: 'stamp_emitter')]
+#[Tasklet\Spec(name: 'stamp_emitter')]
 final class StampEmitter extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -171,7 +170,7 @@ final class StampEmitter extends Tasklet
     }
 }
 
-#[Task(name: 'plain_emitter')]
+#[Tasklet\Spec(name: 'plain_emitter')]
 final class PlainEmitter extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -180,7 +179,7 @@ final class PlainEmitter extends Tasklet
     }
 }
 
-#[Task(name: 'fan_target')]
+#[Tasklet\Spec(name: 'fan_target')]
 final class FanTarget extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -201,14 +200,14 @@ final class FanTarget extends Tasklet
 #[Relay(factoryId: 'mixed_stamp_relay')]
 final class MixedStampRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')
             ->keyBy(static fn (mixed $v): string => 'ek')
             ->branch(
-                static fn (Edge $e) => $e->into(PlainEmitter::class)
+                static fn (Stream $e) => $e->into(PlainEmitter::class)
                     ->output('plain_out'),
-                static function (Edge $e): void {
+                static function (Stream $e): void {
                     $keyed = $e->into(StampEmitter::class)->keyed();
                     $keyed->flatMap(static fn (mixed $v): array => [$v . '1', $v . '2'])
                         ->into(FanTarget::class);
@@ -218,7 +217,7 @@ final class MixedStampRelay extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'poison')]
+#[Tasklet\Spec(name: 'poison')]
 final class Poison extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -234,14 +233,14 @@ final class Poison extends Tasklet
 #[Relay(factoryId: 'poison_relay')]
 final class PoisonRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(Poison::class)->output('out');
     }
 }
 
 /** Throws on a value that did decode: a handler's failure, not the entrance's. */
-#[Task(name: 'flaky')]
+#[Tasklet\Spec(name: 'flaky')]
 final class Flaky extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -258,7 +257,7 @@ final class Flaky extends Tasklet
 #[Relay(factoryId: 'flaky_entry_relay')]
 final class FlakyEntryRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->map(static function (string $text): string {
@@ -273,7 +272,7 @@ final class FlakyEntryRelay extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'saga_step')]
+#[Tasklet\Spec(name: 'saga_step')]
 final class SagaStep extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -292,7 +291,7 @@ final class SagaStep extends Tasklet
 #[\Flezha\Attribute\Relay(factoryId: 'saga_relay', run: 'steps')]
 final class SagaRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('orders')->into(SagaStep::class)->output('done');
     }
@@ -303,7 +302,7 @@ final class SagaRelay extends \Flezha\Relay
 // One tasklet under both kinds: the SDK carries the request either way, and
 // the core decides what it means, ending a steps relay or failing a flow relay's item.
 
-#[Task(name: 'completer')]
+#[Tasklet\Spec(name: 'completer')]
 final class Completer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -322,7 +321,7 @@ final class Completer extends Tasklet
 
 trait CompletingGraph
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Completer::class)->output('out');
     }
@@ -340,7 +339,7 @@ final class CompletingFlow extends \Flezha\Relay
     use CompletingGraph;
 }
 
-#[Task(name: 'timing')]
+#[Tasklet\Spec(name: 'timing')]
 final class Timing extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -377,7 +376,7 @@ final class Timing extends Tasklet
 
 trait TimingGraph
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(Timing::class);
     }
@@ -403,7 +402,7 @@ final class TimingFlow extends \Flezha\Relay
 // releases one output per consumer, transformed and keyed. The plugin output
 // rides alongside either way.
 
-#[Task(name: 'steps_producer')]
+#[Tasklet\Spec(name: 'steps_producer')]
 final class StepsProducer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -419,7 +418,7 @@ final class Delivered
     public static array $values = [];
 }
 
-#[Task(name: 'steps_b')]
+#[Tasklet\Spec(name: 'steps_b')]
 final class StepsB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -428,7 +427,7 @@ final class StepsB extends Tasklet
     }
 }
 
-#[Task(name: 'steps_c')]
+#[Tasklet\Spec(name: 'steps_c')]
 final class StepsC extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -439,7 +438,7 @@ final class StepsC extends Tasklet
 
 trait StepsEmitGraph
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $edge = $c->input('in')->into(StepsProducer::class)->named('handoff');
         $edge->map(static fn (mixed $v): mixed => $v + 1)->into(StepsB::class);
@@ -452,7 +451,7 @@ trait StepsEmitGraph
 #[Relay(factoryId: 'json_entry_relay')]
 final class JsonEntryRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(StepsB::class);
     }
@@ -474,7 +473,7 @@ final class StepsEmitFlowRelay extends \Flezha\Relay
 #[Relay(factoryId: 'steps_carry', run: ['steps' => ['each' => 'chained']])]
 final class StepsCarryRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(StepsProducer::class)->named('carry');
     }
@@ -484,7 +483,7 @@ final class StepsCarryRelay extends \Flezha\Relay
 #[Relay(factoryId: 'steps_call_end', run: ['steps' => ['each' => 'per_input']])]
 final class StepsCallEndRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(StepsProducer::class)->named('ask')
             ->call('pricing', deadlineMs: 1_000)->into(StepsProducer::class);
@@ -494,7 +493,7 @@ final class StepsCallEndRelay extends \Flezha\Relay
 // -- merges, the router and fanned keys -------------------------------------
 
 /** What it was handed, under which cell. */
-#[Task(name: 'recorder')]
+#[Tasklet\Spec(name: 'recorder')]
 final class Recorder extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -503,7 +502,7 @@ final class Recorder extends Tasklet
     }
 }
 
-#[Task(name: 'static_recorder', cellKeys: ['a', 'b'])]
+#[Tasklet\Spec(name: 'static_recorder', cellKeys: ['a', 'b'])]
 final class StaticRecorder extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -521,7 +520,7 @@ final class StaticRecorder extends Tasklet
 #[Relay(factoryId: 'merge_relay')]
 final class MergeRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $ticks = $c->input('ticks');
         $quotes = $c->input('quotes');
@@ -536,7 +535,7 @@ final class MergeRelay extends \Flezha\Relay
 #[Relay(factoryId: 'route_latest_relay')]
 final class RouteLatestRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->routeLatest($c->input('config'), $c->input('trades'), static fn (array $t): string => $t['symbol'])
             ->output('routed');
@@ -547,7 +546,7 @@ final class RouteLatestRelay extends \Flezha\Relay
 #[Relay(factoryId: 'fanned_relay')]
 final class FannedRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $split = static fn (mixed $v): array => $v === 'none' ? [] : explode(',', (string) $v);
         $c->input('keyed')

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -20,7 +19,7 @@ use Flezha\Tasklet;
  * it wrote down about it: the attempt happened, and the book says so even when the order was
  * cancelled again.
  */
-#[Task(name: 'record_order')]
+#[Tasklet\Spec(name: 'record_order')]
 final class RecordOrder extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void

@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Agentdesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
 /** Answers a message 202 when it goes on to the session, and 429 when its user is over the budget. */
-#[Task(name: 'admit')]
+#[Tasklet\Spec(name: 'admit')]
 final class Admit extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void

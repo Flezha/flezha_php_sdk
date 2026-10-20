@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Examples\Agentdesk;
 
 use Flezha\Attribute\Relay;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 
 /**
  * The HTTP side of the desk: a flow relay that carries the HTTP plugin, answers every
@@ -19,7 +19,7 @@ final class GatewayRelay extends \Flezha\Relay
 {
     private const DEADLINE_MS = 60_000;
 
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $user = fn (array $value) => $value['user'];
         // every request arrives on "http"; kept as a handle to split it

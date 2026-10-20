@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Runner;
@@ -174,7 +173,7 @@ final class ApiPlaced
     }
 }
 
-#[Task(name: 'api_place', inputType: ApiQuote::class, outputType: ApiPlaced::class)]
+#[Tasklet\Spec(name: 'api_place', inputType: ApiQuote::class, outputType: ApiPlaced::class)]
 final class ApiPlace extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -183,7 +182,7 @@ final class ApiPlace extends Tasklet
     }
 }
 
-#[Task(name: 'api_audit')]
+#[Tasklet\Spec(name: 'api_audit')]
 final class ApiAudit extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -195,7 +194,7 @@ final class ApiAudit extends Tasklet
 #[Relay(factoryId: 'api_facts')]
 final class ApiFacts extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('place', description: 'Places an order')->into(ApiPlace::class)->output('placed');
         $c->input('declared', schema: ['type' => 'object', 'required' => ['pair']])->into(ApiPlace::class);
@@ -207,7 +206,7 @@ final class ApiFacts extends \Flezha\Relay
 #[Relay(factoryId: 'api_broken_schema')]
 final class ApiBrokenSchema extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('place', schema: ['properties' => ['pair' => ['type' => 'string']]])->into(ApiPlace::class);
     }

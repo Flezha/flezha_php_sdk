@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace Flezha\Tests;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\LatestDocumentRouter;
 use Flezha\Tasklet;
 use Flezha\SpawnHandle;
-use Flezha\Testing\Harness;
+use Flezha\Testing\TaskletTestHarness;
 use Flezha\Testing\ReplayMismatch;
 use PHPUnit\Framework\TestCase;
 
-#[Task(name: 'mutates_without_recording')]
+#[Tasklet\Spec(name: 'mutates_without_recording')]
 final class MutatesWithoutRecording extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -35,7 +34,7 @@ final class MutatesWithoutRecording extends Tasklet
     }
 }
 
-#[Task(name: 'impure_fold')]
+#[Tasklet\Spec(name: 'impure_fold')]
 final class ImpureFold extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -62,7 +61,7 @@ final class HarnessTest extends TestCase
 {
     public function testAnInvocationReportsWhatItProduced(): void
     {
-        $harness = new Harness(Counter::class);
+        $harness = new TaskletTestHarness(Counter::class);
         $outcome = $harness->feed('a');
 
         self::assertSame([['push' => 'a']], $outcome->changes);
@@ -72,13 +71,13 @@ final class HarnessTest extends TestCase
 
     public function testAnEmittedValueIsReportedExactlyAsTheDispatcherSendsIt(): void
     {
-        self::assertSame(['hello'], (new Harness(Echoer::class))->feed('hello')->outputs);
+        self::assertSame(['hello'], (new TaskletTestHarness(Echoer::class))->feed('hello')->outputs);
     }
 
     /** The harness reads its output back as JSON, so a string is not reported as its bytes. */
     public function testAStringAndAnArrayAreReportedExactlyAsEmitted(): void
     {
-        $harness = new Harness(Echoer::class);
+        $harness = new TaskletTestHarness(Echoer::class);
 
         self::assertSame(['echo: hi'], $harness->feed('echo: hi')->outputs);
         self::assertSame([['said' => 'hi']], $harness->feed(['said' => 'hi'])->outputs);
@@ -86,7 +85,7 @@ final class HarnessTest extends TestCase
 
     public function testATimerFiresWithNowEqualToItsSchedule(): void
     {
-        $harness = new Harness(Counter::class);
+        $harness = new TaskletTestHarness(Counter::class);
         $harness->fireTimer('processing_time', 4_200);
 
         self::assertSame(['count' => 1, 'seen' => ['timer:4200']], $harness->state());
@@ -95,8 +94,8 @@ final class HarnessTest extends TestCase
     /** `ShortCounter` defines neither `onTimer` nor `compensate`, and neither does `Echoer`. */
     public function testAHookAShortFormDoesNotDefineDoesWhatATaskletsDefaultDoes(): void
     {
-        $tasklet = new Harness(Echoer::class);
-        $shortForm = new Harness(ShortCounter::class);
+        $tasklet = new TaskletTestHarness(Echoer::class);
+        $shortForm = new TaskletTestHarness(ShortCounter::class);
 
         self::assertEquals($tasklet->fireTimer('processing_time', 1), $shortForm->fireTimer('processing_time', 1));
         self::assertEquals($tasklet->compensate(['placed']), $shortForm->compensate(['placed']));
@@ -104,15 +103,10 @@ final class HarnessTest extends TestCase
 
     public function testARestoreRebuildsTheStateAChangeLogDescribes(): void
     {
-        $harness = new Harness(Counter::class);
+        $harness = new TaskletTestHarness(Counter::class);
         $harness->restore(changes: ['{"push":"x"}', '{"push":"y"}']);
 
         self::assertSame(['count' => 2, 'seen' => ['x', 'y']], $harness->state());
-    }
-
-    public function testTheReplayOfAWellBehavedTaskletAgrees(): void
-    {
-        self::assertTrue(Harness::replayEquals(Counter::class, ['a', 'b', 'c']));
     }
 
     /**
@@ -122,17 +116,22 @@ final class HarnessTest extends TestCase
      */
     public function testAnUnrecordedMutationIsCaught(): void
     {
+        $harness = new TaskletTestHarness(MutatesWithoutRecording::class);
+        $harness->feed(1);
+        $harness->feed(2);
+
         $this->expectException(ReplayMismatch::class);
         $this->expectExceptionMessage('mutated the state without recording a change');
-
-        Harness::replayEquals(MutatesWithoutRecording::class, [1, 2]);
+        $harness->replayEquals();
     }
 
     public function testAnImpureFoldIsCaught(): void
     {
-        $this->expectException(ReplayMismatch::class);
+        $harness = new TaskletTestHarness(ImpureFold::class);
+        array_map($harness->feed(...), [1, 2, 3]);
 
-        Harness::replayEquals(ImpureFold::class, [1, 2, 3]);
+        $this->expectException(ReplayMismatch::class);
+        $harness->replayEquals();
     }
 
     /**
@@ -141,7 +140,7 @@ final class HarnessTest extends TestCase
      */
     public function testTimersAreRegisteredAndCancelledByTheirScheduledTime(): void
     {
-        $outcome = (new Harness(Timing::class))->feed('42', now: 42);
+        $outcome = (new TaskletTestHarness(Timing::class))->feed('42', now: 42);
 
         self::assertSame([
             ['kind' => 'processing_time', 'scheduled_at' => 1_042, 'register' => true],
@@ -153,7 +152,7 @@ final class HarnessTest extends TestCase
     /** `now()` inside `onTimer` IS the scheduled time, so a chain is stable. */
     public function testATimerFiringServesItsScheduledTimeAsNow(): void
     {
-        $harness = new Harness(Timing::class);
+        $harness = new TaskletTestHarness(Timing::class);
         $harness->fireTimer('event_time', 9_000);
 
         self::assertSame(
@@ -169,7 +168,7 @@ final class HarnessTest extends TestCase
      */
     public function testTheRouterDeliversEachDocumentOnceOnAKeysOwnTraffic(): void
     {
-        $harness = new Harness(LatestDocumentRouter::class);
+        $harness = new TaskletTestHarness(LatestDocumentRouter::class);
         $document = ['limit' => 5];
         $steps = [
             LatestDocumentRouter::document($document),
@@ -190,13 +189,13 @@ final class HarnessTest extends TestCase
         $changed = ['limit' => 7];
         $harness->feed(LatestDocumentRouter::document($changed));
         self::assertSame([['A', $changed]], $harness->feed(LatestDocumentRouter::traffic('A'))->outputs);
-        self::assertTrue($harness->assertReplayEquals());
+        $harness->replayEquals();
     }
 
     /** A harness has no controller, so a spawn's handle is resolved before the call returns. */
     public function testASpawnAnswersAHandleAlreadyResolved(): void
     {
-        $harness = new Harness(SpawnsTwice::class);
+        $harness = new TaskletTestHarness(SpawnsTwice::class);
         [[$unnamed, $spawned], $named] = $harness->feed('p')->outputs;
 
         self::assertMatchesRegularExpression('/^worker-[a-z2-7]{16}$/', $unnamed);
@@ -217,16 +216,16 @@ final class HarnessTest extends TestCase
 
     public function testStableIdIsDistinctPerInvocationAndStableAcrossReplay(): void
     {
-        $harness = new Harness(StableIdProbe::class, 'k');
+        $harness = new TaskletTestHarness(StableIdProbe::class, 'k');
         $first = $harness->feed('x')->outputs;
-        $again = (new Harness(StableIdProbe::class, 'k'))->feed('x')->outputs;
+        $again = (new TaskletTestHarness(StableIdProbe::class, 'k'))->feed('x')->outputs;
 
         self::assertNotSame($first[0][0], $first[0][1], 'two calls in one invocation differ');
         self::assertSame($first, $again, 'the same invocation replayed derives the same ids');
     }
 }
 
-#[Task(name: 'spawns_twice')]
+#[Tasklet\Spec(name: 'spawns_twice')]
 final class SpawnsTwice extends Tasklet
 {
     /** @var list<SpawnHandle> the handles the latest run made */
@@ -242,7 +241,7 @@ final class SpawnsTwice extends Tasklet
     }
 }
 
-#[Task(name: 'stable_id_probe')]
+#[Tasklet\Spec(name: 'stable_id_probe')]
 final class StableIdProbe extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void

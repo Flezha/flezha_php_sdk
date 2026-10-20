@@ -16,13 +16,12 @@ namespace Flezha\Examples\E05;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Flezha;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 
-#[Task(name: 'reserve_stock')]
+#[Tasklet\Spec(name: 'reserve_stock')]
 final class ReserveStock extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -38,7 +37,7 @@ final class ReserveStock extends Tasklet
     }
 }
 
-#[Task(name: 'charge_card')]
+#[Tasklet\Spec(name: 'charge_card')]
 final class ChargeCard extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -57,7 +56,7 @@ final class ChargeCard extends Tasklet
 #[Relay(factoryId: 'checkout', run: 'steps')]
 final class CheckoutSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('orders')
             ->into(ReserveStock::class)->named('reserved')

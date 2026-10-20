@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
-use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
 /**
- * The single-cell tasklet {@see Builder::routeLatest()} expands to: it
+ * The single-cell tasklet {@see \Flezha\ChannelBuilder::routeLatest()} expands to: it
  * retains the latest document and hands it to a key on that key's own next
  * traffic item.
  *
@@ -22,7 +21,7 @@ use Flezha\Tasklet;
  *
  * @internal
  */
-#[Task(name: 'route_latest')]
+#[Tasklet\Spec(name: 'route_latest')]
 final class LatestDocumentRouter extends Tasklet
 {
     /**

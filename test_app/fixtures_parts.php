@@ -14,11 +14,10 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 
 abstract class PartSender extends Tasklet
@@ -45,7 +44,7 @@ abstract class PartSender extends Tasklet
     }
 }
 
-#[Task(name: 'part_echo')]
+#[Tasklet\Spec(name: 'part_echo')]
 final class PartEchoStep extends PartSender
 {
 }
@@ -53,7 +52,7 @@ final class PartEchoStep extends PartSender
 #[Relay(factoryId: 'part_echo')]
 final class PartEcho extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->retryBackoffMs(25)
             ->into(PartEchoStep::class)
@@ -61,7 +60,7 @@ final class PartEcho extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'part_echo_turn')]
+#[Tasklet\Spec(name: 'part_echo_turn')]
 final class PartEchoTurn extends PartSender
 {
 }
@@ -74,7 +73,7 @@ final class PartEchoTurn extends PartSender
 )]
 final class PartEchoSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->retryBackoffMs(25)
             ->into(PartEchoTurn::class)

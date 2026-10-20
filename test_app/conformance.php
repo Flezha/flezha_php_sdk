@@ -29,15 +29,14 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay as RelayAttribute;
-use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
 use Flezha\Dispatch\Registry;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 use Flezha\Graph\ClassSpec;
-use Flezha\Graph\Edge;
+use Flezha\Stream;
 use Flezha\Graph\Merge;
 use Flezha\Graph\Validate;
 use Flezha\Relay;
@@ -49,7 +48,7 @@ use Flezha\Runner;
  * The palette. One fixture tasklet per role the fixture header names; the
  * facts a role declares are the facts a rule reads.
  */
-#[Task(name: 'plain')]
+#[Tasklet\Spec(name: 'plain')]
 class PalettePlain extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -58,23 +57,23 @@ class PalettePlain extends Tasklet
     }
 }
 
-#[Task(name: 'second')]
+#[Tasklet\Spec(name: 'second')]
 final class PaletteSecond extends PalettePlain
 {
 }
 
 /** A distinct class declaring the SAME name as `plain`: that IS the collision. */
-#[Task(name: 'plain')]
+#[Tasklet\Spec(name: 'plain')]
 final class PaletteTwin extends PalettePlain
 {
 }
 
-#[Task(name: 'static', cellKeys: ['a', 'b'])]
+#[Tasklet\Spec(name: 'static', cellKeys: ['a', 'b'])]
 final class PaletteStatic extends PalettePlain
 {
 }
 
-#[Task(name: 'routed', cellKeys: ['a', 'b'])]
+#[Tasklet\Spec(name: 'routed', cellKeys: ['a', 'b'])]
 final class PaletteRouted extends PalettePlain
 {
     public function cellsFor(mixed $input): array
@@ -83,17 +82,17 @@ final class PaletteRouted extends PalettePlain
     }
 }
 
-#[Task(name: 'dynamic')]
+#[Tasklet\Spec(name: 'dynamic')]
 final class PaletteDynamic extends PalettePlain
 {
 }
 
-#[Task(name: 'nochange', logicalClock: true)]
+#[Tasklet\Spec(name: 'nochange', logicalClock: true)]
 final class PaletteNoChange extends PalettePlain
 {
 }
 
-#[Task(name: 'eventtime')]
+#[Tasklet\Spec(name: 'eventtime')]
 final class PaletteEventTime extends PalettePlain
 {
     public function eventTime(mixed $input): int
@@ -107,12 +106,12 @@ final class PaletteEventTime extends PalettePlain
  * argument is a constant expression — so a row that declares one is bound to
  * the palette class declaring that capacity rather than setting it.
  */
-#[Task(name: 'plain', mailboxCapacity: 0)]
+#[Tasklet\Spec(name: 'plain', mailboxCapacity: 0)]
 final class PalettePlainMailboxZero extends PalettePlain
 {
 }
 
-#[Task(name: 'plain', mailboxCapacity: 2000000)]
+#[Tasklet\Spec(name: 'plain', mailboxCapacity: 2000000)]
 final class PalettePlainMailboxHuge extends PalettePlain
 {
 }
@@ -156,7 +155,7 @@ final class RowInterpreter
      * A handle is a channel id from an `entry(...)` step, or a tasklet role
      * naming that tasklet's output channel.
      *
-     * @var array<string, Edge>
+     * @var array<string, Stream>
      */
     private array $handles = [];
 
@@ -185,7 +184,7 @@ final class RowInterpreter
         return self::$row ?? throw new \RuntimeException('no row of the refusal table is loaded');
     }
 
-    public function declare(Builder $c): void
+    public function declare(ChannelBuilder $c): void
     {
         foreach ($this->steps as $step) {
             $this->step($c, $step);
@@ -203,7 +202,7 @@ final class RowInterpreter
         return [trim(substr($text, 0, $open)), trim(rtrim(substr($text, $open + 1), ')'))];
     }
 
-    private function step(Builder $c, string $step): void
+    private function step(ChannelBuilder $c, string $step): void
     {
         [$verb, $arg] = self::splitCall($step);
         match ($verb) {
@@ -218,7 +217,7 @@ final class RowInterpreter
      * `<handle>.<link>…` — a chain declared off a handle, a channel knob or a
      * tasklet knob. A class setting was read as the row was loaded.
      */
-    private function dotted(Builder $c, string $step): void
+    private function dotted(ChannelBuilder $c, string $step): void
     {
         [$head, $rest] = explode('.', $step, 2);
         if ($head === 'class') {
@@ -231,7 +230,7 @@ final class RowInterpreter
         }
     }
 
-    private function applyLink(Edge $edge, string $link, string $role): Edge
+    private function applyLink(Stream $edge, string $link, string $role): Stream
     {
         [$verb, $arg] = self::splitCall($link);
         if (str_starts_with($verb, 'call')) {
@@ -262,7 +261,7 @@ final class RowInterpreter
      * `<x>.call…(<arg>)`: a 500 ms call whose Response channel feeds the role
      * that produces x, unless the step leaves it unread.
      */
-    private function call(Edge $edge, string $verb, string $arg, string $role): Edge
+    private function call(Stream $edge, string $verb, string $arg, string $role): Stream
     {
         $response = match ($verb) {
             'call_factory' => $edge->call(factory: $arg, deadlineMs: 500),
@@ -283,7 +282,7 @@ final class RowInterpreter
      * fixture tasklet. The result is that tasklet's output channel,
      * addressed by its role.
      */
-    private function wire(Edge|Merge $closing, string $role): Edge
+    private function wire(Stream|Merge $closing, string $role): Stream
     {
         return $this->handles[$role] = $closing->into($this->taskletClass($role));
     }
@@ -292,7 +291,7 @@ final class RowInterpreter
      * `merge(<role>, <x>, <x>…)`: one merge over the listed sources, each
      * mapped as it stands.
      */
-    private function merge(Builder $c, string $arg): void
+    private function merge(ChannelBuilder $c, string $arg): void
     {
         [$role, $sources] = array_map(trim(...), explode(',', $arg, 2));
         $merge = $c->merge();
@@ -310,7 +309,7 @@ final class RowInterpreter
     {
         [$target, $arms] = array_map(trim(...), explode(',', $arg));
         $this->handle($target)->branch(
-            ...array_fill(0, (int) $arms, static fn (Edge $arm): Edge => $arm),
+            ...array_fill(0, (int) $arms, static fn (Stream $arm): Stream => $arm),
         );
     }
 
@@ -334,7 +333,7 @@ final class RowInterpreter
         return $settings;
     }
 
-    private function handle(string $name): Edge
+    private function handle(string $name): Stream
     {
         return $this->handles[$name] ?? throw new \RuntimeException(
             "the row addresses `$name`, which nothing has declared"
@@ -422,7 +421,7 @@ final class ShorthandWithTopology extends Relay
 {
     use PassesThrough;
 
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input')->into(PalettePlain::class)->output('out');
     }
@@ -444,7 +443,7 @@ trait DeclaresTheLoadedRow
         return static::buildSpec(static::declaration());
     }
 
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         RowInterpreter::loaded()->declare($c);
     }

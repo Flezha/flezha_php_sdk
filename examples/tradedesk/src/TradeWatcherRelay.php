@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Flezha\Examples\Tradedesk;
 
 use Flezha\Attribute\Relay;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 
 /**
  * The desk's stream: trades in, each price compared with its symbol's recent average, and an order
@@ -35,7 +35,7 @@ final class TradeWatcherRelay extends \Flezha\Relay
      * Only the first stage is keyed: a plain `into` leaves its consumer single-cell, which is
      * right for the second stage, since it keeps nothing per symbol.
      */
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('trades')                                                            // JSON from the exchange
             ->filter(fn (array $message) => ($message['channel'] ?? null) === 'trade') // trade messages only

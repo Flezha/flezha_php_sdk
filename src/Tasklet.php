@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Attribute\Task;
-
 /**
  * The base every authored tasklet extends.
  *
- * A `#[Task]` attribute carries the scalar declarations; the methods carry the
+ * A `#[Tasklet\Spec]` attribute carries the scalar declarations; the methods carry the
  * behaviour. Only {@see run()} is required — the rest are hooks with a default
  * that says "this tasklet does not do that", and overriding one IS the
  * declaration that it does, so a declaration and its implementation cannot
@@ -17,7 +15,7 @@ use Flezha\Attribute\Task;
  *
  * A value leaves only through `$ctx->emit()`: `run` returns nothing.
  *
- *     #[Task(name: 'totals', cellKeys: ['a', 'b'])]
+ *     #[Tasklet\Spec(name: 'totals', cellKeys: ['a', 'b'])]
  *     final class Totals extends Tasklet
  *     {
  *         public function cellsFor(mixed $input): array { return ['a', 'b']; }
@@ -71,7 +69,7 @@ abstract class Tasklet
 
     /**
      * The input's event time. Overriding it makes the tasklet's clock event
-     * time; `#[Task(logicalClock: true)]` makes it logical; otherwise it is
+     * time; `#[Tasklet\Spec(logicalClock: true)]` makes it logical; otherwise it is
      * the wall clock.
      */
     public function eventTime(mixed $input): int
@@ -82,7 +80,7 @@ abstract class Tasklet
     /**
      * Rebuild a State written at an older schema version.
      *
-     * Override alongside `#[Task(minReadableSchemaVersion: ...)]`: the core
+     * Override alongside `#[Tasklet\Spec(minReadableSchemaVersion: ...)]`: the core
      * refuses everything below that floor and hands the rest across tagged
      * with the version it was written at, so this decides nothing about
      * whether the record is readable — only how.

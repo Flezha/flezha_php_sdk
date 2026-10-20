@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -18,7 +17,7 @@ use Flezha\Tasklet;
  * It does two things per input, both through the context: it starts a steps relay and it
  * emits.
  */
-#[Task(name: 'buy_above_average')]
+#[Tasklet\Spec(name: 'buy_above_average')]
 final class BuyAboveAverage extends Tasklet
 {
     private const BUY_ABOVE_PCT = 2.0;

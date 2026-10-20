@@ -7,11 +7,10 @@ namespace Flezha\Tests;
 require_once __DIR__ . '/../examples/E07_LocalMode.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Examples\E07\WordCountRelay;
 use Flezha\Exception\FlezhaException;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 use Flezha\LocalRelay;
 use Flezha\Tasklet;
 use Flezha\LocalOutput;
@@ -174,7 +173,7 @@ final class LocalModeTest extends RepositoryTestCase
 }
 
 /** Fails its first attempt, so the core retries it and says so. */
-#[Task(name: 'flaky')]
+#[Tasklet\Spec(name: 'flaky')]
 final class FlakyTasklet extends Tasklet
 {
     public static int $attempts = 0;
@@ -191,14 +190,14 @@ final class FlakyTasklet extends Tasklet
 #[Relay(factoryId: 'local_flaky_php')]
 final class FlakyRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(FlakyTasklet::class)->output('out');
     }
 }
 
 /** Reads the map an undeclared entry decodes, and emits a string and a map. */
-#[Task(name: 'defaults')]
+#[Tasklet\Spec(name: 'defaults')]
 final class DefaultCodecsTasklet extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -211,7 +210,7 @@ final class DefaultCodecsTasklet extends Tasklet
 #[Relay(factoryId: 'local_default_codecs_php')]
 final class DefaultCodecs extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(DefaultCodecsTasklet::class)->output('out');
     }

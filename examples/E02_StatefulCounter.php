@@ -7,7 +7,7 @@ declare(strict_types=1);
  * through a recorded change, because the change log IS how the state is
  * rebuilt after a restart.
  *
- * `Harness::assertReplayEquals()` in your own suite is what makes that rule
+ * `TaskletTestHarness::replayEquals()` in your own suite is what makes that rule
  * safe — it catches a handler that mutated the state without recording a
  * change, and an `applyChange` that is not a pure fold.
  */
@@ -17,11 +17,10 @@ namespace Flezha\Examples\E02;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Codable;
 use Flezha\Ctx;
 use Flezha\Flezha;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 
 /** The durable bytes carry this array, never the class name — so a rename is safe. */
@@ -42,7 +41,7 @@ final class Totals implements Codable
     }
 }
 
-#[Task(name: 'counter', stateType: Totals::class)]
+#[Tasklet\Spec(name: 'counter', stateType: Totals::class)]
 final class Counter extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -67,7 +66,7 @@ final class Counter extends Tasklet
 #[Relay(factoryId: 'order_totals')]
 final class OrderTotalsRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('orders')
             ->keyBy(static fn (array $order): string => (string) $order['customer'])

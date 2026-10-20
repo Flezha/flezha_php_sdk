@@ -16,11 +16,10 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
-use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 use Flezha\TimerFiring;
@@ -62,7 +61,7 @@ define(__NAMESPACE__ . '\\BENCH_CHECKPOINT', ['checkpoint' => [
 
 // -- do_nothing / bench_echo -------------------------------------------------
 
-#[Task(name: 'do_nothing_tasklet')]
+#[Tasklet\Spec(name: 'do_nothing_tasklet')]
 final class DoNothing extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -74,7 +73,7 @@ final class DoNothing extends Tasklet
 #[Relay(factoryId: 'do_nothing')]
 final class DoNothingRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(DoNothing::class)
@@ -90,7 +89,7 @@ final class DoNothingRelay extends \Flezha\Relay
 #[Relay(factoryId: 'bench_echo')]
 final class BenchEchoRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(DoNothing::class)
@@ -104,7 +103,7 @@ final class BenchEchoRelay extends \Flezha\Relay
  * State seeded by the controller's init values and then only read: there is
  * nothing to journal, so the tasklet declares no change fold.
  */
-#[Task(name: 'compare_filter_tasklet')]
+#[Tasklet\Spec(name: 'compare_filter_tasklet')]
 final class CompareFilter extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -123,7 +122,7 @@ final class CompareFilter extends Tasklet
 #[Relay(factoryId: 'compare_filter')]
 final class CompareFilterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CompareFilter::class)
@@ -133,7 +132,7 @@ final class CompareFilterRelay extends \Flezha\Relay
 
 // -- static_cell / sugar_static_cell / mixed_relay -------------------
 
-#[Task(name: 'static_entry_tasklet', cellKeys: ['a', 'b', 'c', 'd'])]
+#[Tasklet\Spec(name: 'static_entry_tasklet', cellKeys: ['a', 'b', 'c', 'd'])]
 class StaticEntry extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -162,7 +161,7 @@ class StaticEntry extends Tasklet
 }
 
 /** A subclass keeps every declaration its parent made, but not its node name. */
-#[Task(name: 'macro_static_entry_tasklet')]
+#[Tasklet\Spec(name: 'macro_static_entry_tasklet')]
 final class MacroStaticEntry extends StaticEntry
 {
 }
@@ -176,18 +175,18 @@ trait PassesThrough
     }
 }
 
-#[Task(name: 'pass_through')]
+#[Tasklet\Spec(name: 'pass_through')]
 class PassThrough extends Tasklet
 {
     use PassesThrough;
 }
 
-#[Task(name: 'static_downstream_tasklet')]
+#[Tasklet\Spec(name: 'static_downstream_tasklet')]
 final class StaticDownstream extends PassThrough
 {
 }
 
-#[Task(name: 'macro_static_downstream_tasklet')]
+#[Tasklet\Spec(name: 'macro_static_downstream_tasklet')]
 final class MacroStaticDownstream extends PassThrough
 {
 }
@@ -195,7 +194,7 @@ final class MacroStaticDownstream extends PassThrough
 #[Relay(factoryId: 'static_cell')]
 final class StaticCellRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(StaticEntry::class)->named('hop')
@@ -211,7 +210,7 @@ final class StaticCellRelay extends \Flezha\Relay
 #[Relay(factoryId: 'sugar_static_cell')]
 final class SugarStaticCellRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(MacroStaticEntry::class)
@@ -220,12 +219,12 @@ final class SugarStaticCellRelay extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'mixed_macro_entry_tasklet')]
+#[Tasklet\Spec(name: 'mixed_macro_entry_tasklet')]
 final class MixedMacroEntry extends PassThrough
 {
 }
 
-#[Task(name: 'mixed_hand_downstream')]
+#[Tasklet\Spec(name: 'mixed_hand_downstream')]
 final class MixedHandDownstream extends PassThrough
 {
 }
@@ -233,7 +232,7 @@ final class MixedHandDownstream extends PassThrough
 #[Relay(factoryId: 'mixed_relay')]
 final class MixedRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(MixedMacroEntry::class)->named('hop')
@@ -339,7 +338,7 @@ final class SugarStateOnly extends \Flezha\Relay
 // user can observe end to end that a refusal is isolated to the emit rather
 // than failing the item.
 
-#[Task(name: 'hybrid_producer_tasklet')]
+#[Tasklet\Spec(name: 'hybrid_producer_tasklet')]
 final class HybridProducer extends Tasklet
 {
     public const SENTINEL = 0xDEADBEEF;
@@ -357,7 +356,7 @@ final class HybridProducer extends Tasklet
     }
 }
 
-#[Task(name: 'hybrid_consumer_tasklet')]
+#[Tasklet\Spec(name: 'hybrid_consumer_tasklet')]
 final class HybridConsumer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -369,7 +368,7 @@ final class HybridConsumer extends Tasklet
 #[Relay(factoryId: 'hybrid_channel')]
 final class HybridChannelRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->into(HybridProducer::class)->branch(
             // The consumer edge first, so a refused plugin serialization leaves
@@ -392,7 +391,7 @@ final class HybridChannelRelay extends \Flezha\Relay
 // value with the channel it came from, the merge keys on the symbol the mapping
 // read, and the emitted line is `<source>:<payload>`.
 
-#[Task(name: 'merge_label_tasklet')]
+#[Tasklet\Spec(name: 'merge_label_tasklet')]
 final class MergeLabel extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -404,7 +403,7 @@ final class MergeLabel extends Tasklet
 #[Relay(factoryId: 'merged_input')]
 final class MergedInputRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $ticks = $c->input('ticks', codec: ChannelCodec::Text);
         $quotes = $c->input('quotes', codec: ChannelCodec::Text);
@@ -433,7 +432,7 @@ final class MergedInputRelay extends \Flezha\Relay
 // Every value transform on one edge: `drop` is filtered out, a comma list fans
 // out into one value per element, each is upper-cased and keyed on its prefix.
 
-#[Task(name: 'transform_label_tasklet')]
+#[Tasklet\Spec(name: 'transform_label_tasklet')]
 final class TransformLabel extends PassThrough
 {
 }
@@ -441,7 +440,7 @@ final class TransformLabel extends PassThrough
 #[Relay(factoryId: 'transform_chain')]
 final class TransformChainRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('trades', codec: ChannelCodec::Text)
             ->filter(static fn (string $trade): bool => $trade !== 'drop')
@@ -456,7 +455,7 @@ final class TransformChainRelay extends \Flezha\Relay
 
 // -- cell_stress -----------------------------------------------------------
 
-#[Task(name: 'stress_a', cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
+#[Tasklet\Spec(name: 'stress_a', cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
 final class StressA extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -470,7 +469,7 @@ final class StressA extends Tasklet
     }
 }
 
-#[Task(name: 'stress_to_p0', cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
+#[Tasklet\Spec(name: 'stress_to_p0', cellKeys: ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'])]
 class StressToP0 extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -484,17 +483,17 @@ class StressToP0 extends Tasklet
     }
 }
 
-#[Task(name: 'stress_b')]
+#[Tasklet\Spec(name: 'stress_b')]
 final class StressB extends StressToP0
 {
 }
 
-#[Task(name: 'stress_c')]
+#[Tasklet\Spec(name: 'stress_c')]
 final class StressC extends StressToP0
 {
 }
 
-#[Task(name: 'stress_d')]
+#[Tasklet\Spec(name: 'stress_d')]
 final class StressD extends StressToP0
 {
 }
@@ -502,7 +501,7 @@ final class StressD extends StressToP0
 #[Relay(factoryId: 'cell_stress')]
 final class CellStressRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(StressA::class)->named('a_to_b')
@@ -521,7 +520,7 @@ final class CellStressRelay extends \Flezha\Relay
 // the engine rewinds behind 200, replays the retained input log sorted by event
 // time, and the fold order becomes [100, 200, 300].
 
-#[Task(name: 'candle_tasklet')]
+#[Tasklet\Spec(name: 'candle_tasklet')]
 final class Candle extends Tasklet
 {
     /** Event times in fold order: the assertion surface. */
@@ -555,7 +554,7 @@ final class Candle extends Tasklet
 #[Relay(factoryId: 'candle', run: ['flow' => ['exactly' => ['effectively_once' => ['correction_ms' => 600_000]]]])]
 final class CandleRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(Candle::class)->keyed()
@@ -570,7 +569,7 @@ final class CandleRelay extends \Flezha\Relay
 // half exercises a durable Cell. The timeout is read from
 // `TIMER_TEST_TIMEOUT_MS` (the e2e sets it short).
 
-#[Task(name: 'session_timeout_tasklet')]
+#[Tasklet\Spec(name: 'session_timeout_tasklet')]
 final class SessionTimeout extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -605,7 +604,7 @@ final class SessionTimeout extends Tasklet
 #[Relay(factoryId: 'session_timeout')]
 final class SessionTimeoutRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(SessionTimeout::class)
@@ -616,7 +615,7 @@ final class SessionTimeoutRelay extends \Flezha\Relay
 // -- bounded_mailbox_{drop_nothing,drop_newest,drop_oldest} ------------------
 
 /** The capacity and the fold reach each subclass by inheritance. */
-#[Task(name: 'bounded_mailbox', mailboxCapacity: 4)]
+#[Tasklet\Spec(name: 'bounded_mailbox', mailboxCapacity: 4)]
 class BoundedMailbox extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -637,17 +636,17 @@ class BoundedMailbox extends Tasklet
     }
 }
 
-#[Task(name: 'drop_nothing_test_tasklet')]
+#[Tasklet\Spec(name: 'drop_nothing_test_tasklet')]
 final class DropNothingMailbox extends BoundedMailbox
 {
 }
 
-#[Task(name: 'drop_newest_test_tasklet')]
+#[Tasklet\Spec(name: 'drop_newest_test_tasklet')]
 final class DropNewestMailbox extends BoundedMailbox
 {
 }
 
-#[Task(name: 'drop_oldest_test_tasklet')]
+#[Tasklet\Spec(name: 'drop_oldest_test_tasklet')]
 final class DropOldestMailbox extends BoundedMailbox
 {
 }
@@ -655,7 +654,7 @@ final class DropOldestMailbox extends BoundedMailbox
 #[Relay(factoryId: 'bounded_mailbox_drop_nothing')]
 final class BoundedMailboxDropNothingRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('drop_nothing_input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(DropNothingMailbox::class)
@@ -666,7 +665,7 @@ final class BoundedMailboxDropNothingRelay extends \Flezha\Relay
 #[Relay(factoryId: 'bounded_mailbox_drop_newest')]
 final class BoundedMailboxDropNewestRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('drop_newest_input', codec: ChannelCodec::Text)->onFull(Overflow::DropNewest)
             ->into(DropNewestMailbox::class)
@@ -677,7 +676,7 @@ final class BoundedMailboxDropNewestRelay extends \Flezha\Relay
 #[Relay(factoryId: 'bounded_mailbox_drop_oldest')]
 final class BoundedMailboxDropOldestRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('drop_oldest_input', codec: ChannelCodec::Text)->onFull(Overflow::DropOldest)
             ->into(DropOldestMailbox::class)
@@ -693,7 +692,7 @@ final class BoundedMailboxDropOldestRelay extends \Flezha\Relay
 // forwarded frame keeps its producing channel's name, and that is what selects
 // the receiving relay's entry channel — so the entry here is `in`.
 
-#[Task(name: 'partition_pass_tasklet')]
+#[Tasklet\Spec(name: 'partition_pass_tasklet')]
 final class PartitionPass extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -716,7 +715,7 @@ final class PartitionPass extends Tasklet
 #[Relay(factoryId: 'partition_pass')]
 final class PartitionPassRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
             ->into(PartitionPass::class)->keyed()
@@ -732,7 +731,7 @@ define(__NAMESPACE__ . '\\DYN_TTL_SECONDS', Wire::int(getenv('DYN_TEST_TTL_MS'))
     ? intdiv(Wire::int(getenv('DYN_TEST_TTL_MS')) + 999, 1000)
     : null);
 
-#[Task(name: 'dynamic_cell_tasklet', idleTtlSeconds: DYN_TTL_SECONDS)]
+#[Tasklet\Spec(name: 'dynamic_cell_tasklet', idleTtlSeconds: DYN_TTL_SECONDS)]
 final class DynamicCell extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -756,7 +755,7 @@ final class DynamicCell extends Tasklet
 #[Relay(factoryId: 'dynamic_cell')]
 final class DynamicCellRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             // Filtered before keying: a dropped value answers no key, so the
@@ -775,7 +774,7 @@ final class DynamicCellRelay extends \Flezha\Relay
 // paths the input took. `call_turn` is the steps
 // one, in fixtures_steps.php.
 
-#[Task(name: 'call_echo')]
+#[Tasklet\Spec(name: 'call_echo')]
 final class CallEchoStep extends PassThrough
 {
 }
@@ -783,18 +782,18 @@ final class CallEchoStep extends PassThrough
 #[Relay(factoryId: 'call_echo')]
 final class CallEcho extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(CallEchoStep::class)->output();
     }
 }
 
-#[Task(name: 'call_parse')]
+#[Tasklet\Spec(name: 'call_parse')]
 final class CallParse extends PassThrough
 {
 }
 
-#[Task(name: 'call_answer')]
+#[Tasklet\Spec(name: 'call_answer')]
 final class CallAnswer extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -806,7 +805,7 @@ final class CallAnswer extends Tasklet
 #[Relay(factoryId: 'call_downstream')]
 final class CallDownstream extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(CallParse::class)
@@ -816,12 +815,12 @@ final class CallDownstream extends \Flezha\Relay
 }
 
 // An input starting `no` takes the refused path, every other the accepted one.
-#[Task(name: 'call_admit')]
+#[Tasklet\Spec(name: 'call_admit')]
 final class CallAdmit extends PassThrough
 {
 }
 
-#[Task(name: 'call_accept')]
+#[Tasklet\Spec(name: 'call_accept')]
 final class CallAccept extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -830,7 +829,7 @@ final class CallAccept extends Tasklet
     }
 }
 
-#[Task(name: 'call_refuse')]
+#[Tasklet\Spec(name: 'call_refuse')]
 final class CallRefuse extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -842,7 +841,7 @@ final class CallRefuse extends Tasklet
 #[Relay(factoryId: 'call_split')]
 final class CallSplit extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $admitted = $c->input('in', codec: ChannelCodec::Text)->into(CallAdmit::class);
         $admitted->filter(static fn (mixed $input): bool => !str_starts_with($input, 'no'))

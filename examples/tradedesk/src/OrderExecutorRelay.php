@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Flezha\Examples\Tradedesk;
 
 use Flezha\Attribute\Relay;
-use Flezha\Graph\Builder;
-use Flezha\Graph\Edge;
+use Flezha\ChannelBuilder;
+use Flezha\Stream;
 
 /**
  * The desk's steps relay: one instance per order, which runs its steps and then ends.
@@ -43,14 +43,14 @@ final class OrderExecutorRelay extends \Flezha\Relay
      * Nothing ends on an output, and nothing names a channel, so each channel carries the name of
      * the step that produces it.
      */
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('order')                                            // the order to carry out
             ->into(ReserveFunds::class)                               // step one
             ->into(PlaceOrder::class)                                 // step two, once step one is done
             ->branch(
-                fn (Edge $fill) => $fill->into(ConfirmFill::class),   // two arms, side by side
-                fn (Edge $book) => $book->into(RecordOrder::class),
+                fn (Stream $fill) => $fill->into(ConfirmFill::class),   // two arms, side by side
+                fn (Stream $book) => $book->into(RecordOrder::class),
             );
     }
 }

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Flezha\Graph;
 
+use Flezha\ChannelBuilder;
 use Flezha\Relay;
+use Flezha\Stream;
 use Flezha\Tasklet;
 
 /**
@@ -23,13 +25,13 @@ use Flezha\Tasklet;
  */
 final class Merge
 {
-    /** @var list<Edge> each source with its mapping already on its chain */
+    /** @var list<Stream> each source with its mapping already on its chain */
     private array $sources = [];
 
     /** @var list<callable(mixed):string> */
     private array $keys = [];
 
-    public function __construct(private readonly Builder $builder)
+    public function __construct(private readonly ChannelBuilder $builder)
     {
     }
 
@@ -38,7 +40,7 @@ final class Merge
      * the handle, so a key declared there is the transform-after-key refusal:
      * a merge is keyed once, on the merge.
      */
-    public function from(Edge $source, callable $map): self
+    public function from(Stream $source, callable $map): self
     {
         $this->sources[] = $source->map($map);
 
@@ -60,7 +62,7 @@ final class Merge
      *
      * @param class-string<Tasklet>|class-string<Relay> $class
      */
-    public function into(string $class, ?string $nodeName = null): Edge
+    public function into(string $class, ?string $nodeName = null): Stream
     {
         $node = $this->builder->nodeFor($class, $nodeName);
         $link = ['link' => 'merge', 'tasklet' => $node->index, 'group' => $this->builder->nextMergeGroup()];
@@ -71,6 +73,6 @@ final class Merge
             $source->wire($node, $link);
         }
 
-        return new Edge($this->builder, ['tasklet', $node], []);
+        return new Stream($this->builder, ['tasklet', $node], []);
     }
 }

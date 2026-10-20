@@ -13,7 +13,7 @@ namespace Flezha;
  * package brings the authoring surface, the codec for user types, the
  * concurrency host and idiomatic errors.
  *
- *     #[Task(name: 'echo')]
+ *     #[Tasklet\Spec(name: 'echo')]
  *     final class EchoTasklet extends Tasklet
  *     {
  *         public function run(mixed $input, Ctx $ctx): void { $ctx->emit($input); }
@@ -22,7 +22,7 @@ namespace Flezha;
  *     #[Relay(factoryId: 'echo')]
  *     final class EchoRelay extends Relay
  *     {
- *         public static function channels(Builder $c): void
+ *         public static function channels(ChannelBuilder $c): void
  *         {
  *             $c->input('input')->into(EchoTasklet::class)->output('out');
  *         }

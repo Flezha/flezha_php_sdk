@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Attribute\Relay as RelayAttribute;
-use Flezha\Attribute\Task;
 use Flezha\Codec\Json;
 use Flezha\Codec\TypeCodec;
 use Flezha\Codec\ValueCodec;
 use Flezha\Exception\FlezhaException;
+use Flezha\Tasklet\Spec;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionIntersectionType;
@@ -40,7 +40,7 @@ final class Definition
     private static array $cache = [];
 
     public readonly string $name;
-    public readonly Task $decl;
+    public readonly Spec $decl;
     public readonly Tasklet|Relay $instance;
     public readonly ?ValueCodec $stateCodec;
     public readonly ?ValueCodec $changeCodec;
@@ -168,14 +168,14 @@ final class Definition
      *
      * Field by field rather than nearest-attribute-wins, because the common
      * case is a subclass that renames the node and changes nothing else —
-     * `#[Task(name: 'stress_b')]` on a child of a static-keyed parent — and
+     * `#[Tasklet\Spec(name: 'stress_b')]` on a child of a static-keyed parent — and
      * whole-attribute inheritance would silently drop the key set exactly
      * there. The one field never inherited is `name`: a node identity is per
      * class, and an inherited one would make two tasklets claim one node.
      *
      * @param ReflectionClass<Tasklet>|ReflectionClass<Relay> $reflection
      */
-    private static function declarationOf(ReflectionClass $reflection): Task
+    private static function declarationOf(ReflectionClass $reflection): Spec
     {
         $chain = [];
         for ($class = $reflection; $class !== false; $class = $class->getParentClass()) {
@@ -185,7 +185,7 @@ final class Definition
         $arguments = [];
         // Ancestor first, so a derived class's own argument wins.
         foreach (array_reverse($chain) as $class) {
-            $attributes = $class->getAttributes(Task::class);
+            $attributes = $class->getAttributes(Spec::class);
             if ($attributes === []) {
                 continue;
             }
@@ -199,25 +199,25 @@ final class Definition
             if (array_key_exists($relayArgument, $arguments)) {
                 throw new FlezhaException('topology.relay_field_on_tasklet', [
                     'tasklet' => $arguments['name'] ?? $reflection->getName(),
-                    'fields' => ["`$relayArgument` on #[Task]"],
+                    'fields' => ["`$relayArgument` on #[Tasklet\Spec]"],
                     'instead' => '#[Relay] on a class extending Relay that defines `run`',
                 ]);
             }
         }
 
-        return new Task(...$arguments);
+        return new Spec(...$arguments);
     }
 
     /**
      * One attribute's written arguments, keyed by parameter name — positional
      * ones included, so an author who writes them that way is merged the same.
      *
-     * @param ReflectionAttribute<Task> $attribute
+     * @param ReflectionAttribute<Spec> $attribute
      * @return array<string, mixed>
      */
     private static function namedArguments(ReflectionAttribute $attribute): array
     {
-        $parameters = (new ReflectionClass(Task::class))->getConstructor()?->getParameters() ?? [];
+        $parameters = (new ReflectionClass(Spec::class))->getConstructor()?->getParameters() ?? [];
         $named = [];
         foreach ($attribute->getArguments() as $key => $value) {
             $name = is_int($key) ? ($parameters[$key]?->getName() ?? (string) $key) : $key;
@@ -388,7 +388,7 @@ final class Definition
      *
      * @param ReflectionClass<Tasklet>|ReflectionClass<Relay> $reflection
      */
-    private static function nameOf(ReflectionClass $reflection, Task $decl): string
+    private static function nameOf(ReflectionClass $reflection, Spec $decl): string
     {
         $class = $reflection->getName();
         if (!$reflection->isSubclassOf(Relay::class)) {

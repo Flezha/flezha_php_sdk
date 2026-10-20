@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -18,7 +17,7 @@ use Flezha\Tasklet;
  * A trade is the array the exchange sent, of which the desk reads `symbol` and `price`; the
  * move it hands on is an array of the symbol, the price and the average.
  */
-#[Task(name: 'track_prices')]
+#[Tasklet\Spec(name: 'track_prices')]
 final class TrackPrices extends Tasklet
 {
     private const WINDOW = 10;

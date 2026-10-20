@@ -61,7 +61,7 @@ binary by hand as the message says.
 - **Local mode**: `LocalRelay::start` runs a relay's declared graph in your own
   process, with no controller. See
   [Local mode](https://github.com/flezha/flezha/blob/main/docs/public/topics/core/running_and_testing.md#local-mode).
-- **Testing**: `Flezha\Testing\Harness` drives one tasklet and checks its
+- **Testing**: `Flezha\Testing\TaskletTestHarness` drives one tasklet and checks its
   replay. See
   [Check a tasklet on its own](https://github.com/flezha/flezha/blob/main/docs/public/topics/core/running_and_testing.md#check-a-tasklet-on-its-own).
 - **The relay API**: a relay's entry channels, answering a caller, `call(...)`

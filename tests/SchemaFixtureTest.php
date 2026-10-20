@@ -8,6 +8,7 @@ use Flezha\Codec\ActivationCodec;
 use Flezha\Ctx;
 use Flezha\Ffi\Core;
 use Flezha\Graph\HostClassDecl;
+use Flezha\Testing\FakeCore;
 
 /**
  * The cross-language byte pin.
@@ -32,6 +33,14 @@ final class SchemaFixtureTest extends RepositoryTestCase
         self::assertSame((int) $this->pinned('schema_version', 'activation', self::CONSTANTS), Core::SCHEMA_VERSION);
         self::assertSame((int) $this->pinned('sdk_lang', 'php', self::CONSTANTS), HostClassDecl::SDK_LANG_PHP);
         self::assertSame((int) $this->pinned('format_id', 'json', self::CONSTANTS), HostClassDecl::FORMAT_ID_JSON);
+    }
+
+    public function testTheHarnessEffectNameBoundIsTheCores(): void
+    {
+        self::assertSame(
+            (int) $this->pinned('effect', 'name_max_bytes', self::CONSTANTS),
+            (new \ReflectionClassConstant(FakeCore::class, 'MAX_EFFECT_NAME'))->getValue(),
+        );
     }
 
     public function testTheReservedPrefixIsTheFixturesKeys(): void

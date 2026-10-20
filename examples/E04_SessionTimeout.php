@@ -17,14 +17,13 @@ namespace Flezha\Examples\E04;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Ctx;
 use Flezha\Flezha;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 use Flezha\TimerFiring;
 
-#[Task(name: 'session', idleTtlSeconds: 3_600)]
+#[Tasklet\Spec(name: 'session', idleTtlSeconds: 3_600)]
 final class Session extends Tasklet
 {
     private const QUIET_MS = 30_000;
@@ -67,7 +66,7 @@ final class Session extends Tasklet
 #[Relay(factoryId: 'sessions')]
 final class SessionRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('events')
             ->keyBy(static fn (array $e): string => (string) $e['session'])

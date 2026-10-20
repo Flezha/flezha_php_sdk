@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Agentdesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -12,7 +11,7 @@ use Flezha\Tasklet;
  * Answers a message with the demo model, sending the answer as it grows, and keeps the
  * conversation so the next answer knows what came before.
  */
-#[Task(name: 'reply')]
+#[Tasklet\Spec(name: 'reply')]
 final class Reply extends Tasklet
 {
     public function initState(?string $cellKey): mixed

@@ -13,11 +13,10 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\FlezhaException;
-use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\SpawnHandle;
 use Flezha\Tasklet;
@@ -48,7 +47,7 @@ use Flezha\TimerFiring;
 // from the journal and is handed NO retained outputs, so the hook reads the
 // last thing it said, retracts it and pops it.
 
-#[Task(name: 'chat_turn')]
+#[Tasklet\Spec(name: 'chat_turn')]
 final class ChatTurn extends DurableStep
 {
     public const CRASH_TURN = 'mid-crash';
@@ -80,7 +79,7 @@ final class ChatTurn extends DurableStep
     }
 }
 
-#[Task(name: 'chat_reply')]
+#[Tasklet\Spec(name: 'chat_reply')]
 final class ChatReply extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -89,7 +88,7 @@ final class ChatReply extends Tasklet
     }
 }
 
-#[Task(name: 'chat_reply_undoable')]
+#[Tasklet\Spec(name: 'chat_reply_undoable')]
 final class ChatReplyUndoable extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -135,7 +134,7 @@ final class ChatReplyUndoable extends Tasklet
 // instance from outliving the test run.
 final class ChatLoopSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
@@ -152,7 +151,7 @@ final class ChatLoopSteps extends \Flezha\Relay
 )]
 final class StatelessLoopSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatReply::class)
@@ -165,7 +164,7 @@ final class StatelessLoopSteps extends \Flezha\Relay
 // emits `<symbol>:<count>`: the shape a partition group of steps relay members
 // takes.
 
-#[Task(name: 'keyed_loop_count')]
+#[Tasklet\Spec(name: 'keyed_loop_count')]
 final class KeyedLoopCount extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -194,7 +193,7 @@ final class KeyedLoopCount extends Tasklet
 )]
 final class KeyedLoopSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('trades', codec: ChannelCodec::Text)->keyBy(Wire::prefix(...))
             ->into(KeyedLoopCount::class)
@@ -210,7 +209,7 @@ final class KeyedLoopSteps extends \Flezha\Relay
 )]
 final class ChatRewindSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
@@ -227,7 +226,7 @@ final class ChatRewindSteps extends \Flezha\Relay
 // its state. failing_turn_undo_all_steps is the same under
 // all-or-nothing.
 
-#[Task(name: 'note')]
+#[Tasklet\Spec(name: 'note')]
 final class Note extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -259,7 +258,7 @@ final class Note extends Tasklet
     }
 }
 
-#[Task(name: 'answer')]
+#[Tasklet\Spec(name: 'answer')]
 final class Answer extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -289,7 +288,7 @@ final class Answer extends Tasklet
 
 abstract class FailingTurnLoop extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(Note::class)->named('noted')
@@ -320,7 +319,7 @@ final class FailingTurnUndoAllSteps extends FailingTurnLoop
 
 // The reply that blocks on the turn `reply-crash` while the release env is
 // unset, after the root has committed.
-#[Task(name: 'blocking_reply')]
+#[Tasklet\Spec(name: 'blocking_reply')]
 final class BlockingReply extends Tasklet
 {
     public const REPLY_CRASH_TURN = 'reply-crash';
@@ -344,7 +343,7 @@ final class BlockingReply extends Tasklet
 )]
 final class ReplyBlockLoopSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChatTurn::class)->named('mid')
@@ -359,7 +358,7 @@ final class ReplyBlockLoopSteps extends \Flezha\Relay
 // the input as its id, and prints both results, because a handle's answer is
 // observable nowhere but in the tasklet that read it.
 
-#[Task(name: 'spawn_requester')]
+#[Tasklet\Spec(name: 'spawn_requester')]
 final class SpawnRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -388,7 +387,7 @@ final class SpawnRequester extends Tasklet
 #[Relay(factoryId: 'spawn_requester')]
 final class SpawnRequesterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SpawnRequester::class)
@@ -403,7 +402,7 @@ final class SpawnRequesterRelay extends \Flezha\Relay
 // until the release env is set, so a runner killed there dies with the spawn
 // answered and its input not durably consumed.
 
-#[Task(name: 'spawn_hold_requester')]
+#[Tasklet\Spec(name: 'spawn_hold_requester')]
 final class SpawnHoldRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -416,7 +415,7 @@ final class SpawnHoldRequester extends Tasklet
 #[Relay(factoryId: 'spawn_hold_requester', run: ['flow' => ['exactly' => 'effectively_once']])]
 final class SpawnHoldRequesterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(SpawnHoldRequester::class)->keyed()
@@ -430,7 +429,7 @@ final class SpawnHoldRequesterRelay extends \Flezha\Relay
 // JSON object its entry channel decodes, and prints the result as
 // spawn_requester does.
 
-#[Task(name: 'spawn_once_requester')]
+#[Tasklet\Spec(name: 'spawn_once_requester')]
 final class SpawnOnceRequester extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -442,7 +441,7 @@ final class SpawnOnceRequester extends Tasklet
 #[Relay(factoryId: 'spawn_once_requester')]
 final class SpawnOnceRequesterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SpawnOnceRequester::class)
@@ -459,82 +458,82 @@ final class SpawnOnceRequesterRelay extends \Flezha\Relay
 // class, so the sixteen are written out; the edge names follow the reference,
 // which spells them from the step TYPE rather than from the tasklet name.
 
-#[Task(name: 'bench_s0')]
+#[Tasklet\Spec(name: 'bench_s0')]
 final class BenchS0 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s1')]
+#[Tasklet\Spec(name: 'bench_s1')]
 final class BenchS1 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s2')]
+#[Tasklet\Spec(name: 'bench_s2')]
 final class BenchS2 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s3')]
+#[Tasklet\Spec(name: 'bench_s3')]
 final class BenchS3 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s4')]
+#[Tasklet\Spec(name: 'bench_s4')]
 final class BenchS4 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s5')]
+#[Tasklet\Spec(name: 'bench_s5')]
 final class BenchS5 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s6')]
+#[Tasklet\Spec(name: 'bench_s6')]
 final class BenchS6 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s7')]
+#[Tasklet\Spec(name: 'bench_s7')]
 final class BenchS7 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s8')]
+#[Tasklet\Spec(name: 'bench_s8')]
 final class BenchS8 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s9')]
+#[Tasklet\Spec(name: 'bench_s9')]
 final class BenchS9 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s10')]
+#[Tasklet\Spec(name: 'bench_s10')]
 final class BenchS10 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s11')]
+#[Tasklet\Spec(name: 'bench_s11')]
 final class BenchS11 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s12')]
+#[Tasklet\Spec(name: 'bench_s12')]
 final class BenchS12 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s13')]
+#[Tasklet\Spec(name: 'bench_s13')]
 final class BenchS13 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s14')]
+#[Tasklet\Spec(name: 'bench_s14')]
 final class BenchS14 extends DurableStep
 {
 }
 
-#[Task(name: 'bench_s15')]
+#[Tasklet\Spec(name: 'bench_s15')]
 final class BenchS15 extends DurableStep
 {
 }
@@ -552,7 +551,7 @@ abstract class BenchChain extends \Flezha\Relay
 
     protected const STEPS = 1;
 
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $edge = $c->input('in', codec: ChannelCodec::Text)->into(self::STEP_CLASSES[0]);
         for ($at = 1; $at < static::STEPS; $at++) {
@@ -594,7 +593,7 @@ final class BenchChainOptout4 extends BenchChain
 // `FLEZHA_BENCH_WAKE_AFTER_MS` set each turn arms a timer that far out, whose
 // firing sends the bench's wake marker, `wake:<fired_at>`, for the timer-wake measurements.
 
-#[Task(name: 'bench_turn')]
+#[Tasklet\Spec(name: 'bench_turn')]
 final class BenchTurn extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -633,7 +632,7 @@ final class BenchTurn extends Tasklet
 )]
 final class BenchLoopSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(BenchTurn::class)->named('mid')
@@ -648,7 +647,7 @@ final class BenchLoopSteps extends \Flezha\Relay
 // every message to two of them; each cell that runs emits `<cell key>:<message>`,
 // so one message yields exactly two outputs (steps.rs).
 
-#[Task(name: 'static_cell_step', cellKeys: ['a', 'b', 'c'])]
+#[Tasklet\Spec(name: 'static_cell_step', cellKeys: ['a', 'b', 'c'])]
 final class StaticCellStep extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -670,7 +669,7 @@ final class StaticCellStep extends Tasklet
 )]
 final class StaticCellSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(StaticCellStep::class)
@@ -681,7 +680,7 @@ final class StaticCellSteps extends \Flezha\Relay
 // -- complete_flow / chained_steps -------------------------------------------
 
 /** Echoes each input and ends its instance on `bye`, the echo of `bye` included. */
-#[Task(name: 'complete_flow_tasklet')]
+#[Tasklet\Spec(name: 'complete_flow_tasklet')]
 final class CompleteFlow extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -696,7 +695,7 @@ final class CompleteFlow extends Tasklet
 #[Relay(factoryId: 'complete_flow')]
 final class CompleteFlowRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CompleteFlow::class)
@@ -708,7 +707,7 @@ final class CompleteFlowRelay extends \Flezha\Relay
  * Prints `chained_pass <n>` and hands the next pass `n - 1` on its own
  * channel; the pass at zero hands nothing, and the empty batch ends the loop.
  */
-#[Task(name: 'chained_countdown')]
+#[Tasklet\Spec(name: 'chained_countdown')]
 final class ChainedCountdown extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -724,7 +723,7 @@ final class ChainedCountdown extends Tasklet
 #[Relay(factoryId: 'chained_steps', run: ['steps' => ['each' => 'chained']])]
 final class ChainedSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(ChainedCountdown::class)

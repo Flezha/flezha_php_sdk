@@ -25,12 +25,11 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
-use Flezha\Graph\Builder;
-use Flezha\Graph\Edge;
+use Flezha\Stream;
 use Flezha\Tasklet;
 use Flezha\TimerFiring;
 
@@ -210,7 +209,7 @@ abstract class FailingStep extends Tasklet
 // The run-once shape (steps.rs:14): one tasklet emits its first message
 // back once and the pass ends, so the controller deregisters the instance.
 
-#[Task(name: 'echo_args')]
+#[Tasklet\Spec(name: 'echo_args')]
 final class EchoArgs extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -222,7 +221,7 @@ final class EchoArgs extends Tasklet
 #[Relay(factoryId: 'echo_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class EchoSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(EchoArgs::class)
@@ -237,7 +236,7 @@ final class EchoSteps extends \Flezha\Relay
 // with it, because the runner's stdout and the completion record are the two
 // places the scenario can read.
 
-#[Task(name: 'once_placed')]
+#[Tasklet\Spec(name: 'once_placed')]
 final class OncePlaced extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -253,7 +252,7 @@ final class OncePlaced extends Tasklet
 #[Relay(factoryId: 'typed_once_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class TypedOnceSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('order', codec: ChannelCodec::Json)
             ->into(OncePlaced::class)
@@ -269,12 +268,12 @@ final class TypedOnceSteps extends \Flezha\Relay
 // SYNCHRONOUS remote durability, which is what lets the kill-the-disk drill
 // destroy the state directory and still resume with A committed.
 
-#[Task(name: 'commit_a')]
+#[Tasklet\Spec(name: 'commit_a')]
 final class CommitA extends DurableStep
 {
 }
 
-#[Task(name: 'block_b')]
+#[Tasklet\Spec(name: 'block_b')]
 final class BlockB extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -285,7 +284,7 @@ final class BlockB extends Tasklet
 
 abstract class CommitBlockChain extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(CommitA::class)->named('mid')
@@ -310,7 +309,7 @@ final class SyncDurableSteps extends CommitBlockChain
 // run, so a SIGKILL after the effect and a resume on a released runner shows
 // whether the function ran again.
 
-#[Task(name: 'effect_block')]
+#[Tasklet\Spec(name: 'effect_block')]
 final class EffectBlock extends Tasklet
 {
     public static function countRun(string $path): string
@@ -330,7 +329,7 @@ final class EffectBlock extends Tasklet
 #[Relay(factoryId: 'effect_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class EffectBlockSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(EffectBlock::class);
     }
@@ -338,7 +337,7 @@ final class EffectBlockSteps extends \Flezha\Relay
 
 // `effect_flow`: the same call in a flow relay at the default tier, which
 // keeps no input log, so nothing re-runs an input and nothing is kept.
-#[Task(name: 'effect_once')]
+#[Tasklet\Spec(name: 'effect_once')]
 final class EffectOnce extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -350,7 +349,7 @@ final class EffectOnce extends Tasklet
 #[Relay(factoryId: 'effect_flow')]
 final class EffectFlow extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(EffectOnce::class);
     }
@@ -366,7 +365,7 @@ final class EffectFlow extends \Flezha\Relay
 #[Relay(factoryId: 'optout_commit_block', run: 'steps', durable: false)]
 final class OptoutCommitBlock extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(CommitA::class)
@@ -382,7 +381,7 @@ final class OptoutCommitBlock extends \Flezha\Relay
 // stage committed and B unfinished. A steps relay commits stage by stage, so the
 // class declares no tier of its own.
 
-#[Task(name: 'tier_commit_a')]
+#[Tasklet\Spec(name: 'tier_commit_a')]
 final class TierCommitA extends DurableStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -394,7 +393,7 @@ final class TierCommitA extends DurableStep
 #[Relay(factoryId: 'tier_commit_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class TierCommitBlockSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(TierCommitA::class)->keyed()
@@ -410,7 +409,7 @@ final class TierCommitBlockSteps extends \Flezha\Relay
 // lands mid-rollback with SB's done-marker already durable — the respawn
 // finishes SA and SKIPS the already-done SB.
 
-#[Task(name: 'saga_a')]
+#[Tasklet\Spec(name: 'saga_a')]
 final class SagaA extends UndoingStep
 {
     protected function compensationGated(): bool
@@ -419,12 +418,12 @@ final class SagaA extends UndoingStep
     }
 }
 
-#[Task(name: 'saga_b')]
+#[Tasklet\Spec(name: 'saga_b')]
 final class SagaB extends UndoingStep
 {
 }
 
-#[Task(name: 'saga_c')]
+#[Tasklet\Spec(name: 'saga_c')]
 final class SagaC extends FailingStep
 {
 }
@@ -432,7 +431,7 @@ final class SagaC extends FailingStep
 #[Relay(factoryId: 'saga_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class SagaBlockSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(SagaA::class)->named('s1')
@@ -449,7 +448,7 @@ final class SagaBlockSteps extends \Flezha\Relay
 // tasklet parks until the release variable, or fails, so the keyed stage is
 // rolled back once per key.
 
-#[Task(name: 'key_split')]
+#[Tasklet\Spec(name: 'key_split')]
 final class KeySplit extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -460,19 +459,19 @@ final class KeySplit extends Tasklet
     }
 }
 
-#[Task(name: 'keyed_commit')]
+#[Tasklet\Spec(name: 'keyed_commit')]
 final class KeyedCommit extends UndoingStep
 {
 }
 
-#[Task(name: 'keyed_fail')]
+#[Tasklet\Spec(name: 'keyed_fail')]
 final class KeyedFail extends FailingStep
 {
 }
 
 abstract class KeyedCommits extends \Flezha\Relay
 {
-    protected static function keyedCommits(Builder $c): Edge
+    protected static function keyedCommits(ChannelBuilder $c): Stream
     {
         return $c->input('in', codec: ChannelCodec::Text)
             ->into(KeySplit::class)->named('keys')
@@ -484,7 +483,7 @@ abstract class KeyedCommits extends \Flezha\Relay
 #[Relay(factoryId: 'keyed_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class KeyedBlockSteps extends KeyedCommits
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         self::keyedCommits($c)->into(BlockB::class);
     }
@@ -493,7 +492,7 @@ final class KeyedBlockSteps extends KeyedCommits
 #[Relay(factoryId: 'keyed_saga_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class KeyedSagaSteps extends KeyedCommits
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         self::keyedCommits($c)->into(KeyedFail::class);
     }
@@ -506,7 +505,7 @@ final class KeyedSagaSteps extends KeyedCommits
 // A's Cell record and reaches the output once A's stage commits. Task B parks, so
 // a SIGKILL lands with A committed and B unfinished.
 
-#[Task(name: 'commit_a')]
+#[Tasklet\Spec(name: 'commit_a')]
 final class OutboxA extends DurableStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -518,7 +517,7 @@ final class OutboxA extends DurableStep
 #[Relay(factoryId: 'outbox_block_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class OutboxBlockSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(OutboxA::class)->keyed()
@@ -537,7 +536,7 @@ final class OutboxBlockSteps extends \Flezha\Relay
 // undo was written. The respawn re-runs the outstanding hook, whose done
 // marker never landed, and the undo is delivered exactly once.
 
-#[Task(name: 'undo_outbox_a')]
+#[Tasklet\Spec(name: 'undo_outbox_a')]
 final class UndoOutboxA extends UndoingStep
 {
     protected function compensationGated(): bool
@@ -551,7 +550,7 @@ final class UndoOutboxA extends UndoingStep
     }
 }
 
-#[Task(name: 'undo_outbox_c')]
+#[Tasklet\Spec(name: 'undo_outbox_c')]
 final class UndoOutboxC extends FailingStep
 {
 }
@@ -559,7 +558,7 @@ final class UndoOutboxC extends FailingStep
 #[Relay(factoryId: 'undo_outbox_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class UndoOutboxSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(UndoOutboxA::class)
@@ -575,7 +574,7 @@ final class UndoOutboxSteps extends \Flezha\Relay
 // Cell's record carries an output; the second fails, so the stage never
 // commits and no marker ever names that record.
 
-#[Task(name: 'failed_stage')]
+#[Tasklet\Spec(name: 'failed_stage')]
 final class FailedStage extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -590,7 +589,7 @@ final class FailedStage extends Tasklet
 #[Relay(factoryId: 'failed_stage_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class FailedStageSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(KeySplit::class)
@@ -619,7 +618,7 @@ final class FailedStageSteps extends \Flezha\Relay
 // The inter-task channels are hybrid, which is what makes a non-leaf
 // tasklet's forward and undo output visible at the output.
 
-#[Task(name: 'branch_a')]
+#[Tasklet\Spec(name: 'branch_a')]
 final class BranchA extends UndoingStep
 {
     protected function undoRecord(): ?string
@@ -628,7 +627,7 @@ final class BranchA extends UndoingStep
     }
 }
 
-#[Task(name: 'branch_b')]
+#[Tasklet\Spec(name: 'branch_b')]
 final class BranchB extends UndoingStep
 {
     protected function undoRecord(): ?string
@@ -638,7 +637,7 @@ final class BranchB extends UndoingStep
 }
 
 /** The sibling leaf: emits straight to the output, and its undo does too. */
-#[Task(name: 'branch_c')]
+#[Tasklet\Spec(name: 'branch_c')]
 final class BranchC extends UndoingStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -653,7 +652,7 @@ final class BranchC extends UndoingStep
 }
 
 /** The deep leaf under BranchB: parks (crash-resume), or fails (compensation). */
-#[Task(name: 'branch_d')]
+#[Tasklet\Spec(name: 'branch_d')]
 final class BranchD extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -669,7 +668,7 @@ final class BranchD extends Tasklet
 #[Relay(factoryId: 'branch_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class BranchSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         // One channel, two consumers: THE fan-out. Both branches read exactly
         // what BranchA released on it (held edge, wired twice).
@@ -699,17 +698,17 @@ final class BranchSteps extends \Flezha\Relay
 // the join runs once with C's JOURNALED handoff banked and B2's fresh output
 // appended, so `c:` appears exactly once across both runs.
 
-#[Task(name: 'diam_a')]
+#[Tasklet\Spec(name: 'diam_a')]
 final class DiamA extends DurableStep
 {
 }
 
-#[Task(name: 'diam_b1')]
+#[Tasklet\Spec(name: 'diam_b1')]
 final class DiamB1 extends DurableStep
 {
 }
 
-#[Task(name: 'diam_b2')]
+#[Tasklet\Spec(name: 'diam_b2')]
 final class DiamB2 extends DurableStep
 {
     protected function gated(mixed $input): bool
@@ -728,7 +727,7 @@ final class DiamB2 extends DurableStep
     }
 }
 
-#[Task(name: 'diam_c')]
+#[Tasklet\Spec(name: 'diam_c')]
 final class DiamC extends DurableStep
 {
     protected function release(mixed $input, Ctx $ctx): void
@@ -738,7 +737,7 @@ final class DiamC extends DurableStep
 }
 
 /** The join: one `j:`-tagged record per accumulated contribution. */
-#[Task(name: 'diam_join')]
+#[Tasklet\Spec(name: 'diam_join')]
 final class DiamJoin extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -750,7 +749,7 @@ final class DiamJoin extends Tasklet
 #[Relay(factoryId: 'diamond_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class DiamondSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         // Held edge wired twice = the fan-out; two arms naming DiamJoin with no
         // node name = the fan-in, since two unnamed mentions are one node.
@@ -778,7 +777,7 @@ final class DiamondSteps extends \Flezha\Relay
 // sees attempt 2; arming more failures than the ladder has attempts exhausts
 // it, RA rolls back and the run reports an error.
 
-#[Task(name: 'retry_a')]
+#[Tasklet\Spec(name: 'retry_a')]
 final class RetryA extends UndoingStep
 {
     protected function undoRecord(): ?string
@@ -787,7 +786,7 @@ final class RetryA extends UndoingStep
     }
 }
 
-#[Task(name: 'retry_flaky')]
+#[Tasklet\Spec(name: 'retry_flaky')]
 final class RetryFlaky extends Tasklet
 {
     private const FAILS_ENV = 'FLEZHA_STEPS_RETRY_FAILS';
@@ -814,7 +813,7 @@ final class RetryFlaky extends Tasklet
 #[Relay(factoryId: 'retry_steps', run: 'steps', durable: FIXTURE_DURABLE)]
 final class RetrySteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(RetryA::class)
@@ -833,7 +832,7 @@ final class RetrySteps extends \Flezha\Relay
 // with `FLEZHA_STEPS_E2E_HOLD` the firing parks at the gate: `timer` inside
 // `on_timer`, before `tick` commits; `tock` in `tock`, after.
 
-#[Task(name: 'tick')]
+#[Tasklet\Spec(name: 'tick')]
 final class TimerTick extends DurableStep
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -859,7 +858,7 @@ final class TimerTick extends DurableStep
     }
 }
 
-#[Task(name: 'tock')]
+#[Tasklet\Spec(name: 'tock')]
 final class TimerTock extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -879,7 +878,7 @@ final class TimerTock extends Tasklet
 )]
 final class TimerLoopSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(TimerTick::class)->named('ticked')
@@ -894,7 +893,7 @@ final class TimerLoopSteps extends \Flezha\Relay
 // message arms an event-time timer 100 later and emits `seen:<t>`, and the
 // firing emits `fired:<at>` (steps.rs).
 
-#[Task(name: 'event_tick')]
+#[Tasklet\Spec(name: 'event_tick')]
 final class EventTick extends DurableStep
 {
     public function eventTime(mixed $input): int
@@ -923,7 +922,7 @@ final class EventTick extends DurableStep
 )]
 final class EventTimerSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(EventTick::class)->output('out');
     }
@@ -931,7 +930,7 @@ final class EventTimerSteps extends \Flezha\Relay
 
 // call_turn: a durable per-input loop whose turn's output answers the
 // outside call.
-#[Task(name: 'call_turn')]
+#[Tasklet\Spec(name: 'call_turn')]
 final class CallTurnStep extends PassThrough
 {
 }
@@ -944,7 +943,7 @@ final class CallTurnStep extends PassThrough
 )]
 final class CallTurn extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(CallTurnStep::class)->output();
     }

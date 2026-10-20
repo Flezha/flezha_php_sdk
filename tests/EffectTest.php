@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\Codec\ValueCodec;
 use Flezha\Ctx;
 use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\RegisteredClass;
 use Flezha\Exception\FlezhaException;
-use Flezha\Graph\Builder;
 use Flezha\LocalOutput;
 use Flezha\LocalRelay;
 use Flezha\Tasklet;
 use Flezha\Testing\EffectReplayMismatch;
-use Flezha\Testing\Harness;
+use Flezha\Testing\TaskletTestHarness;
 use PHPUnit\Framework\TestCase;
 
 /** How often each outside call ran, by name. */
@@ -34,7 +33,7 @@ final class EffectCalls
     }
 }
 
-#[Task(name: 'effect_asks')]
+#[Tasklet\Spec(name: 'effect_asks')]
 final class EffectAsks extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -57,7 +56,7 @@ final class UpperCodec implements ValueCodec
     }
 }
 
-#[Task(name: 'effect_codec')]
+#[Tasklet\Spec(name: 'effect_codec')]
 final class EffectWithCodec extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -66,7 +65,7 @@ final class EffectWithCodec extends Tasklet
     }
 }
 
-#[Task(name: 'effect_one_more')]
+#[Tasklet\Spec(name: 'effect_one_more')]
 final class EffectOneMore extends Tasklet
 {
     private int $calls = 0;
@@ -80,7 +79,7 @@ final class EffectOneMore extends Tasklet
     }
 }
 
-#[Task(name: 'effect_around')]
+#[Tasklet\Spec(name: 'effect_around')]
 final class EffectAround extends Tasklet
 {
     private bool $live = true;
@@ -96,7 +95,7 @@ final class EffectAround extends Tasklet
     }
 }
 
-#[Task(name: 'effect_bad_name')]
+#[Tasklet\Spec(name: 'effect_bad_name')]
 final class EffectBadName extends Tasklet
 {
     public static string $name = '';
@@ -107,7 +106,7 @@ final class EffectBadName extends Tasklet
     }
 }
 
-#[Task(name: 'effect_nested')]
+#[Tasklet\Spec(name: 'effect_nested')]
 final class EffectNested extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -116,7 +115,7 @@ final class EffectNested extends Tasklet
     }
 }
 
-#[Task(name: 'effect_fails')]
+#[Tasklet\Spec(name: 'effect_fails')]
 final class EffectFails extends Tasklet
 {
     private int $attempts = 0;
@@ -133,7 +132,7 @@ final class EffectFails extends Tasklet
 #[Relay(factoryId: 'effect_local_php')]
 final class EffectLocal extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: \Flezha\ChannelCodec::Text)->into(EffectAsks::class)
             ->output('out', codec: \Flezha\ChannelCodec::Json);
@@ -177,7 +176,7 @@ final class EffectTest extends TestCase
 
     public function testALiveInputRunsTheFunctionAndAReplayIsServedItsResult(): void
     {
-        $harness = new Harness(EffectAsks::class);
+        $harness = new TaskletTestHarness(EffectAsks::class);
         $live = $harness->feed('live-q');
         $replayed = $harness->feed('live-q', replay: true);
 
@@ -188,12 +187,12 @@ final class EffectTest extends TestCase
 
     public function testACodecEncodesAndDecodesTheResult(): void
     {
-        self::assertSame(['hammer'], (new Harness(EffectWithCodec::class))->feed('Hammer')->outputs);
+        self::assertSame(['hammer'], (new TaskletTestHarness(EffectWithCodec::class))->feed('Hammer')->outputs);
     }
 
     public function testAReplayThatRunsAFunctionFailsNamingTheEffect(): void
     {
-        $harness = new Harness(EffectOneMore::class);
+        $harness = new TaskletTestHarness(EffectOneMore::class);
         $harness->feed('q');
 
         $this->expectException(EffectReplayMismatch::class);
@@ -203,7 +202,7 @@ final class EffectTest extends TestCase
 
     public function testACallMadeAroundTheEffectOnReplayFailsNamingIt(): void
     {
-        $harness = new Harness(EffectAround::class);
+        $harness = new TaskletTestHarness(EffectAround::class);
         $harness->feed('q');
 
         $this->expectException(EffectReplayMismatch::class);
@@ -216,7 +215,7 @@ final class EffectTest extends TestCase
         foreach (['', str_repeat('m', 256)] as $name) {
             EffectBadName::$name = $name;
             try {
-                (new Harness(EffectBadName::class))->feed('q');
+                (new TaskletTestHarness(EffectBadName::class))->feed('q');
                 self::fail('a bad name was not refused');
             } catch (FlezhaException $e) {
                 self::assertSame('effect.bad_name', $e->getCode());
@@ -228,7 +227,7 @@ final class EffectTest extends TestCase
     public function testAnEffectInsideAnEffectIsRefused(): void
     {
         try {
-            (new Harness(EffectNested::class))->feed('q');
+            (new TaskletTestHarness(EffectNested::class))->feed('q');
             self::fail('a nested effect was not refused');
         } catch (FlezhaException $e) {
             self::assertSame('effect.nested', $e->getCode());
@@ -237,7 +236,7 @@ final class EffectTest extends TestCase
 
     public function testAFailingFunctionKeepsNothingAndItsErrorPropagates(): void
     {
-        $harness = new Harness(EffectFails::class);
+        $harness = new TaskletTestHarness(EffectFails::class);
         try {
             $harness->feed('q');
             self::fail('the function error did not propagate');

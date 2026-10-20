@@ -31,11 +31,10 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Exception\NonRetryableException;
-use Flezha\Graph\Builder;
 use Flezha\Response;
 use Flezha\Tasklet;
 
@@ -99,7 +98,7 @@ final class RelayCall
     }
 }
 
-#[Task(name: 'pricing_quote')]
+#[Tasklet\Spec(name: 'pricing_quote')]
 final class PricingQuote extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -113,18 +112,18 @@ final class PricingQuote extends Tasklet
 #[Relay(factoryId: 'call_pricing')]
 final class CallPricing extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(PricingQuote::class)->output('quotes');
     }
 }
 
-#[Task(name: 'order_ask')]
+#[Tasklet\Spec(name: 'order_ask')]
 final class OrderAsk extends PassThrough
 {
 }
 
-#[Task(name: 'order_priced')]
+#[Tasklet\Spec(name: 'order_priced')]
 final class OrderPriced extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -136,7 +135,7 @@ final class OrderPriced extends Tasklet
 #[Relay(factoryId: 'call_orders')]
 final class CallOrders extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)
             ->into(OrderAsk::class)
@@ -160,13 +159,13 @@ final class CallOrders extends \Flezha\Relay
 )]
 final class CallOrdersSteps extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         CallOrders::channels($c);
     }
 }
 
-#[Task(name: 'agent_turn')]
+#[Tasklet\Spec(name: 'agent_turn')]
 final class AgentTurn extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -190,13 +189,13 @@ final class AgentTurn extends Tasklet
 )]
 final class CallAgent extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('turn', codec: ChannelCodec::Text)->into(AgentTurn::class)->output();
     }
 }
 
-#[Task(name: 'gateway_account')]
+#[Tasklet\Spec(name: 'gateway_account')]
 final class GatewayAccount extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -205,7 +204,7 @@ final class GatewayAccount extends Tasklet
     }
 }
 
-#[Task(name: 'gateway_resume')]
+#[Tasklet\Spec(name: 'gateway_resume')]
 final class GatewayResume extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -214,7 +213,7 @@ final class GatewayResume extends Tasklet
     }
 }
 
-#[Task(name: 'gateway_log')]
+#[Tasklet\Spec(name: 'gateway_log')]
 final class GatewayLog extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -226,7 +225,7 @@ final class GatewayLog extends Tasklet
 #[Relay(factoryId: 'call_gateway', run: ['flow' => ['exactly' => 'effectively_once']])]
 final class CallGateway extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $account = $c->input('in', codec: ChannelCodec::Text)->into(GatewayAccount::class)->named('gateway');
         $account->filter(RelayCall::isTurn(...))
@@ -252,7 +251,7 @@ final class CallGateway extends \Flezha\Relay
     }
 }
 
-#[Task(name: 'tool_turn')]
+#[Tasklet\Spec(name: 'tool_turn')]
 final class ToolTurn extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -261,7 +260,7 @@ final class ToolTurn extends Tasklet
     }
 }
 
-#[Task(name: 'tool_log')]
+#[Tasklet\Spec(name: 'tool_log')]
 final class ToolLog extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -278,7 +277,7 @@ final class ToolLog extends Tasklet
 )]
 final class CallToolSession extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $turn = $c->input('turn', codec: ChannelCodec::Text)->into(ToolTurn::class)->named('tool');
         $turn->filter(static fn (mixed $line): bool => !RelayCall::isOutcome($line))
@@ -302,7 +301,7 @@ final class OrderToPlace
     }
 }
 
-#[Task(name: 'orders_place', inputType: OrderToPlace::class, outputType: OrderPlaced::class)]
+#[Tasklet\Spec(name: 'orders_place', inputType: OrderToPlace::class, outputType: OrderPlaced::class)]
 final class OrdersPlace extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -311,7 +310,7 @@ final class OrdersPlace extends Tasklet
     }
 }
 
-#[Task(name: 'orders_audit')]
+#[Tasklet\Spec(name: 'orders_audit')]
 final class OrdersAudit extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -326,7 +325,7 @@ final class OrdersAudit extends Tasklet
 #[Relay(factoryId: 'orders')]
 final class Orders extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('place', description: 'Places an order')->into(OrdersPlace::class)->output('placed');
         $c->input('audit', codec: ChannelCodec::Text)->into(OrdersAudit::class);

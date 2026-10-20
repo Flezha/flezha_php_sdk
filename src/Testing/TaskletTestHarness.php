@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flezha\Testing;
 
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
@@ -11,13 +12,10 @@ use Flezha\Definition;
 use Flezha\Dispatch\Dispatcher;
 use Flezha\Dispatch\RegisteredClass;
 use Flezha\Dispatch\Restore;
-use Flezha\Exception\FlezhaException;
-use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
 use Flezha\Graph\TaskNode;
 use Flezha\Relay;
 use Flezha\Tasklet;
-use Flezha\SpawnBridge;
 use Flezha\TimerFiring;
 
 /**
@@ -26,7 +24,7 @@ use Flezha\TimerFiring;
  * Not a second implementation of the dispatcher: it drives
  * {@see Dispatcher::invoke()} — the function every activation kind that
  * reaches a handler goes through — over a one-tasklet `RegisteredClass`, and
- * {@see assertReplayEquals()} folds through {@see Restore::fold()}, the
+ * {@see replayEquals()} folds through {@see Restore::fold()}, the
  * function a real restore calls. So what it proves is what the runner does,
  * rather than something that agrees with it.
  *
@@ -35,43 +33,17 @@ use Flezha\TimerFiring;
  * kept, and throws {@see EffectReplayMismatch} when a function runs there or
  * a kept result is never asked for.
  */
-final class Harness implements SpawnBridge
+final class TaskletTestHarness
 {
-    /** The lowercase base32 a generated id's suffix is spelled in. */
-    private const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
-
-    /** The longest effect name, in bytes, as the core refuses it. */
-    private const MAX_EFFECT_NAME = 255;
-
     private readonly Definition $definition;
     private readonly TaskNode $node;
     private readonly RegisteredClass $registered;
+    private readonly FakeCore $core;
 
     /** @var list<string> the encoded change log, as the WAL would hold it */
     public array $log = [];
 
     private int $changeSeq = 0;
-
-    /** @var array<int, string> each spawn's answer by handle number, released when its invocation ends */
-    private array $spawns = [];
-
-    private int $spawnCount = 0;
-
-    /** @var list<array<string, list<string>>> each live input's effect results, by name in call order */
-    private array $keptEffects = [];
-
-    private int $replays = 0;
-
-    /** @var array<string, list<string>> this input's effect results */
-    private array $effects = [];
-
-    private bool $replaying = false;
-
-    /** @var array<string, int> this invocation's count of each effect name */
-    private array $ordinals = [];
-
-    /** @var array{string, int}|null the effect whose function is running */
-    private ?array $running = null;
 
     /** @param class-string<Tasklet>|class-string<Relay> $taskletClass */
     public function __construct(
@@ -80,13 +52,14 @@ final class Harness implements SpawnBridge
         private readonly string $relay = 'harness',
     ) {
         $this->definition = Definition::of($taskletClass);
+        $this->core = new FakeCore($this->definition->name);
 
         // The real channel builder, not a hand-written spec: one entry channel
         // into the tasklet, and one plugin output so `ctx->emit` has somewhere
         // to go. A tasklet under test emits to be observed, not to be routed,
         // and the output names JSON so `outputs` reports exactly the value a
         // handler emitted.
-        $builder = new Builder('<harness>');
+        $builder = new ChannelBuilder('<harness>');
         $builder->input('in')->into($taskletClass)->output('out', codec: ChannelCodec::Json);
         $this->node = $builder->tasklets[0];
 
@@ -116,26 +89,13 @@ final class Harness implements SpawnBridge
     /** Run the tasklet against one input; `$replay` replays the next live input, in order. */
     public function feed(mixed $input, int $now = 0, bool $replay = false): Outcome
     {
-        if ($replay) {
-            $this->effects = $this->keptEffects[$this->replays++] ?? [];
-        } else {
-            $this->effects = [];
-            $this->keptEffects[] = [];
-        }
-        $this->replaying = $replay;
-        $this->ordinals = [];
-        $this->running = null;
-
+        $this->core->beginInput($replay);
         $outcome = $this->drive(
             $now,
             $replay,
             fn (Ctx $ctx) => $this->definition->instance->run($input, $ctx),
         );
-        foreach ($replay ? $this->effects : [] as $name => $results) {
-            if (count($results) > ($this->ordinals[$name] ?? 0)) {
-                throw new EffectReplayMismatch($this->definition->name, (string) $name, 'was never asked for');
-            }
-        }
+        $this->core->endInput();
 
         return $outcome;
     }
@@ -197,7 +157,7 @@ final class Harness implements SpawnBridge
      * a handler that mutated the state without recording a change, and an
      * `applyChange` that is not a pure fold.
      */
-    public function assertReplayEquals(): bool
+    public function replayEquals(): void
     {
         $replayed = Restore::fold(
             $this->definition,
@@ -212,106 +172,6 @@ final class Harness implements SpawnBridge
         if ($replayed != $this->state()) {
             throw new ReplayMismatch($this->definition->name, $this->state(), $replayed);
         }
-
-        return true;
-    }
-
-    /**
-     * The spawn bridge a `Ctx` asks. A harness has no controller, so a spawn
-     * answers at once what one would have: `spawned` under the given id, or
-     * under an id shaped like a generated one, and `skipped_on_replay` on a
-     * replay.
-     */
-    public function spawnRequest(
-        int $token,
-        string $factoryId,
-        string $id,
-        string $payload,
-        string $ifRunning,
-        bool $replay,
-        ?int $offset,
-    ): int {
-        $handle = $this->spawnCount++;
-        if ($id === '' && !$replay) {
-            // The spawn's number as the suffix: deterministic, and distinct per spawn.
-            $suffix = '';
-            for ($n = $handle, $i = 0; $i < 16; $i++, $n >>= 5) {
-                $suffix = self::BASE32[$n & 31] . $suffix;
-            }
-            $id = "$factoryId-$suffix";
-        }
-        $this->spawns[$handle] = Json::encode(['id' => $id, 'outcome' => $replay ? 'skipped_on_replay' : 'spawned']);
-
-        return $handle;
-    }
-
-    public function spawnResult(int $handle, int $timeoutMs): ?string
-    {
-        return $this->spawns[$handle]
-            ?? throw new FlezhaException('runtime.spawn_handle_released', ['handle' => $handle]);
-    }
-
-    /** A harness has no controller and no listener, so the part, already encoded, goes nowhere. */
-    public function part(int $token, int $item, string $payload): void
-    {
-    }
-
-    /**
-     * The core's answer to a begun `Ctx::effect`, over this input's results:
-     * the kept one, or run the function (on a live input only).
-     */
-    public function effectBegin(int $token, int $item, string $name): array
-    {
-        if ($name === '' || strlen($name) > self::MAX_EFFECT_NAME) {
-            throw new FlezhaException('effect.bad_name', ['name' => Json::encode($name)]);
-        }
-        if ($this->running !== null) {
-            throw new FlezhaException('effect.nested', ['name' => $name]);
-        }
-
-        $ordinal = $this->ordinals[$name] ?? 0;
-        $this->ordinals[$name] = $ordinal + 1;
-        if (isset($this->effects[$name][$ordinal])) {
-            return ['kept', $this->effects[$name][$ordinal]];
-        }
-        if ($this->replaying) {
-            throw new EffectReplayMismatch($this->definition->name, $name, 'ran its function');
-        }
-        $this->running = [$name, $ordinal];
-
-        return ['run', null];
-    }
-
-    /** Keep a live input's result, as the controller does. */
-    public function effectEnd(int $token, int $item, string $payload): ?string
-    {
-        [$name, $ordinal] = $this->running ?? throw new \LogicException('an end follows a begin that runs');
-        $this->effects[$name][$ordinal] = $payload;
-        $this->keptEffects[array_key_last($this->keptEffects)] = $this->effects;
-        $this->running = null;
-
-        return null;
-    }
-
-    public function effectRelease(int $token, int $item): void
-    {
-        $this->running = null;
-    }
-
-    /**
-     * Drive `tasklet_class` over `$inputs` and assert the replay agrees.
-     *
-     * @param class-string<Tasklet>|class-string<Relay> $taskletClass
-     * @param list<mixed>                                     $inputs
-     */
-    public static function replayEquals(string $taskletClass, array $inputs, ?string $cellKey = null): bool
-    {
-        $harness = new self($taskletClass, $cellKey);
-        foreach ($inputs as $input) {
-            $harness->feed($input);
-        }
-
-        return $harness->assertReplayEquals();
     }
 
     private function drive(int $now, bool $replay, callable $body): Outcome
@@ -326,13 +186,13 @@ final class Harness implements SpawnBridge
                 ],
                 $this->registered,
                 $this->node,
-                $this,
+                $this->core,
                 $now,
                 $replay,
                 $body,
             );
         } finally {
-            $this->spawns = [];
+            $this->core->endInvocation();
         }
 
         array_push($this->log, ...$ctx->changes);

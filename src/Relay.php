@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Flezha;
 
 use Flezha\Attribute\Relay as RelayAttribute;
-use Flezha\Attribute\Task;
 use Flezha\Exception\FlezhaException;
-use Flezha\Graph\Builder;
 use Flezha\Graph\ClassSpec;
+use Flezha\Tasklet\Spec;
 use LogicException;
 use ReflectionClass;
 
@@ -23,7 +22,7 @@ abstract class Relay
     private static array $cache = [];
 
     /** Declare the channels graph. */
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
     }
 
@@ -62,9 +61,9 @@ abstract class Relay
         return $attributes[0]->newInstance();
     }
 
-    protected static function builder(RelayAttribute $declaration): Builder
+    protected static function builder(RelayAttribute $declaration): ChannelBuilder
     {
-        $builder = new Builder($declaration->factoryId);
+        $builder = new ChannelBuilder($declaration->factoryId);
         if (self::isShortForm($declaration)) {
             // The class is its own tasklet, which `Definition` names after
             // the factory id.
@@ -144,8 +143,8 @@ abstract class Relay
                     self::refuseFields('topology.short_form_field_on_full_form', $declaration, ["`$argument`"]);
                 }
             }
-            if ((new ReflectionClass(static::class))->getAttributes(Task::class) !== []) {
-                self::refuseFields('topology.short_form_field_on_full_form', $declaration, ['#[Task]']);
+            if ((new ReflectionClass(static::class))->getAttributes(Spec::class) !== []) {
+                self::refuseFields('topology.short_form_field_on_full_form', $declaration, ['#[Tasklet\Spec]']);
             }
 
             return false;

@@ -2,25 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Flezha\Graph;
+namespace Flezha;
 
-use Flezha\ChannelCodec;
-use Flezha\Dropped;
 use Flezha\Exception\FlezhaException;
-use Flezha\Fanned;
-use Flezha\Overflow;
-use Flezha\Relay;
-use Flezha\Response;
-use Flezha\Tasklet;
+use Flezha\Graph\CallEnd;
+use Flezha\Graph\ChannelSpec;
+use Flezha\Graph\ConsumerEdge;
+use Flezha\Graph\Merge;
+use Flezha\Graph\TaskNode;
 
 /**
- * One edge under construction.
+ * A stream handle: one edge under construction.
  *
- * Immutable: every fluent call answers a new edge, so a shared prefix can be
+ * Immutable: every fluent call answers a new stream, so a shared prefix can be
  * branched without the arms colliding — which is what makes `branch(...)`
  * build exactly the topology the separate `into(...)` statements would.
  */
-final class Edge
+final class Stream
 {
     /** The two links a fluent call adds; every `map` records the same one. */
     private const TRANSFORM = ['link' => 'transform'];
@@ -31,7 +29,7 @@ final class Edge
      * @param array<string, mixed>                $pending
      */
     public function __construct(
-        private readonly Builder $builder,
+        private readonly ChannelBuilder $builder,
         private readonly array $from,
         private readonly array $pending,
     ) {

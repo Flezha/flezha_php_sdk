@@ -5,20 +5,19 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
 use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Tasklet;
-use Flezha\Testing\Harness;
+use Flezha\Testing\TaskletTestHarness;
 use PHPUnit\Framework\TestCase;
 
-#[Task(cellKeys: ['a'])]
+#[Tasklet\Spec(cellKeys: ['a'])]
 final class Nameless extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -31,6 +30,14 @@ final class Nameless extends Tasklet
     }
 }
 
+#[Tasklet\Spec(name: 'spec_by_import')]
+final class SpecByImport extends Tasklet
+{
+    public function run(mixed $input, Ctx $ctx): void
+    {
+    }
+}
+
 final class NoTaskAttribute extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -38,7 +45,7 @@ final class NoTaskAttribute extends Tasklet
     }
 }
 
-#[Task(name: '')]
+#[Tasklet\Spec(name: '')]
 final class EmptyName extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -66,19 +73,19 @@ trait SumsEvents
     }
 }
 
-#[Task(name: 'totals')]
+#[Tasklet\Spec(name: 'totals')]
 final class TotalsBeforeRename extends Tasklet
 {
     use SumsEvents;
 }
 
-#[Task(name: 'totals')]
+#[Tasklet\Spec(name: 'totals')]
 final class TotalsAfterRename extends Tasklet
 {
     use SumsEvents;
 }
 
-#[Task(name: 'sized', mailboxCapacity: 8, idleTtlSeconds: 60)]
+#[Tasklet\Spec(name: 'sized', mailboxCapacity: 8, idleTtlSeconds: 60)]
 class SizedParent extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -86,17 +93,17 @@ class SizedParent extends Tasklet
     }
 }
 
-#[Task(maxCells: 4)]
+#[Tasklet\Spec(maxCells: 4)]
 final class UnnamedSizedChild extends SizedParent
 {
 }
 
-#[Task(name: 'sized_child')]
+#[Tasklet\Spec(name: 'sized_child')]
 final class NamedSizedChild extends SizedParent
 {
 }
 
-#[Task(name: 'sessions', idleTtlSeconds: 3_600)]
+#[Tasklet\Spec(name: 'sessions', idleTtlSeconds: 3_600)]
 final class Sessions extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -104,7 +111,7 @@ final class Sessions extends Tasklet
     }
 }
 
-#[Task(name: 'stamped')]
+#[Tasklet\Spec(name: 'stamped')]
 final class Stamped extends Tasklet
 {
     public function eventTime(mixed $input): int
@@ -118,7 +125,7 @@ final class Stamped extends Tasklet
     }
 }
 
-#[Task(name: 'ledger', logicalClock: true)]
+#[Tasklet\Spec(name: 'ledger', logicalClock: true)]
 final class LogicalLedger extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -137,7 +144,7 @@ final class LogicalLedger extends Tasklet
     }
 }
 
-#[Task(name: 'two_clocks', logicalClock: true)]
+#[Tasklet\Spec(name: 'two_clocks', logicalClock: true)]
 final class TwoClocks extends Tasklet
 {
     public function eventTime(mixed $input): int
@@ -150,7 +157,7 @@ final class TwoClocks extends Tasklet
     }
 }
 
-#[Task(name: 'stateless_logical', logicalClock: true)]
+#[Tasklet\Spec(name: 'stateless_logical', logicalClock: true)]
 final class StatelessLogical extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -158,7 +165,7 @@ final class StatelessLogical extends Tasklet
     }
 }
 
-#[Task(name: 'x', dynamicCells: true)]
+#[Tasklet\Spec(name: 'x', dynamicCells: true)]
 final class RetiredDynamicCells extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -166,7 +173,7 @@ final class RetiredDynamicCells extends Tasklet
     }
 }
 
-#[Task(name: 'x', clock: 'event_time')]
+#[Tasklet\Spec(name: 'x', clock: 'event_time')]
 final class RetiredClock extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -174,7 +181,7 @@ final class RetiredClock extends Tasklet
     }
 }
 
-#[Task(name: 'x', idleTtlMs: 1000)]
+#[Tasklet\Spec(name: 'x', idleTtlMs: 1000)]
 final class RetiredIdleTtlMs extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -182,7 +189,7 @@ final class RetiredIdleTtlMs extends Tasklet
     }
 }
 
-#[Task(name: 'emits_or_skips')]
+#[Tasklet\Spec(name: 'emits_or_skips')]
 final class EmitsOrSkips extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -197,7 +204,7 @@ final class EmitsOrSkips extends Tasklet
     }
 }
 
-#[Task(name: 'seeded')]
+#[Tasklet\Spec(name: 'seeded')]
 final class Seeded extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -210,7 +217,7 @@ final class Seeded extends Tasklet
     }
 }
 
-#[Task(name: 'routed', cellKeys: ['a', 'b'])]
+#[Tasklet\Spec(name: 'routed', cellKeys: ['a', 'b'])]
 final class Routed extends Tasklet
 {
     public function cellsFor(mixed $input): array
@@ -235,7 +242,7 @@ final class ShortPlaceOrder extends \Flezha\Relay
 #[Relay(factoryId: 'form_emits')]
 final class EmitsRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(EmitsOrSkips::class)->output('out');
     }
@@ -244,7 +251,7 @@ final class EmitsRelay extends \Flezha\Relay
 #[Relay(factoryId: 'form_sessions')]
 final class SessionsRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('orders')->keyBy(static fn (array $o): string => $o['customer'])->into(Sessions::class);
     }
@@ -253,7 +260,7 @@ final class SessionsRelay extends \Flezha\Relay
 #[Relay(factoryId: 'form_clocks')]
 final class ClocksRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $in = $c->input('in');
         $in->into(Stamped::class)->output('stamps');
@@ -265,7 +272,7 @@ final class ClocksRelay extends \Flezha\Relay
 #[Relay(factoryId: 'form_stateless_logical')]
 final class StatelessLogicalRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->into(StatelessLogical::class);
     }
@@ -274,7 +281,7 @@ final class StatelessLogicalRelay extends \Flezha\Relay
 #[Relay(factoryId: 'form_keyed_static')]
 final class KeyedStaticRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in')->keyBy(static fn (mixed $v): string => 'a')->into(Routed::class);
     }
@@ -293,8 +300,8 @@ final class TaskletFormTest extends TestCase
     /** @return iterable<string, array{class-string}> */
     public static function nameless(): iterable
     {
-        yield 'a #[Task] with no name' => [Nameless::class];
-        yield 'no #[Task] at all' => [NoTaskAttribute::class];
+        yield 'a #[Tasklet\Spec] with no name' => [Nameless::class];
+        yield 'no #[Tasklet\Spec] at all' => [NoTaskAttribute::class];
         yield 'an empty name' => [EmptyName::class];
         yield 'a subclass relying on its parent' => [UnnamedSizedChild::class];
     }
@@ -321,17 +328,23 @@ final class TaskletFormTest extends TestCase
         self::assertSame(60, $definition->decl->idleTtlSeconds);
     }
 
+    /** With only `use Flezha\Tasklet;`, `#[Tasklet\Spec]` resolves beside the class it names. */
+    public function testTheSpecAttributeResolvesThroughTheTaskletImport(): void
+    {
+        self::assertSame('spec_by_import', Definition::of(SpecByImport::class)->name);
+    }
+
     /**
      * The name, not the class, is the durable key: state journaled by one class
      * folds back under the other, and both declare one node.
      */
     public function testARenamedClassKeepsItsState(): void
     {
-        $before = new Harness(TotalsBeforeRename::class);
+        $before = new TaskletTestHarness(TotalsBeforeRename::class);
         $before->feed(3);
         $before->feed(4);
 
-        $after = new Harness(TotalsAfterRename::class);
+        $after = new TaskletTestHarness(TotalsAfterRename::class);
         $after->restore(changes: $before->log);
 
         self::assertSame('totals', Definition::of(TotalsBeforeRename::class)->name);
@@ -343,12 +356,12 @@ final class TaskletFormTest extends TestCase
     /** A change is plain data: journaled as JSON, folded live, and folded again on restore. */
     public function testAChangeNeedsNoClass(): void
     {
-        $harness = new Harness(TotalsBeforeRename::class);
+        $harness = new TaskletTestHarness(TotalsBeforeRename::class);
         $outcome = $harness->feed(5);
 
         self::assertSame(['{"kind":"event","amount":5}'], $harness->log);
         self::assertSame([['kind' => 'event', 'amount' => 5]], $outcome->changes);
-        self::assertTrue(Harness::replayEquals(TotalsBeforeRename::class, [5, 6]));
+        $harness->replayEquals();
     }
 
     public function testTheIdleTtlIsWholeSeconds(): void
@@ -434,7 +447,7 @@ final class TaskletFormTest extends TestCase
 
     public function testAValueLeavesOnlyThroughTheContextUnderTheHarness(): void
     {
-        $harness = new Harness(EmitsOrSkips::class);
+        $harness = new TaskletTestHarness(EmitsOrSkips::class);
 
         self::assertSame(['a', 'b'], $harness->feed('both')->outputs);
         self::assertSame([], $harness->feed('neither')->outputs);
@@ -489,8 +502,8 @@ final class TaskletFormTest extends TestCase
 
     public function testTheInitialStateComesFromInitState(): void
     {
-        self::assertSame(['cell' => 'A'], (new Harness(Seeded::class, 'A'))->state());
-        self::assertSame(['cell' => null], (new Harness(Seeded::class))->state());
+        self::assertSame(['cell' => 'A'], (new TaskletTestHarness(Seeded::class, 'A'))->state());
+        self::assertSame(['cell' => null], (new TaskletTestHarness(Seeded::class))->state());
     }
 
     /** @return iterable<string, array{string, string}> */
@@ -516,7 +529,7 @@ final class TaskletFormTest extends TestCase
     public function testARunReturningAValueFailsToLoad(string $run, string $error): void
     {
         $script = sprintf(
-            '<?php require %s; #[\Flezha\Attribute\Task(name: "r")] final class R extends \Flezha\Tasklet { %s }',
+            '<?php require %s; #[\Flezha\Tasklet\Spec(name: "r")] final class R extends \Flezha\Tasklet { %s }',
             var_export(dirname(__DIR__) . '/vendor/autoload.php', true),
             $run,
         );

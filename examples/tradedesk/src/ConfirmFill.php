@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 use Flezha\TimerFiring;
@@ -24,7 +23,7 @@ use Flezha\TimerFiring;
  * Everything that finished is then undone in reverse, across both arms: the order is cancelled and
  * the money released, while the desk's book is skipped because it writes no `compensate`.
  */
-#[Task(name: 'confirm_fill')]
+#[Tasklet\Spec(name: 'confirm_fill')]
 final class ConfirmFill extends Tasklet
 {
     private const EXCHANGE_MAX = 100;

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Flezha\Tests;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
 use Flezha\ChannelCodec;
 use Flezha\Codec\ActivationCodec;
 use Flezha\Codec\Json;
@@ -16,7 +15,7 @@ use Flezha\Dispatch\Registry;
 use Flezha\Exception\FlezhaException;
 use Flezha\Ffi\Binding;
 use Flezha\Ffi\Core;
-use Flezha\Graph\Builder;
+use Flezha\ChannelBuilder;
 use Flezha\Graph\HostClassDecl;
 use Flezha\Graph\Validate;
 use Flezha\Tasklet;
@@ -27,7 +26,7 @@ use Flezha\SpawnResult;
 use PHPUnit\Framework\TestCase;
 
 /** Spawns once with no id and once with the id `w1`, reads both, then emits its input. */
-#[Task(name: 'spawner')]
+#[Tasklet\Spec(name: 'spawner')]
 final class Spawner extends Tasklet
 {
     /** @var list<SpawnResult|FlezhaException> what each read answered, in order */
@@ -54,7 +53,7 @@ final class Spawner extends Tasklet
 #[Relay(factoryId: 'spawner')]
 final class SpawnerRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('in', codec: ChannelCodec::Text)->into(Spawner::class)->output('out');
     }

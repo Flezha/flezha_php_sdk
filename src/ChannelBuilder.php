@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Flezha\Graph;
+namespace Flezha;
 
-use Flezha\ChannelCodec;
-use Flezha\Definition;
 use Flezha\Exception\FlezhaException;
-use Flezha\Relay;
-use Flezha\Overflow;
-use Flezha\Tasklet;
+use Flezha\Graph\ChannelSpec;
+use Flezha\Graph\ConsumerEdge;
+use Flezha\Graph\LatestDocumentRouter;
+use Flezha\Graph\Merge;
+use Flezha\Graph\TaskNode;
 
 /**
  * The fluent channel builder a relay's `channels()` receives.
@@ -18,7 +18,7 @@ use Flezha\Tasklet;
  * because it is what the graph is being declared with: an author writes it in
  * the same block as the wiring it qualifies.
  */
-final class Builder
+final class ChannelBuilder
 {
     /** @var list<TaskNode> */
     public array $tasklets = [];
@@ -52,7 +52,7 @@ final class Builder
      *
      * `$description` says what the channel is for, in the relay's API. A JSON
      * channel's schema is derived from the `inputType` the tasklet it feeds
-     * declares in its `#[Task]`; `$schema` declares one instead.
+     * declares in its `#[Tasklet\Spec]`; `$schema` declares one instead.
      *
      * @param (callable(string):mixed)|null $decode
      * @param mixed $schema a JSON Schema, as the array `json_encode` writes as an object
@@ -63,7 +63,7 @@ final class Builder
         ?ChannelCodec $codec = null,
         string $description = '',
         mixed $schema = null,
-    ): Edge {
+    ): Stream {
         $channel = new ChannelSpec(index: count($this->channels), name: $name, kind: 'entry');
         $this->refuseCodecBesideCallable($channel, $codec, $decode);
         $channel->decode = $decode ?? ($codec ?? ChannelCodec::Json)->decoder($channel);
@@ -72,7 +72,7 @@ final class Builder
         $channel->schema = $schema;
         $this->channels[] = $channel;
 
-        return new Edge($this, ['entry', $channel], []);
+        return new Stream($this, ['entry', $channel], []);
     }
 
     /** Merge several channels into one tasklet; see {@see Merge}. */
@@ -107,13 +107,13 @@ final class Builder
      *
      * @param callable(mixed):string $keyFn
      */
-    public function routeLatest(Edge $documents, Edge $traffic, callable $keyFn): Edge
+    public function routeLatest(Stream $documents, Stream $traffic, callable $keyFn): Stream
     {
         return $this->wireRouteLatest($documents, $traffic, $keyFn, null);
     }
 
     /** {@see routeLatest()} under an explicit node identity. */
-    public function routeLatestNamed(Edge $documents, Edge $traffic, callable $keyFn, string $nodeName): Edge
+    public function routeLatestNamed(Stream $documents, Stream $traffic, callable $keyFn, string $nodeName): Stream
     {
         return $this->wireRouteLatest($documents, $traffic, $keyFn, $nodeName);
     }
@@ -123,7 +123,7 @@ final class Builder
      * the traffic edge, so the router holds keys rather than traffic values,
      * and the two edges are one merge into the packaged tasklet.
      */
-    private function wireRouteLatest(Edge $documents, Edge $traffic, callable $keyFn, ?string $nodeName): Edge
+    private function wireRouteLatest(Stream $documents, Stream $traffic, callable $keyFn, ?string $nodeName): Stream
     {
         return $this->merge()
             ->from($documents, LatestDocumentRouter::document(...))

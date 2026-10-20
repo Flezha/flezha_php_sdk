@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Flezha\Examples\Tradedesk;
 
-use Flezha\Attribute\Task;
 use Flezha\Ctx;
 use Flezha\Tasklet;
 
@@ -12,7 +11,7 @@ use Flezha\Tasklet;
  * Step two: place the order with the paper exchange, keeping the id it answers with, and cancel
  * the order again if it is undone. It has the same shape as step one.
  */
-#[Task(name: 'place_order')]
+#[Tasklet\Spec(name: 'place_order')]
 final class PlaceOrder extends Tasklet
 {
     public function initState(?string $cellKey): mixed

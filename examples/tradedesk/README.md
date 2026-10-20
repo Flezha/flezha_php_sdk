@@ -20,7 +20,7 @@ writes them one tasklet at a time.
 | `src/ConfirmFill.php` | asks for a timer ten seconds out, then confirms the fill and ends the order with its result, or refuses an order above the exchange's limit |
 | `src/RecordOrder.php` | books the placed order, and has nothing to undo |
 
-Every tasklet is a class extending `Flezha\Tasklet`, with `#[Task(name: '...')]`
+Every tasklet is a class extending `Flezha\Tasklet`, with `#[Tasklet\Spec(name: '...')]`
 naming it. What a tasklet remembers and the changes that record it are plain
 arrays, folded by the class's own `applyChange`, and the values it takes and
 hands on are the arrays their JSON decodes to.

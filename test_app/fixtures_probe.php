@@ -11,15 +11,14 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Ctx;
-use Flezha\Graph\Builder;
 use Flezha\Tasklet;
 
 // -- poison_probe / wedge_probe ----------------------------------------------
 
-#[Task(name: 'poison_probe_tasklet')]
+#[Tasklet\Spec(name: 'poison_probe_tasklet')]
 final class PoisonProbe extends Tasklet
 {
     private static bool $antidoteTaken = false;
@@ -40,7 +39,7 @@ final class PoisonProbe extends Tasklet
 #[Relay(factoryId: 'poison_probe')]
 final class PoisonProbeRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->retryBackoffMs(25)
             ->into(PoisonProbe::class)
@@ -63,7 +62,7 @@ final class PoisonProbeRelay extends \Flezha\Relay
  *   "slow" — emits two seconds late, so the relay can be stopped or moved
  *     while the activation still runs.
  */
-#[Task(name: 'wedge_probe_tasklet')]
+#[Tasklet\Spec(name: 'wedge_probe_tasklet')]
 final class WedgeProbe extends Tasklet
 {
     private static bool $aborted = false;
@@ -91,7 +90,7 @@ final class WedgeProbe extends Tasklet
 #[Relay(factoryId: 'wedge_probe')]
 final class WedgeProbeRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(WedgeProbe::class)

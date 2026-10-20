@@ -11,11 +11,10 @@ declare(strict_types=1);
 namespace Flezha\TestApp;
 
 use Flezha\Attribute\Relay;
-use Flezha\Attribute\Task;
+use Flezha\ChannelBuilder;
 use Flezha\ChannelCodec;
 use Flezha\Codec\Json;
 use Flezha\Ctx;
-use Flezha\Graph\Builder;
 use Flezha\Overflow;
 use Flezha\Tasklet;
 use Flezha\TimerFiring;
@@ -26,7 +25,7 @@ use Flezha\TimerFiring;
 // `checkpoint_store` and `bench_checkpoint` are the same keyed upsert under
 // three acknowledgement postures; only `run` differs.
 
-#[Task]
+#[Tasklet\Spec]
 abstract class KeyedUpsert extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -56,7 +55,7 @@ abstract class KeyedUpsert extends Tasklet
     }
 }
 
-#[Task(name: 'tier_store_tasklet')]
+#[Tasklet\Spec(name: 'tier_store_tasklet')]
 final class TierStore extends KeyedUpsert
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -72,7 +71,7 @@ final class TierStore extends KeyedUpsert
 }
 
 /** `tier_store`'s twin, whose interval closes on a `commit:` input. */
-#[Task(name: 'checkpoint_store_tasklet')]
+#[Tasklet\Spec(name: 'checkpoint_store_tasklet')]
 final class CheckpointStore extends KeyedUpsert
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -87,7 +86,7 @@ final class CheckpointStore extends KeyedUpsert
 }
 
 /** `checkpoint_store` driven by a DECLARED cadence rather than an input. */
-#[Task(name: 'bench_checkpoint_tasklet')]
+#[Tasklet\Spec(name: 'bench_checkpoint_tasklet')]
 final class BenchCheckpoint extends KeyedUpsert
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -102,7 +101,7 @@ final class BenchCheckpoint extends KeyedUpsert
  */
 abstract class KeyedUpsertRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(TierStore::class)->keyed()
@@ -134,7 +133,7 @@ final class BenchKeyedRelay extends KeyedUpsertRelay
 #[Relay(factoryId: 'tier_store', run: ['flow' => ['exactly' => 'effectively_once']])]
 final class TierStoreRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)->retryBackoffMs(300)
             ->into(TierStore::class)->keyed()
@@ -146,7 +145,7 @@ final class TierStoreRelay extends \Flezha\Relay
 #[Relay(factoryId: 'remote_tier_store', run: ['flow' => ['exactly' => 'effectively_once']], durable: 'remote')]
 final class RemoteTierStoreRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         TierStoreRelay::channels($c);
     }
@@ -160,7 +159,7 @@ final class RemoteTierStoreRelay extends \Flezha\Relay
 // `hold` and keeps retrying it, so a runner killed there has made the forward's
 // record durable and not the tally's.
 
-#[Task]
+#[Tasklet\Spec]
 abstract class Counting extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -174,7 +173,7 @@ abstract class Counting extends Tasklet
     }
 }
 
-#[Task(name: 'tier_pass')]
+#[Tasklet\Spec(name: 'tier_pass')]
 final class TierPass extends Counting
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -184,7 +183,7 @@ final class TierPass extends Counting
     }
 }
 
-#[Task(name: 'tier_tally')]
+#[Tasklet\Spec(name: 'tier_tally')]
 final class TierTally extends Counting
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -201,7 +200,7 @@ final class TierTally extends Counting
 #[Relay(factoryId: 'tier_chain', run: ['flow' => ['exactly' => 'effectively_once']])]
 final class TierChainRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(TierPass::class)
@@ -217,7 +216,7 @@ final class TierChainRelay extends \Flezha\Relay
 )]
 final class CheckpointStoreRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CheckpointStore::class)->keyed()
@@ -240,7 +239,7 @@ final class CheckpointStoreRelay extends \Flezha\Relay
 )]
 final class CheckpointBatchedRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CheckpointStore::class)->keyed()
@@ -261,7 +260,7 @@ final class CheckpointBatchedRelay extends \Flezha\Relay
 )]
 final class BenchCheckpointRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)->onFull(Overflow::DropNothing)
             ->into(BenchCheckpoint::class)->keyed()
@@ -272,7 +271,7 @@ final class BenchCheckpointRelay extends \Flezha\Relay
 // -- store_input -------------------------------------------------------------
 
 /** The durable-state reference: every input is appended through a change. */
-#[Task(name: 'store_input_tasklet')]
+#[Tasklet\Spec(name: 'store_input_tasklet')]
 final class StoreInput extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -296,7 +295,7 @@ final class StoreInput extends Tasklet
 #[Relay(factoryId: 'store_input')]
 final class StoreInputRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(StoreInput::class)
@@ -306,7 +305,7 @@ final class StoreInputRelay extends \Flezha\Relay
 
 // -- stateful_counter / persistence_off_counter ------------------------------
 
-#[Task(name: 'counter_entry_tasklet')]
+#[Tasklet\Spec(name: 'counter_entry_tasklet')]
 final class CounterEntry extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -315,7 +314,7 @@ final class CounterEntry extends Tasklet
     }
 }
 
-#[Task(name: 'counter_tasklet')]
+#[Tasklet\Spec(name: 'counter_tasklet')]
 final class Counter extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -337,7 +336,7 @@ final class Counter extends Tasklet
 #[Relay(factoryId: 'stateful_counter')]
 final class StatefulCounterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CounterEntry::class)->named('ticks')
@@ -352,7 +351,7 @@ final class StatefulCounterRelay extends \Flezha\Relay
 #[Relay(factoryId: 'persistence_off_counter', durable: false)]
 final class PersistenceOffCounterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(CounterEntry::class, 'persistence_off_entry_tasklet')->named('ticks')
@@ -367,7 +366,7 @@ final class PersistenceOffCounterRelay extends \Flezha\Relay
 // sleep e2e reads the total after a wake to prove the Cell came back with the
 // state it slept with.
 
-#[Task(name: 'sleeping_counter_tasklet')]
+#[Tasklet\Spec(name: 'sleeping_counter_tasklet')]
 final class SleepingCounter extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -392,7 +391,7 @@ final class SleepingCounter extends Tasklet
 #[Relay(factoryId: 'sleeping_counter', durable: FIXTURE_DURABLE)]
 final class SleepingCounterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->keyBy(Wire::prefix(...))
@@ -404,7 +403,7 @@ final class SleepingCounterRelay extends \Flezha\Relay
 // -- coalescing_counter ------------------------------------------------------
 
 /** Wire format: `<interval>:<ts>:<delta>`; a missing or unparsable part reads 0. */
-#[Task(name: 'tick_entry_tasklet')]
+#[Tasklet\Spec(name: 'tick_entry_tasklet')]
 final class TickEntry extends Tasklet
 {
     public function run(mixed $input, Ctx $ctx): void
@@ -422,7 +421,7 @@ final class TickEntry extends Tasklet
  * idempotent per `(interval, ts)` either way, so replay produces the same
  * state.
  */
-#[Task(name: 'tick_tasklet')]
+#[Tasklet\Spec(name: 'tick_tasklet')]
 final class Tick extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -444,7 +443,7 @@ final class Tick extends Tasklet
 #[Relay(factoryId: 'coalescing_counter')]
 final class CoalescingCounterRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(TickEntry::class)->named('ticks')
@@ -458,7 +457,7 @@ final class CoalescingCounterRelay extends \Flezha\Relay
  * Emits the running total, so a resume is observable on the wire. Default +
  * change replay rebuilds the total on restore; no snapshot fast path needed.
  */
-#[Task(name: 'resume_probe_tasklet')]
+#[Tasklet\Spec(name: 'resume_probe_tasklet')]
 final class ResumeProbe extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -484,7 +483,7 @@ final class ResumeProbe extends Tasklet
 #[Relay(factoryId: 'resume_probe')]
 final class ResumeProbeRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(ResumeProbe::class)
@@ -503,7 +502,7 @@ final class ResumeProbeRelay extends \Flezha\Relay
 // through a declared migration. Output is `total:currency` so the e2e can read
 // the migrated field off the wire.
 
-#[Task(name: 'evolving_cart')]
+#[Tasklet\Spec(name: 'evolving_cart')]
 final class EvolvingCartV1 extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -526,7 +525,7 @@ final class EvolvingCartV1 extends Tasklet
     }
 }
 
-#[Task(name: 'evolving_cart', schemaVersion: 2, minReadableSchemaVersion: 1)]
+#[Tasklet\Spec(name: 'evolving_cart', schemaVersion: 2, minReadableSchemaVersion: 1)]
 final class EvolvingCartV2 extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -573,7 +572,7 @@ final class EvolvingCartV2 extends Tasklet
 #[Relay(factoryId: 'schema_evolution_v1')]
 final class SchemaEvolutionV1Relay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(EvolvingCartV1::class)
@@ -584,7 +583,7 @@ final class SchemaEvolutionV1Relay extends \Flezha\Relay
 #[Relay(factoryId: 'schema_evolution_v2')]
 final class SchemaEvolutionV2Relay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(EvolvingCartV2::class)
@@ -599,7 +598,7 @@ final class SchemaEvolutionV2Relay extends \Flezha\Relay
 // whose clock is not event time. `event` asks for the event-time timer, a
 // number `n` for a processing-time one `n` hours ahead; the change follows.
 
-#[Task(name: 'timer_cap_tasklet', maxTimersPerCell: 2)]
+#[Tasklet\Spec(name: 'timer_cap_tasklet', maxTimersPerCell: 2)]
 final class TimerCap extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -626,7 +625,7 @@ final class TimerCap extends Tasklet
 #[Relay(factoryId: 'timer_cap')]
 final class TimerCapRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(TimerCap::class)
@@ -640,7 +639,7 @@ final class TimerCapRelay extends \Flezha\Relay
 // processing-time timer and cancels the one the previous input armed; the
 // input is echoed, and a firing emits `fired:<at>`.
 
-#[Task(name: 'timer_churn_tasklet')]
+#[Tasklet\Spec(name: 'timer_churn_tasklet')]
 final class TimerChurn extends Tasklet
 {
     public function initState(?string $cellKey): mixed
@@ -673,7 +672,7 @@ final class TimerChurn extends Tasklet
 #[Relay(factoryId: 'timer_churn')]
 final class TimerChurnRelay extends \Flezha\Relay
 {
-    public static function channels(Builder $c): void
+    public static function channels(ChannelBuilder $c): void
     {
         $c->input('input', codec: ChannelCodec::Text)
             ->into(TimerChurn::class)
