@@ -83,6 +83,7 @@ final class ActivationCodec
 
         $activation['change_seq'] = $c->varint('change seq');
         $activation['factory'] = $c->bytes('factory');
+        $activation['cell_identity'] = $c->some('cell identity') ? $c->bytes('cell identity') : null;
         $c->finish('the activation');
 
         return $activation;

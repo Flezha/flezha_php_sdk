@@ -64,6 +64,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
             ],
             'change_seq' => 9,
             'factory' => 'f',
+            'cell_identity' => 'id',
         ], $activation);
     }
 
@@ -123,6 +124,7 @@ final class SchemaFixtureTest extends RepositoryTestCase
                 ...$expected[$kind],
                 'change_seq' => 0,
                 'factory' => 'f',
+                'cell_identity' => null,
             ], $activation, "the $kind fixture");
         }
     }

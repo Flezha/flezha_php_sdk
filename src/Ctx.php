@@ -6,6 +6,7 @@ namespace Flezha;
 
 use Flezha\Codec\Json;
 use Flezha\Codec\ValueCodec;
+use Flezha\Dispatch\RegisteredClass;
 use Flezha\Exception\FlezhaException;
 use Flezha\Graph\CallEnd;
 use Flezha\Graph\ChannelSpec;
@@ -36,13 +37,13 @@ final class Ctx
     private bool $checkpointed = false;
     private ?string $completion = null;
     private int $ordinal = 0;
-    private ?string $identity = null;
 
     /** @param list<ChannelSpec> $outgoing */
     public function __construct(
         private readonly ClassSpec $spec,
         private readonly TaskNode $node,
         private readonly array $outgoing,
+        private readonly RegisteredClass $registered,
         private readonly string $relay,
         public readonly ?string $cellKey,
         private readonly int $changeSeq,
@@ -72,15 +73,9 @@ final class Ctx
     /** A replay-stable identifier, distinct per invocation within the cell. */
     public function stableId(): string
     {
-        // Lazily, because most invocations never ask and the identity is the
-        // one part of the derivation that costs an allocation.
-        $this->identity ??= Identity::cell(
-            $this->relay,
-            $this->node->name,
-            (string) $this->cellKey,
-        );
+        $identity = $this->registered->identityOf($this->node, $this->relay, $this->cellKey);
 
-        return Identity::stableId($this->identity, $this->changeSeq, $this->ordinal++);
+        return Identity::stableId($identity, $this->changeSeq, $this->ordinal++);
     }
 
     /**

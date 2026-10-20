@@ -100,6 +100,9 @@ final class Dispatcher
                     $activation['tasklet'],
                 ), true);
             }
+            if (isset($activation['cell_identity'])) {
+                $registered->keepIdentity($node, $activation['relay'], $activation['cell_key'], $activation['cell_identity']);
+            }
 
             return match ($activation['kind']) {
                 'work' => $this->runWork($activation, $registered, $node),
@@ -146,6 +149,7 @@ final class Dispatcher
             spec: $registered->spec,
             node: $node,
             outgoing: $registered->outgoing[$node->index],
+            registered: $registered,
             relay: (string) $activation['relay'],
             cellKey: $activation['cell_key'],
             changeSeq: (int) $activation['change_seq'],

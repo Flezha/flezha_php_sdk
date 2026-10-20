@@ -4,15 +4,13 @@ declare(strict_types=1);
 
 namespace Flezha;
 
-use Flezha\Exception\FlezhaException;
-
 /**
- * Cell identity bytes and the replay-stable identifier derived from them.
+ * The replay-stable identifier of a cell.
  *
- * Both algorithms are fixed by the SDK contract rather than by a library, so
- * every SDK derives the same value from the same cell: the identity is
- * length-prefixed `instance | tasklet | key`, and the identifier is FNV-1a
- * 128 over `identity | change seq | per-invocation ordinal`.
+ * The algorithm is fixed by the SDK contract rather than by a library, so
+ * every SDK derives the same value from the same cell: FNV-1a 128 over
+ * `identity | change seq | per-invocation ordinal`, where the identity is the
+ * bytes the core hands with the cell's first activation.
  *
  * PHP has no 128-bit integer, so the hash is carried as four 32-bit limbs.
  * The FNV prime is `2^88 + 0x13b`, which makes the multiply a small-word
@@ -28,28 +26,6 @@ final class Identity
 
     private function __construct()
     {
-    }
-
-    /**
-     * `[u8 len][instance][u8 len][tasklet][u16 len][key]`, big-endian
-     * lengths. The layout every SDK writes, so an identifier derived here
-     * matches one derived there for the same cell.
-     */
-    public static function cell(string $instanceId, string $taskletName, string $cellKey): string
-    {
-        $parts = [['relay id', $instanceId, 255], ['tasklet name', $taskletName, 255], ['cell key', $cellKey, 0xFFFF]];
-        foreach ($parts as [$part, $value, $limit]) {
-            if (strlen($value) > $limit) {
-                throw new FlezhaException(
-                    'runtime.identity_too_long',
-                    ['part' => $part, 'value' => $value, 'limit' => $limit],
-                );
-            }
-        }
-
-        return pack('C', strlen($instanceId)) . $instanceId
-            . pack('C', strlen($taskletName)) . $taskletName
-            . pack('n', strlen($cellKey)) . $cellKey;
     }
 
     /**

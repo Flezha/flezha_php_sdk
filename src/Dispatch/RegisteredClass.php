@@ -20,6 +20,9 @@ final class RegisteredClass
     /** @var array<string, mixed> */
     private array $cells = [];
 
+    /** @var array<string, string> the identity bytes the core handed with a cell's first activation */
+    private array $identities = [];
+
     public function __construct(public readonly ClassSpec $spec)
     {
         $outgoing = [];
@@ -60,16 +63,28 @@ final class RegisteredClass
         $this->cells[self::address($node, $relay, $cellKey)] = $state;
     }
 
+    public function keepIdentity(TaskNode $node, string $relay, ?string $cellKey, string $identity): void
+    {
+        $this->identities[self::address($node, $relay, $cellKey)] = $identity;
+    }
+
+    public function identityOf(TaskNode $node, string $relay, ?string $cellKey): string
+    {
+        return $this->identities[self::address($node, $relay, $cellKey)]
+            ?? throw new \LogicException('the core handed this thread no identity for the cell');
+    }
+
     /** Drop a cell that left this runner, or every cell of its relay. */
     public function forget(TaskNode $node, string $relay, ?string $cellKey, bool $wholeRelay): void
     {
         if (!$wholeRelay) {
-            unset($this->cells[self::address($node, $relay, $cellKey)]);
+            $address = self::address($node, $relay, $cellKey);
+            unset($this->cells[$address], $this->identities[$address]);
             return;
         }
-        foreach (array_keys($this->cells) as $address) {
+        foreach (array_keys($this->cells + $this->identities) as $address) {
             if (str_starts_with($address, $relay . "\0")) {
-                unset($this->cells[$address]);
+                unset($this->cells[$address], $this->identities[$address]);
             }
         }
     }

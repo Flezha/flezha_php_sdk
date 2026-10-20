@@ -8,10 +8,7 @@ use Flezha\Identity;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The replay-stable identifier, pinned to the value every other SDK derives.
- *
- * The vectors are the shared ones: the identity layout is length-prefixed
- * `instance | tasklet | key` with big-endian lengths, and the identifier is
+ * The replay-stable identifier, pinned to the value every other SDK derives:
  * FNV-1a 128 over `identity | u64 BE change seq | u32 BE ordinal`. PHP has no
  * 128-bit integer, so this is the one algorithm in the package reimplemented
  * rather than delegated — which is exactly why it is pinned.
@@ -20,9 +17,11 @@ final class IdentityTest extends TestCase
 {
     private const IDENTITY_HEX = '04696e73740470726f6300026b31';
 
-    public function testTheIdentityLayoutIsLengthPrefixed(): void
+    public function testStableIdMatchesTheCrossLanguageVector(): void
     {
-        self::assertSame(self::IDENTITY_HEX, bin2hex(Identity::cell('inst', 'proc', 'k1')));
+        self::assertSame('bbf81fd4955afd1724203700a240e822', Identity::stableId('instance/op/key', 42, 0));
+        self::assertSame('bbf81fd4965afd1724203700a240e95d', Identity::stableId('instance/op/key', 42, 1));
+        self::assertSame('15915375576d2f389a938dc3a9940c9d', Identity::stableId('', 0, 0));
     }
 
     /** @return iterable<string, array{int, int, string}> */
@@ -45,16 +44,8 @@ final class IdentityTest extends TestCase
 
     public function testAnIdentifierIsThirtyTwoLowercaseHexCharacters(): void
     {
-        $id = Identity::stableId(Identity::cell('o', 'p', ''), 1, 0);
+        $id = Identity::stableId('o/p/', 1, 0);
 
         self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $id);
-    }
-
-    public function testAnOversizedComponentIsRefused(): void
-    {
-        $this->expectException(\Flezha\Exception\FlezhaException::class);
-        $this->expectExceptionCode('runtime.identity_too_long');
-
-        Identity::cell(str_repeat('x', 256), 'p', '');
     }
 }

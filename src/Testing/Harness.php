@@ -104,6 +104,8 @@ final class Harness implements SpawnBridge
         // The dispatcher's own cell store, so the state this harness reports
         // is the state a runner would hold.
         $this->registered = new RegisteredClass($spec);
+        // No core runs here, so the harness names the cell's identity itself.
+        $this->registered->keepIdentity($this->node, $relay, $cellKey, "$relay/{$this->node->name}/$cellKey");
     }
 
     /** The cell's live state, as the dispatcher left it. */
