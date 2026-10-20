@@ -414,9 +414,10 @@ final class AuthoringTest extends RepositoryTestCase
     public function testAStepsClassDeclaringNoTaskletsIsRefused(): void
     {
         $this->expectException(FlezhaException::class);
-        $this->expectExceptionCode('topology.no_steps_body');
+        $this->expectExceptionCode('topology.no_tasklets');
 
-        EmptySteps::spec();
+        self::validate(static function (Builder $c): void {
+        }, 'steps');
     }
 
     /**
@@ -1352,14 +1353,6 @@ final class PerEdgeTransform extends RelayBase
 
 final class Unattributed extends RelayBase
 {
-}
-
-#[Relay(factoryId: 'empty_steps', run: 'steps')]
-final class EmptySteps extends RelayBase
-{
-    public static function channels(Builder $c): void
-    {
-    }
 }
 
 #[Relay(factoryId: 'named_sink')]

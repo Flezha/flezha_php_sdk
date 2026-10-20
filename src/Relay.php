@@ -89,7 +89,7 @@ abstract class Relay
     protected static function buildSpec(RelayAttribute $declaration): ClassSpec
     {
         $builder = static::builder($declaration);
-        $spec = new ClassSpec(
+        return new ClassSpec(
             factoryId: $declaration->factoryId,
             description: $declaration->description,
             maxDurationMs: $declaration->maxDurationMs,
@@ -99,11 +99,6 @@ abstract class Relay
             tasklets: $builder->tasklets,
             channels: $builder->channels,
         );
-        if ($spec->runsInSteps() && $spec->tasklets === []) {
-            throw new FlezhaException('topology.no_steps_body', ['factory_id' => $declaration->factoryId]);
-        }
-
-        return $spec;
     }
 
     /**
