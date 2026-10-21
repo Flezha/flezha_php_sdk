@@ -132,18 +132,7 @@ final class TaskletTestHarness
      */
     public function restore(?string $snapshot = null, array $changes = []): void
     {
-        $this->registered->setState($this->node, $this->relay, $this->cellKey, Restore::fold(
-            $this->definition,
-            [
-                'snapshot' => $snapshot === null ? null : ['bytes' => $snapshot, 'from_version' => null],
-                'changes' => array_map(
-                    static fn (string $bytes): array => ['bytes' => $bytes, 'from_version' => null],
-                    $changes,
-                ),
-            ],
-            $this->cellKey,
-            $this->definition->name,
-        ));
+        $this->registered->setState($this->node, $this->relay, $this->cellKey, $this->fold($snapshot, $changes));
     }
 
     /**
@@ -159,19 +148,28 @@ final class TaskletTestHarness
      */
     public function replayEquals(): void
     {
-        $replayed = Restore::fold(
-            $this->definition,
-            ['changes' => array_map(
-                static fn (string $bytes): array => ['bytes' => $bytes, 'from_version' => null],
-                $this->log,
-            )],
-            $this->cellKey,
-            $this->definition->name,
-        );
+        $replayed = $this->fold(null, $this->log);
 
         if ($replayed != $this->state()) {
             throw new ReplayMismatch($this->definition->name, $this->state(), $replayed);
         }
+    }
+
+    /**
+     * The state `Restore::fold` rebuilds from a snapshot and a change log.
+     *
+     * @param list<string> $changes
+     */
+    private function fold(?string $snapshot, array $changes): mixed
+    {
+        $body = static fn (string $bytes): array => ['bytes' => $bytes, 'from_version' => null];
+
+        return Restore::fold(
+            $this->definition,
+            ['snapshot' => $snapshot === null ? null : $body($snapshot), 'changes' => array_map($body, $changes)],
+            $this->cellKey,
+            $this->definition->name,
+        );
     }
 
     private function drive(int $now, bool $replay, callable $body): Outcome
