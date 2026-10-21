@@ -83,7 +83,7 @@ final class SwooleExecutor implements Executor
         if (!$zts) {
             return 'SwooleExecutor needs a thread-safe (ZTS) PHP build; this one is '
                 . 'non-thread-safe. Install a ZTS PHP (the official image is `php:8.4-zts`, and '
-                . '`docker/dev/Dockerfile.php --target zts` builds one with Swoole already in '
+                . '`deploy/docker/dev/Dockerfile.php --target zts` builds one with Swoole already in '
                 . 'it), or use the default SyncExecutor and scale by processes.';
         }
         if (!$hasThread) {

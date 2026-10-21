@@ -8,7 +8,7 @@ use Flezha\Exception\FlezhaException;
 
 /**
  * The one exception: a refusal this package makes is rendered by the core from
- * `flz_transport/errors.json`, so every code its source raises must be one the
+ * `crates/flz_transport/errors.json`, so every code its source raises must be one the
  * catalogue holds, or it reads as `internal.uncatalogued`.
  */
 final class FlezhaExceptionTest extends RepositoryTestCase
@@ -17,7 +17,7 @@ final class FlezhaExceptionTest extends RepositoryTestCase
     {
         /** @var array{codes: array<string, mixed>} $catalogue */
         $catalogue = json_decode(
-            (string) file_get_contents($this->repositoryFile('flz_transport/errors.json')),
+            (string) file_get_contents($this->repositoryFile('crates/flz_transport/errors.json')),
             true,
             512,
             JSON_THROW_ON_ERROR,

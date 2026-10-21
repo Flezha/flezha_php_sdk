@@ -101,7 +101,7 @@ and build the image:
 
 ```sh
 scripts/build-php-sdk.sh --release
-docker build -f docker/prod/Dockerfile.controller -t flezha/flezha:0.1.0 .
+docker build -f deploy/docker/prod/Dockerfile.controller -t flezha/flezha:0.1.0 .
 ```
 
 The first needs a Rust toolchain. Then tell Composer where the package is, once, naming

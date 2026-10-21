@@ -53,7 +53,7 @@ final class Binding
     /**
      * Every exported entry point of the ABI.
      *
-     * Three spellings depart from `flz_core_ffi/src/lib.rs`, all because this
+     * Three spellings depart from `crates/flz_core_ffi/src/lib.rs`, all because this
      * is read by PHP's own C parser rather than by a compiler:
      *
      * - `namespace` is a PHP keyword, so that parameter is `ns`;

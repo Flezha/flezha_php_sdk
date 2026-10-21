@@ -6,7 +6,7 @@ declare(strict_types=1);
  * The conformance run: every row of `test/fixtures/reference_topologies.txt`
  * driven through THIS SDK's builder.
  *
- * `flz_core/src/host/check_tests.rs` is the same table driven against the
+ * `crates/flz_core/src/host/check_tests.rs` is the same table driven against the
  * record directly, because the core has no builder. This one maps the same
  * step vocabulary onto the PHP graph builder, so what is measured here is what
  * an author of a PHP relay actually writes.

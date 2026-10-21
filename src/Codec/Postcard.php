@@ -9,7 +9,7 @@ use Flezha\Exception\DecodeException;
 /**
  * The postcard primitives the activation schema is built from.
  *
- * Field order IS the wire contract (`flz_core/src/schema.rs`), so nothing here
+ * Field order IS the wire contract (`crates/flz_core/src/schema.rs`), so nothing here
  * is self-describing: a reader and a writer agree because they walk the same
  * shape in the same order. Encoding is a set of static functions returning
  * fragments; decoding is {@see PostcardCursor}, which holds the position.

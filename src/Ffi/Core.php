@@ -27,7 +27,7 @@ final class Core implements SpawnBridge
      * `flz_core_context_new` so a shim paired with a mismatched core is
      * refused before any controller connection.
      *
-     * Moves in the same commit as `flz_core/src/schema.rs`; the fixture suite
+     * Moves in the same commit as `crates/flz_core/src/schema.rs`; the fixture suite
      * is what makes forgetting it a red build.
      */
     public const SCHEMA_VERSION = 8;
