@@ -482,6 +482,10 @@ final class TaskletFormTest extends TestCase
 
         self::assertNotSame('ok', $result['effects'][0]['verdict']);
         self::assertStringContainsString('elsewhere', $result['effects'][0]['message']);
+        // The SDK's own line for the failed item, at `debug`.
+        self::assertCount(1, $this->logged);
+        self::assertStringStartsWith('debug: emits_or_skips failed an item: ', $this->logged[0]);
+        $this->logged->exchangeArray([]);
     }
 
     /** A steps short form's `run` emits as a tasklet's does, and the value reaches its output. */
