@@ -94,6 +94,8 @@ final class Binding
         int32_t flz_core_abandon(uintptr_t ctx, uint64_t token);
         void flz_core_shutdown(uintptr_t ctx);
         void flz_core_watch_stdin_eof(void);
+        int32_t flz_core_host_owns_signals(void);
+        void flz_core_terminate(const char *reason);
         int32_t flz_core_spawn_request(uintptr_t ctx, uint64_t token, const char *factory_id, const char *id, const char *payload, size_t payload_len, const char *if_running, int32_t replay, int64_t offset, uint64_t *handle_out);
         int32_t flz_core_spawn_result(uintptr_t ctx, uint64_t handle, uint64_t timeout_ms, char **out, size_t *out_len);
         int32_t flz_core_part(uintptr_t ctx, uint64_t token, uint32_t item, const char *payload, size_t payload_len);
