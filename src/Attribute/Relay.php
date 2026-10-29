@@ -13,9 +13,11 @@ use Flezha\ChannelCodec;
  * `run: ['steps' => ['each' => 'per_input']]`, `durable: false`,
  * `durable: ['local' => ['sleep_after' => 2_000]]`. Unwritten, the class runs
  * as a flow and keeps its work locally without sleeping (a steps class sleeps
- * after six idle hours unless it says otherwise). The
- * core reads the tree when the class registers and refuses a misplaced
- * setting by name.
+ * after six idle hours unless it says otherwise). A finished instance keeps
+ * nothing unless the level sets `keep_finished` to hours, or to `true` for the
+ * controller's window (72 hours by default), so `flz relay info` can still
+ * show its Cells and result. The core reads the tree when the class registers
+ * and refuses a misplaced setting by name.
  *
  * On a §5 short form, a class that defines its one tasklet's `run` instead
  * of `channels()`, it also names the channels that tasklet is wired between:

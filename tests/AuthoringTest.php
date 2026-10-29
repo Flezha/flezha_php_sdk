@@ -890,8 +890,13 @@ final class AuthoringTest extends RepositoryTestCase
         ))['durable'] ?? null;
 
         self::assertSame(
-            [null, false, ['local' => ['sleep_after' => false]]],
-            [$durable(null), $durable(false), $durable(['local' => ['sleep_after' => false]])],
+            [null, false, ['local' => ['sleep_after' => false]], ['remote' => ['keep_finished' => 24]]],
+            [
+                $durable(null),
+                $durable(false),
+                $durable(['local' => ['sleep_after' => false]]),
+                $durable(['remote' => ['keep_finished' => 24]]),
+            ],
         );
     }
 
