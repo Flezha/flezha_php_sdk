@@ -21,7 +21,7 @@ to it is likely to be found by its users first.
 composer require flezha/sdk
 ```
 
-The package is not on Packagist yet. Until it is, install it from a checkout as
+To work on the SDK itself, install it from a checkout as
 [`examples/echo`](examples/echo/README.md#building-from-a-checkout) shows.
 
 The package is also a Composer plugin, which fetches the native library below.

@@ -95,9 +95,9 @@ builds the images and deploys `k8s/agentdesk.yaml` on k3s.
 
 ## Building from a checkout
 
-The package is not on Packagist yet, and the controller's image `flezha/flezha:0.1.0`
-has to be built. From the repository root, stage the native library the package loads,
-and build the image:
+The controller's image `flezha/flezha:0.1.0` has to be built. To run the project against
+a Flezha checkout instead of the published package, also stage the native library the
+package loads. From the repository root:
 
 ```sh
 scripts/build-php-sdk.sh --release
@@ -115,8 +115,8 @@ composer config --global repositories.flezha-sdk \
 After that, `composer install` in this folder copies the checkout's package into
 `vendor/`. `"symlink": false` is what makes it a copy: the runner's image takes
 `vendor/` as it is, and a link would point outside it. The entry lives in Composer's
-global configuration rather than in `composer.json`, so this folder stays as it would be
-once the package is published; remove the entry then.
+global configuration rather than in `composer.json`, so this folder stays as it is;
+remove the entry to use the published package again.
 
 ## Where to go next
 

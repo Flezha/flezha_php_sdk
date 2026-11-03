@@ -117,8 +117,8 @@ Relay: order_2
 
 ## Building from a checkout
 
-The package is not on Packagist yet. From the repository root, stage the
-native library the package loads:
+To run the project against a Flezha checkout instead of the published package,
+stage the native library the package loads, from the repository root:
 
 ```sh
 scripts/build-php-sdk.sh --release
@@ -134,8 +134,8 @@ composer config --global repositories.flezha-sdk \
 
 After that, `composer install` in this folder links the checkout's package. The
 entry lives in Composer's global configuration rather than in `composer.json`,
-so this folder stays as it would be once the package is published; remove the
-entry then.
+so this folder stays as it is; remove the entry to use the published package
+again.
 
 ## Where to go next
 
