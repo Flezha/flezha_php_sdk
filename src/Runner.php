@@ -297,6 +297,7 @@ final class Runner
         $this->dispatcher = new Dispatcher($this->registry, $this->core);
         $this->executor ??= Executors::fromEnvironment($this->maxActivations);
 
+        self::yieldTerminationSignals();
         try {
             $this->core->start($this->namespace);
         } finally {
@@ -536,6 +537,29 @@ final class Runner
         $core = $this->core();
         foreach ($this->registry->all() as $registered) {
             $core->declareClass(Json::encode(HostClassDecl::of($registered->spec)));
+        }
+    }
+
+    /**
+     * The core's termination handler also runs the handler installed before
+     * it. With Zend signal handling that is Zend's, which with no PHP handler
+     * set ends the process before any state is shipped, so it gives way to
+     * the system default, which is never run; a pcntl handler the
+     * application set is kept. Once per process: the core installs its own at
+     * the first start, and a retried start must not put the default over it.
+     */
+    private static function yieldTerminationSignals(): void
+    {
+        static $yielded = false;
+        if ($yielded || PHP_OS_FAMILY === 'Windows') {
+            return;
+        }
+        $yielded = true;
+        $libc = \FFI::cdef('void *signal(int sig, void *handler);');
+        foreach ([15, 2] as $signal) { // SIGTERM, SIGINT
+            if (!function_exists('pcntl_signal_get_handler') || pcntl_signal_get_handler($signal) === 0) {
+                $libc->signal($signal, null);
+            }
         }
     }
 
