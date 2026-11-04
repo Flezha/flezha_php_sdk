@@ -28,7 +28,7 @@ final class HostClassDecl
      * release checklist bumps this constant, and no gate can compare it against
      * package metadata that does not exist.
      */
-    public const SDK_VERSION = '0.1.0';
+    public const SDK_VERSION = '0.1.1';
 
     /**
      * JSON. The byte names the encoding, not the SDK — the cross-language gate
